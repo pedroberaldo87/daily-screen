@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Daily Screen</title>
+  <link rel="stylesheet" href="/public/style.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#0c0a0f">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Atmospheric layers -->
+  <div class="noise"></div>
+  <div class="ambient-gradient"></div>
+
+  <div class="screen">
+
+    <!-- Compact info strip (left) -->
+    <aside class="info-strip">
+      <div class="info-clock-section">
+        <time class="clock" id="clock">08:23</time>
+        <h1 class="greeting" id="greeting">Bom dia</h1>
+        <p class="date" id="date-display"></p>
+      </div>
+
+      <div class="info-weather" id="weather">
+        <div class="weather-loading">...</div>
+      </div>
+
+      <div class="date-nav" id="date-nav">
+        <button class="date-nav-btn" id="date-prev" aria-label="Dia anterior">‹</button>
+        <button class="date-nav-btn date-nav-today" id="date-today">Hoje</button>
+        <button class="date-nav-btn" id="date-next" aria-label="Próximo dia">›</button>
+      </div>
+    </aside>
+
+    <!-- Task columns — THE HERO -->
+    <div class="columns" id="columns">
+      <div class="column col-medication" data-category="medication" id="col-medication">
+        <div class="column-header">
+          <span class="column-icon">💊</span>
+          <span class="column-label">Medicamentos</span>
+          <span class="column-line"></span>
+        </div>
+        <div class="column-tasks"></div>
+      </div>
+
+      <div class="column col-supplement" data-category="supplement" id="col-supplement">
+        <div class="column-header">
+          <span class="column-icon">🧬</span>
+          <span class="column-label">Suplementos</span>
+          <span class="column-line"></span>
+        </div>
+        <div class="column-tasks"></div>
+      </div>
+
+      <div class="column col-reminder" data-category="reminder" id="col-reminder">
+        <div class="column-header">
+          <span class="column-icon">📋</span>
+          <span class="column-label">Lembretes</span>
+          <span class="column-line"></span>
+        </div>
+        <div class="column-tasks"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Progress bar — full width bottom -->
+  <div class="progress-dock" id="progress-dock">
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <span class="progress-text" id="progress-text">0 de 0</span>
+  </div>
+
+  <!-- Celebration overlay -->
+  <div class="celebration" id="celebration">
+    <div class="confetti-container" id="confetti"></div>
+    <div class="celebration-content">
+      <span class="celebration-emoji">✨</span>
+      <p class="celebration-text">Tudo feito!</p>
+      <p class="celebration-sub">Bom trabalho hoje.</p>
+    </div>
+  </div>
+
+  <script src="/public/utils.js"></script>
+  <script src="/public/display.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/public/sw.js');
+    }
+  </script>
+</body>
+</html>

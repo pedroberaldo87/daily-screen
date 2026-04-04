@@ -1,0 +1,22 @@
+name: daily-screen
+
+services:
+  app:
+    container_name: daily-screen-app
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - daily_screen_data:/data
+    networks:
+      - shared_web
+
+volumes:
+  daily_screen_data:
+
+networks:
+  shared_web:
+    external: true

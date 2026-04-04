@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Screen — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0c0a0f;
+      --bg-surface: #14121a;
+      --bg-card: #1a1722;
+      --bg-input: #1e1b26;
+      --border: rgba(255,255,255,0.08);
+      --border-focus: #e8a84b;
+      --text-primary: #f0ece4;
+      --text-secondary: #7d7889;
+      --text-muted: #4a4656;
+      --accent-med: #f2736a;
+      --accent-sup: #e8a84b;
+      --accent-rem: #6b8fd4;
+      --accent-success: #5ec26a;
+      --accent-danger: #e74c3c;
+      --font: 'Outfit', system-ui, sans-serif;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font);
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .admin-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 24px; padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .admin-header h1 { font-size: 1.3rem; font-weight: 600; }
+    .admin-header nav { display: flex; gap: 16px; }
+    .admin-header a {
+      color: var(--text-secondary); text-decoration: none; font-size: 0.85rem;
+    }
+    .admin-header a:hover { color: var(--text-primary); }
+
+    /* Sections */
+    .section { margin-bottom: 28px; }
+    .section-title {
+      font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px;
+    }
+
+    /* Form elements */
+    input, select, textarea {
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--border-focus); }
+    textarea { resize: vertical; min-height: 40px; }
+
+    label {
+      display: block; font-size: 0.78rem; font-weight: 500;
+      color: var(--text-secondary); margin-bottom: 4px;
+    }
+
+    .form-group { margin-bottom: 14px; }
+    .form-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .form-row > * { flex: 1; min-width: 0; }
+    .form-row .narrow { flex: 0 0 80px; }
+
+    /* Buttons */
+    .btn {
+      padding: 9px 18px; border: none; border-radius: var(--radius-sm);
+      font-family: var(--font); font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent-success); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-secondary { background: var(--bg-card); color: var(--text-secondary); }
+    .btn-secondary:hover { background: var(--bg-input); color: var(--text-primary); }
+    .btn-danger { background: transparent; color: var(--accent-danger); font-size: 0.78rem; padding: 6px 10px; }
+    .btn-danger:hover { background: rgba(231,76,60,0.12); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+    /* Weekday selector */
+    .weekday-selector { display: flex; gap: 4px; }
+    .weekday-btn {
+      width: 38px; height: 34px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--bg-input);
+      color: var(--text-muted); font-family: var(--font);
+      font-size: 0.75rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .weekday-btn.active {
+      background: var(--accent-sup); color: #000;
+      border-color: var(--accent-sup);
+    }
+
+    /* Item cards */
+    .item-card {
+      background: var(--bg-card); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 12px;
+      border: 1px solid var(--border);
+      transition: border-color 0.15s;
+    }
+    .item-card:hover { border-color: rgba(255,255,255,0.12); }
+    .item-card.inactive { opacity: 0.4; }
+
+    .item-icon { font-size: 1.4rem; width: 36px; text-align: center; flex-shrink: 0; }
+    .item-info { flex: 1; min-width: 0; }
+    .item-title { font-weight: 500; font-size: 0.95rem; }
+    .item-meta {
+      font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    .item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+    .badge {
+      display: inline-block; padding: 2px 7px; border-radius: 4px;
+      font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+    }
+    .badge.medication { background: rgba(242,115,106,0.15); color: var(--accent-med); }
+    .badge.supplement { background: rgba(232,168,75,0.15); color: var(--accent-sup); }
+    .badge.reminder   { background: rgba(107,143,212,0.15); color: var(--accent-rem); }
+
+    .count-badge {
+      font-size: 0.65rem; color: var(--accent-sup);
+      background: rgba(232,168,75,0.1); padding: 1px 6px; border-radius: 3px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      z-index: 100; align-items: flex-start; justify-content: center;
+      padding: 40px 20px; overflow-y: auto;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--bg-surface); border-radius: var(--radius);
+      padding: 24px; width: 100%; max-width: 560px;
+      border: 1px solid var(--border);
+    }
+    .modal h2 { font-size: 1.1rem; margin-bottom: 20px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+    /* Collapsible sections in form */
+    .form-section {
+      border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px;
+    }
+    .form-section-title {
+      font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
+    }
+
+    /* Location search */
+    .search-wrap { position: relative; }
+    .search-results {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); margin-top: 4px;
+      max-height: 200px; overflow-y: auto; display: none;
+    }
+    .search-results.visible { display: block; }
+    .search-result {
+      padding: 10px 14px; cursor: pointer; font-size: 0.85rem;
+      border-bottom: 1px solid var(--border); transition: background 0.1s;
+    }
+    .search-result:last-child { border-bottom: none; }
+    .search-result:hover { background: var(--bg-card); }
+    .search-result small { color: var(--text-muted); }
+
+    .current-location {
+      font-size: 0.85rem; color: var(--accent-sup);
+      margin-bottom: 10px; padding: 8px 12px;
+      background: rgba(232,168,75,0.08); border-radius: var(--radius-sm);
+    }
+
+    /* Confirm dialog */
+    .confirm-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.8); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .confirm-overlay.active { display: flex; }
+    .confirm-box {
+      background: var(--bg-surface); border-radius: var(--radius);
+      padding: 24px; max-width: 360px; text-align: center;
+      border: 1px solid var(--border);
+    }
+    .confirm-box p { margin-bottom: 16px; font-size: 0.95rem; }
+    .confirm-box .btn-row { display: flex; gap: 8px; justify-content: center; }
+
+    /* Display link */
+    .display-link {
+      text-align: center; margin-top: 24px; padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .display-link a { color: var(--accent-rem); text-decoration: none; font-size: 0.85rem; }
+    .display-link a:hover { text-decoration: underline; }
+
+    /* ═══ Font Size Panel ═══ */
+    .font-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 20px;
+    }
+    .font-control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .font-control label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .font-control .font-value {
+      font-variant-numeric: tabular-nums;
+      color: var(--accent-sup);
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+    .font-control input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+    .font-control input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent-sup);
+      border: none;
+      cursor: pointer;
+    }
+    .font-control input[type="range"]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent-sup);
+      border: none;
+      cursor: pointer;
+    }
+    .font-panel-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 6px;
+    }
+
+    /* ═══ Icon Picker ═══ */
+    .icon-picker {
+      position: absolute;
+      z-index: 500;
+      width: 380px;
+      max-height: 420px;
+      background: var(--bg-surface);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+    .icon-picker.visible { display: flex; }
+
+    .ip-header {
+      padding: 12px 12px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ip-search {
+      width: 100% !important;
+      padding: 8px 12px !important;
+      background: var(--bg-card) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 8px !important;
+      color: var(--text-primary) !important;
+      font-size: 0.82rem !important;
+    }
+    .ip-search:focus { border-color: var(--border-focus) !important; }
+
+    .ip-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .ip-tabs::-webkit-scrollbar { display: none; }
+
+    .ip-tab {
+      padding: 5px 8px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: all 0.12s;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .ip-tab:hover { background: var(--bg-card); }
+    .ip-tab.active {
+      background: var(--accent-sup);
+      box-shadow: 0 0 12px rgba(232,168,75,0.25);
+    }
+
+    .ip-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      padding: 8px;
+      overflow-y: auto;
+      flex: 1;
+      max-height: 310px;
+    }
+    .ip-grid::-webkit-scrollbar { width: 4px; }
+    .ip-grid::-webkit-scrollbar-track { background: transparent; }
+    .ip-grid::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+
+    .ip-icon {
+      width: 100%;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 1.4rem;
+      cursor: pointer;
+      transition: all 0.1s;
+      line-height: 1;
+    }
+    .ip-icon:hover {
+      background: var(--bg-card);
+      transform: scale(1.2);
+    }
+    .ip-icon:active {
+      transform: scale(0.95);
+      background: var(--accent-sup);
+    }
+
+    /* Icon input styling */
+    .icon-input-trigger {
+      cursor: pointer !important;
+      transition: all 0.15s;
+    }
+    .icon-input-trigger:hover {
+      border-color: var(--accent-sup) !important;
+      box-shadow: 0 0 8px rgba(232,168,75,0.15);
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-header">
+    <h1>Daily Screen — Admin</h1>
+    <nav>
+      <a href="/" target="_blank">Ver tela</a>
+      <a href="/admin/logout">Sair</a>
+    </nav>
+  </div>
+
+  <!-- Settings button (opens modal) -->
+  <div style="margin-bottom:20px">
+    <button class="btn btn-secondary" onclick="openSettingsModal()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px">
+      <span style="font-size:1.1rem">⚙️</span> Configurações
+    </button>
+  </div>
+
+  <!-- ═══ Settings Modal ═══ -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal" style="max-width:600px">
+      <h2>Configurações</h2>
+
+      <!-- Location -->
+      <div class="form-section" style="border-top:none;margin-top:0;padding-top:0">
+        <div class="form-section-title">Localização (previsão do tempo)</div>
+        <div id="current-location" class="current-location" style="display:none"></div>
+        <div class="search-wrap">
+          <input type="text" id="location-search" placeholder="Buscar cidade..." style="width:100%">
+          <div class="search-results" id="location-results"></div>
+        </div>
+      </div>
+
+      <!-- Typography -->
+      <div class="form-section">
+        <div class="form-section-title">Tipografia (tamanhos de fonte)</div>
+        <div class="font-panel" id="font-panel">
+          <div class="font-control">
+            <label>Relógio <span class="font-value" id="fv-clock">3.6</span></label>
+            <input type="range" id="fs-clock" data-key="font_clock" min="1.5" max="5" step="0.1" value="3.6">
+          </div>
+          <div class="font-control">
+            <label>Saudação <span class="font-value" id="fv-greeting">1.25</span></label>
+            <input type="range" id="fs-greeting" data-key="font_greeting" min="0.7" max="2.5" step="0.05" value="1.25">
+          </div>
+          <div class="font-control">
+            <label>Data <span class="font-value" id="fv-date">0.88</span></label>
+            <input type="range" id="fs-date" data-key="font_date" min="0.5" max="1.5" step="0.02" value="0.88">
+          </div>
+          <div class="font-control">
+            <label>Temperatura <span class="font-value" id="fv-weather-temp">2</span></label>
+            <input type="range" id="fs-weather-temp" data-key="font_weather_temp" min="1" max="4" step="0.1" value="2">
+          </div>
+          <div class="font-control">
+            <label>Título da tarefa <span class="font-value" id="fv-task-title">1.05</span></label>
+            <input type="range" id="fs-task-title" data-key="font_task_title" min="0.7" max="2" step="0.05" value="1.05">
+          </div>
+          <div class="font-control">
+            <label>Cabeçalho da coluna <span class="font-value" id="fv-col-header">0.8</span></label>
+            <input type="range" id="fs-col-header" data-key="font_col_header" min="0.5" max="1.5" step="0.02" value="0.8">
+          </div>
+          <div class="font-control">
+            <label>Ícone da tarefa <span class="font-value" id="fv-task-icon">1.6</span></label>
+            <input type="range" id="fs-task-icon" data-key="font_task_icon" min="0.8" max="3" step="0.1" value="1.6">
+          </div>
+          <div class="font-control">
+            <label>Progresso <span class="font-value" id="fv-progress">0.78</span></label>
+            <input type="range" id="fs-progress" data-key="font_progress" min="0.5" max="1.5" step="0.02" value="0.78">
+          </div>
+          <div class="font-panel-actions">
+            <button class="btn btn-secondary btn-sm" onclick="resetFonts()">Voltar ao padrão</button>
+            <button class="btn btn-primary btn-sm" onclick="saveFonts()">Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeSettingsModal()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Add Item ═══ -->
+  <div class="section">
+    <div class="section-title">Adicionar item</div>
+    <div id="add-form-wrap">
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="narrow">
+          <label>Ícone</label>
+          <input id="add-icon" value="✅" maxlength="4" style="width:100%;text-align:center;font-size:1.2rem">
+        </div>
+        <div>
+          <label>Nome</label>
+          <input id="add-title" placeholder="Nome da tarefa" style="width:100%" required>
+        </div>
+        <div class="narrow" style="flex:0 0 140px">
+          <label>Categoria</label>
+          <select id="add-category" style="width:100%">
+            <option value="medication">Medicamento</option>
+            <option value="supplement">Suplemento</option>
+            <option value="reminder">Lembrete</option>
+          </select>
+        </div>
+        <div class="narrow" style="flex:0 0 70px">
+          <label>Ordem</label>
+          <input id="add-sort" type="number" value="0" style="width:100%;text-align:center">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="quickAdd()">Adicionar</button>
+    </div>
+  </div>
+
+  <!-- ═══ Items List ═══ -->
+  <div class="section">
+    <div class="section-title">Itens da rotina</div>
+    <div id="items-list"></div>
+  </div>
+
+  <div class="display-link">
+    <a href="/" target="_blank">Abrir tela do tablet →</a>
+  </div>
+
+  <!-- ═══ Edit Modal ═══ -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <h2 id="modal-title">Editar item</h2>
+      <form id="edit-form">
+        <input type="hidden" id="edit-id">
+
+        <!-- Basic -->
+        <div class="form-row">
+          <div class="narrow">
+            <label>Ícone</label>
+            <input id="edit-icon" maxlength="4" style="width:100%;text-align:center;font-size:1.2rem">
+          </div>
+          <div>
+            <label>Nome</label>
+            <input id="edit-title" required style="width:100%">
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <div>
+            <label>Categoria</label>
+            <select id="edit-category" style="width:100%">
+              <option value="medication">Medicamento</option>
+              <option value="supplement">Suplemento</option>
+              <option value="reminder">Lembrete</option>
+            </select>
+          </div>
+          <div class="narrow" style="flex:0 0 80px">
+            <label>Ordem</label>
+            <input id="edit-sort" type="number" style="width:100%;text-align:center">
+          </div>
+        </div>
+
+        <!-- Weekdays -->
+        <div class="form-section">
+          <div class="form-section-title">Dias da semana</div>
+          <div class="weekday-selector" id="edit-weekdays">
+            <button type="button" class="weekday-btn" data-day="0">Dom</button>
+            <button type="button" class="weekday-btn" data-day="1">Seg</button>
+            <button type="button" class="weekday-btn" data-day="2">Ter</button>
+            <button type="button" class="weekday-btn" data-day="3">Qua</button>
+            <button type="button" class="weekday-btn" data-day="4">Qui</button>
+            <button type="button" class="weekday-btn" data-day="5">Sex</button>
+            <button type="button" class="weekday-btn" data-day="6">Sáb</button>
+          </div>
+        </div>
+
+        <!-- Count & Alerts -->
+        <div class="form-section">
+          <div class="form-section-title">Repetição e alertas</div>
+          <div class="form-row">
+            <div>
+              <label>Total de vezes (vazio = ilimitado)</label>
+              <input id="edit-total-count" type="number" min="1" placeholder="∞" style="width:100%">
+            </div>
+            <div>
+              <label>Já completou</label>
+              <input id="edit-completed-count" type="number" min="0" style="width:100%" disabled>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:10px">
+            <label>Alerta na penúltima vez</label>
+            <input id="edit-alert-penultimate" placeholder="Ex: Quase acabando! Hora de comprar mais" style="width:100%">
+          </div>
+          <div class="form-group">
+            <label>Alerta na última vez</label>
+            <input id="edit-alert-last" placeholder="Ex: Última dose! Comprar amanhã" style="width:100%">
+          </div>
+        </div>
+
+        <!-- Follow-up -->
+        <div class="form-section">
+          <div class="form-section-title">Tarefa automática ao concluir todas</div>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">
+            Quando o total de repetições for atingido, cria automaticamente esta tarefa:
+          </p>
+          <div class="form-row">
+            <div class="narrow">
+              <label>Ícone</label>
+              <input id="edit-followup-icon" maxlength="4" placeholder="📌" style="width:100%;text-align:center;font-size:1.2rem">
+            </div>
+            <div>
+              <label>Nome da tarefa</label>
+              <input id="edit-followup-title" placeholder="Ex: Comprar Vitamina D" style="width:100%">
+            </div>
+            <div class="narrow" style="flex:0 0 140px">
+              <label>Categoria</label>
+              <select id="edit-followup-category" style="width:100%">
+                <option value="">(mesma)</option>
+                <option value="medication">Medicamento</option>
+                <option value="supplement">Suplemento</option>
+                <option value="reminder">Lembrete</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ Confirm Dialog ═══ -->
+  <div class="confirm-overlay" id="confirm-dialog">
+    <div class="confirm-box">
+      <p id="confirm-message"></p>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="closeConfirm()">Cancelar</button>
+        <button class="btn btn-danger" id="confirm-action" style="background:var(--accent-danger);color:#fff">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/public/utils.js"></script>
+  <script src="/public/admin.js"></script>
+  <script src="/public/icon-picker.js"></script>
+</body>
+</html>

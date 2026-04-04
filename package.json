@@ -1,0 +1,39 @@
+{
+  "name": "daily-screen",
+  "version": "1.0.0",
+  "description": "ADHD morning assistant — daily checklist on a wall-mounted tablet",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "adhd",
+    "morning-routine",
+    "checklist",
+    "dashboard",
+    "tablet",
+    "self-hosted",
+    "docker",
+    "express",
+    "sqlite"
+  ],
+  "author": "Pedro Beraldo",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pedroberaldo87/daily-screen.git"
+  },
+  "homepage": "https://github.com/pedroberaldo87/daily-screen#readme",
+  "bugs": {
+    "url": "https://github.com/pedroberaldo87/daily-screen/issues"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "dotenv": "^17.4.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "express-session": "^1.19.0",
+    "helmet": "^8.1.0"
+  }
+}
