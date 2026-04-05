@@ -157,6 +157,7 @@ daily-screen/
     display.js           # Tablet display logic (clock, weather, tasks, date nav)
     admin.js             # Admin panel logic (CRUD, settings)
     icon-picker.js       # Emoji picker with PT-BR search
+    utils.js             # Shared utilities (escapeHtml)
     sw.js                # Service worker (offline + cache strategies)
     manifest.json        # PWA manifest
   views/
@@ -179,16 +180,19 @@ daily-screen/
 
 All endpoints are prefixed with `/api`.
 
+**Public (no auth required):**
 - `GET /api/tasks?date=YYYY-MM-DD` — Get tasks for date (lazy-generates if needed)
 - `POST /api/tasks/:id/toggle` — Mark/unmark task as complete
-- `GET /api/items` — List all routine items (admin)
+- `GET /api/items` — List all routine items
+- `GET /api/weather` — Weather forecast (cached 30 min)
+- `GET /api/geocoding?q=cidade` — Search cities (Open-Meteo)
+- `GET /api/settings` — Get all settings
+
+**Auth required (admin session):**
 - `POST /api/items` — Create routine item
 - `PUT /api/items/:id` — Update routine item
 - `DELETE /api/items/:id` — Soft delete (deactivate)
 - `DELETE /api/items/:id/permanent` — Hard delete
-- `GET /api/weather` — Weather forecast (cached 30 min)
-- `GET /api/geocoding?q=cidade` — Search cities (Open-Meteo)
-- `GET /api/settings` — Get all settings
 - `PUT /api/settings` — Update settings (key-value pairs)
 
 ## Contributing
