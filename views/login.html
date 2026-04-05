@@ -72,19 +72,13 @@
 </head>
 <body>
   <form class="login-box" method="POST" action="/admin/login">
-    <h1>Daily Screen</h1>
+    <h1 data-i18n="login.title">Daily Screen</h1>
     <div id="error" class="error" style="display:none"></div>
-    <label for="password">Senha</label>
+    <label for="password" data-i18n="login.password">Senha</label>
     <input type="password" id="password" name="password" autofocus required>
-    <button type="submit">Entrar</button>
+    <button type="submit" data-i18n="login.submit">Entrar</button>
   </form>
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('error')) {
-      const el = document.getElementById('error');
-      el.textContent = 'Senha incorreta';
-      el.style.display = 'block';
-    }
-  </script>
+  <script src="/public/i18n.js"></script>
+  <script src="/public/login.js"></script>
 </body>
 </html>

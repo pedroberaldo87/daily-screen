@@ -25,7 +25,7 @@
     <aside class="info-strip">
       <div class="info-clock-section">
         <time class="clock" id="clock">08:23</time>
-        <h1 class="greeting" id="greeting">Bom dia</h1>
+        <h1 class="greeting" id="greeting" data-i18n="greeting.morning">Bom dia</h1>
         <p class="date" id="date-display"></p>
       </div>
 
@@ -34,9 +34,9 @@
       </div>
 
       <div class="date-nav" id="date-nav">
-        <button class="date-nav-btn" id="date-prev" aria-label="Dia anterior">‹</button>
-        <button class="date-nav-btn date-nav-today" id="date-today">Hoje</button>
-        <button class="date-nav-btn" id="date-next" aria-label="Próximo dia">›</button>
+        <button class="date-nav-btn" id="date-prev" aria-label="Dia anterior" data-i18n-aria="display.prevDay">‹</button>
+        <button class="date-nav-btn date-nav-today" id="date-today" data-i18n="display.today">Hoje</button>
+        <button class="date-nav-btn" id="date-next" aria-label="Próximo dia" data-i18n-aria="display.nextDay">›</button>
       </div>
     </aside>
 
@@ -45,7 +45,7 @@
       <div class="column col-medication" data-category="medication" id="col-medication">
         <div class="column-header">
           <span class="column-icon">💊</span>
-          <span class="column-label">Medicamentos</span>
+          <span class="column-label" data-i18n="display.medications">Medicamentos</span>
           <span class="column-line"></span>
         </div>
         <div class="column-tasks"></div>
@@ -54,7 +54,7 @@
       <div class="column col-supplement" data-category="supplement" id="col-supplement">
         <div class="column-header">
           <span class="column-icon">🧬</span>
-          <span class="column-label">Suplementos</span>
+          <span class="column-label" data-i18n="display.supplements">Suplementos</span>
           <span class="column-line"></span>
         </div>
         <div class="column-tasks"></div>
@@ -63,7 +63,7 @@
       <div class="column col-reminder" data-category="reminder" id="col-reminder">
         <div class="column-header">
           <span class="column-icon">📋</span>
-          <span class="column-label">Lembretes</span>
+          <span class="column-label" data-i18n="display.reminders">Lembretes</span>
           <span class="column-line"></span>
         </div>
         <div class="column-tasks"></div>
@@ -77,7 +77,7 @@
     <div class="progress-track">
       <div class="progress-fill" id="progress-fill"></div>
     </div>
-    <span class="progress-text" id="progress-text">0 de 0</span>
+    <span class="progress-text" id="progress-text" data-i18n="display.progress">0 de 0</span>
   </div>
 
   <!-- Celebration overlay -->
@@ -85,12 +85,13 @@
     <div class="confetti-container" id="confetti"></div>
     <div class="celebration-content">
       <span class="celebration-emoji">✨</span>
-      <p class="celebration-text">Tudo feito!</p>
-      <p class="celebration-sub">Bom trabalho hoje.</p>
+      <p class="celebration-text" data-i18n="display.allDone">Tudo feito!</p>
+      <p class="celebration-sub" data-i18n="display.goodWork">Bom trabalho hoje.</p>
     </div>
   </div>
 
   <script src="/public/utils.js"></script>
+  <script src="/public/i18n.js"></script>
   <script src="/public/display.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

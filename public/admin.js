@@ -1,10 +1,10 @@
 const API = '/api';
 
-const WEEKDAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const CATEGORY_LABELS = {
-  medication: 'Medicamento',
-  supplement: 'Suplemento',
-  reminder: 'Lembrete',
+const WEEKDAY_KEYS = ['weekday.sun', 'weekday.mon', 'weekday.tue', 'weekday.wed', 'weekday.thu', 'weekday.fri', 'weekday.sat'];
+const CATEGORY_KEYS = {
+  medication: 'category.medication',
+  supplement: 'category.supplement',
+  reminder: 'category.reminder',
 };
 
 // ═══ Items List ═══
@@ -22,12 +22,14 @@ function renderItems(items) {
   for (const item of items) {
     const weekdays = JSON.parse(item.weekdays || '[0,1,2,3,4,5,6]');
     const weekdayStr = weekdays.length === 7
-      ? 'Todo dia'
-      : weekdays.map(d => WEEKDAY_NAMES[d]).join(', ');
+      ? t('admin.allDays')
+      : weekdays.map(d => t(WEEKDAY_KEYS[d])).join(', ');
 
     const countInfo = item.total_count
       ? `${item.completed_count}/${item.total_count}`
       : '';
+
+    const catLabel = t(CATEGORY_KEYS[item.category] || '') || escapeHtml(item.category);
 
     const card = document.createElement('div');
     card.className = `item-card${item.active ? '' : ' inactive'}`;
@@ -36,20 +38,20 @@ function renderItems(items) {
       <div class="item-info">
         <div class="item-title">${escapeHtml(item.title)}</div>
         <div class="item-meta">
-          <span class="badge ${escapeHtml(item.category)}">${CATEGORY_LABELS[item.category] || escapeHtml(item.category)}</span>
+          <span class="badge ${escapeHtml(item.category)}">${escapeHtml(catLabel)}</span>
           <span>${escapeHtml(weekdayStr)}</span>
           ${countInfo ? `<span class="count-badge">${countInfo}</span>` : ''}
           ${item.followup_title ? `<span style="color:var(--accent-rem)">→ ${escapeHtml(item.followup_title)}</span>` : ''}
-          ${!item.active ? '<em style="color:var(--accent-danger)">Desativado</em>' : ''}
+          ${!item.active ? `<em style="color:var(--accent-danger)">${escapeHtml(t('admin.deactivated'))}</em>` : ''}
         </div>
       </div>
       <div class="item-actions">
-        <button class="btn btn-sm btn-secondary" onclick="openEditModal(${item.id})">Editar</button>
+        <button class="btn btn-sm btn-secondary" onclick="openEditModal(${item.id})">${escapeHtml(t('common.edit'))}</button>
         ${item.active
-          ? `<button class="btn btn-sm btn-danger" onclick="deactivateItem(${item.id})">Desativar</button>`
-          : `<button class="btn btn-sm btn-secondary" onclick="reactivateItem(${item.id})">Reativar</button>`
+          ? `<button class="btn btn-sm btn-danger" onclick="deactivateItem(${item.id})">${escapeHtml(t('common.deactivate'))}</button>`
+          : `<button class="btn btn-sm btn-secondary" onclick="reactivateItem(${item.id})">${escapeHtml(t('common.reactivate'))}</button>`
         }
-        <button class="btn btn-sm btn-danger" onclick="confirmDelete(${item.id}, '${item.title.replace(/'/g, "\\'")}')">Deletar</button>
+        <button class="btn btn-sm btn-danger" data-delete-id="${item.id}" data-delete-title="${escapeHtml(item.title)}">${escapeHtml(t('common.delete'))}</button>
       </div>
     `;
     container.appendChild(card);
@@ -192,7 +194,7 @@ let pendingAction = null;
 
 function confirmDelete(id, title) {
   document.getElementById('confirm-message').textContent =
-    `Deletar "${title}" permanentemente? Isso remove o item e todo o histórico.`;
+    t('admin.confirmDelete', { title });
   document.getElementById('confirm-dialog').classList.add('active');
   pendingAction = async () => {
     await fetch(`${API}/items/${id}/permanent`, { method: 'DELETE' });
@@ -214,11 +216,8 @@ document.getElementById('confirm-action').addEventListener('click', async () => 
 
 let searchTimeout = null;
 
-async function loadLocation() {
-  const res = await fetch(`${API}/settings`);
-  const settings = await res.json();
+function applyLocationFromSettings(settings) {
   const el = document.getElementById('current-location');
-
   if (settings.weather_city) {
     el.textContent = `📍 ${settings.weather_city}`;
     el.style.display = 'block';
@@ -240,7 +239,7 @@ document.getElementById('location-search').addEventListener('input', (e) => {
     container.innerHTML = '';
 
     if (results.length === 0) {
-      container.innerHTML = '<div class="search-result"><em style="color:var(--text-muted)">Nenhum resultado</em></div>';
+      container.innerHTML = `<div class="search-result"><em style="color:var(--text-muted)">${escapeHtml(t('admin.noResults'))}</em></div>`;
     } else {
       for (const r of results) {
         const div = document.createElement('div');
@@ -311,19 +310,14 @@ const FONT_DEFAULTS = {
 
 function setupFontSliders() {
   document.querySelectorAll('#font-panel input[type="range"]').forEach(slider => {
-    const key = slider.dataset.key;
-    const valueEl = document.getElementById('fv-' + slider.id.replace('fs-', ''));
-
     slider.addEventListener('input', () => {
+      const valueEl = document.getElementById('fv-' + slider.id.replace('fs-', ''));
       if (valueEl) valueEl.textContent = slider.value;
     });
   });
 }
 
-async function loadFonts() {
-  const res = await fetch(`${API}/settings`);
-  const settings = await res.json();
-
+function applyFontsFromSettings(settings) {
   for (const [key, defaultVal] of Object.entries(FONT_DEFAULTS)) {
     const val = settings[key] || defaultVal;
     const slider = document.querySelector(`input[data-key="${key}"]`);
@@ -350,7 +344,7 @@ async function saveFonts() {
   // Brief visual feedback
   const btn = document.querySelector('#font-panel .btn-primary');
   const orig = btn.textContent;
-  btn.textContent = 'Salvo!';
+  btn.textContent = t('admin.saved');
   btn.style.background = 'var(--accent-success)';
   setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
 }
@@ -375,14 +369,59 @@ async function resetFonts() {
 
   const btn = document.querySelector('#font-panel .btn-secondary');
   const orig = btn.textContent;
-  btn.textContent = 'Restaurado!';
+  btn.textContent = t('admin.restored');
   setTimeout(() => { btn.textContent = orig; }, 1500);
+}
+
+// ═══ Language Selector ═══
+
+function setupLanguageSelector(settings) {
+  const select = document.getElementById('language-select');
+  if (settings && settings.language) {
+    select.value = settings.language;
+  } else {
+    select.value = getLang();
+  }
+
+  select.addEventListener('change', async () => {
+    const lang = select.value;
+    await fetch(`${API}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: lang }),
+    });
+    await setLanguage(lang);
+    loadItems();
+  });
+}
+
+// ═══ Unified Settings Loader ═══
+
+async function loadSettings() {
+  try {
+    const res = await fetch(`${API}/settings`);
+    const settings = await res.json();
+    await initI18n(settings);
+    applyLocationFromSettings(settings);
+    applyFontsFromSettings(settings);
+    setupLanguageSelector(settings);
+  } catch (err) {
+    await initI18n();
+  }
 }
 
 // ═══ Init ═══
 
+// Event delegation for delete buttons (avoids inline JS + XSS via title injection)
+document.getElementById('items-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-delete-id]');
+  if (btn) confirmDelete(Number(btn.dataset.deleteId), btn.dataset.deleteTitle);
+});
+
 setupWeekdayButtons();
 setupFontSliders();
-loadItems();
-loadLocation();
-loadFonts();
+
+(async () => {
+  await loadSettings();
+  loadItems();
+})();

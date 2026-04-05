@@ -28,8 +28,8 @@ app.use(helmet({
 }));
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Trust proxy in production (behind Caddy)

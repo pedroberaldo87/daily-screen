@@ -38,10 +38,15 @@ function updateTodayButton() {
 
 function updateDateDisplay() {
   const d = new Date(currentDate + 'T12:00:00');
-  const weekday = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+  const locale = getLocale();
+  const weekday = d.toLocaleDateString(locale, { weekday: 'long' });
   const day = d.getDate();
-  const month = d.toLocaleDateString('pt-BR', { month: 'long' });
-  document.getElementById('date-display').textContent = `${weekday}, ${day} de ${month}`;
+  const month = d.toLocaleDateString(locale, { month: 'long' });
+  const fmt = getDateFormat();
+  document.getElementById('date-display').textContent = fmt
+    .replace('{weekday}', weekday)
+    .replace('{day}', day)
+    .replace('{month}', month);
 }
 
 // ═══ Idle Auto-Reset ═══
@@ -59,7 +64,7 @@ function resetIdleTimer() {
 
 function updateClock() {
   const now = new Date();
-  document.getElementById('clock').textContent = now.toLocaleTimeString('pt-BR', {
+  document.getElementById('clock').textContent = now.toLocaleTimeString(getLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -67,11 +72,11 @@ function updateClock() {
 
 function updateGreeting() {
   const hour = new Date().getHours();
-  let greeting;
-  if (hour < 12) greeting = 'Bom dia';
-  else if (hour < 18) greeting = 'Boa tarde';
-  else greeting = 'Boa noite';
-  document.getElementById('greeting').textContent = greeting;
+  let key;
+  if (hour < 12) key = 'greeting.morning';
+  else if (hour < 18) key = 'greeting.afternoon';
+  else key = 'greeting.evening';
+  document.getElementById('greeting').textContent = t(key);
 }
 
 function updateDate() {
@@ -103,7 +108,7 @@ async function fetchWeather() {
     `;
   } catch (err) {
     console.error('Weather fetch failed:', err);
-    el.innerHTML = '<div class="weather-loading">sem dados</div>';
+    el.innerHTML = `<div class="weather-loading">${escapeHtml(t('display.noData'))}</div>`;
   }
 }
 
@@ -209,7 +214,7 @@ function updateProgress() {
 
   if (done === total && total > 0) {
     fill.classList.add('complete');
-    text.textContent = 'Tudo feito!';
+    text.textContent = t('display.allDone');
     text.classList.add('all-done');
 
     // Celebration — only trigger once
@@ -219,7 +224,7 @@ function updateProgress() {
     }
   } else {
     fill.classList.remove('complete');
-    text.textContent = `${done} de ${total}`;
+    text.textContent = t('display.progress', { done, total });
     text.classList.remove('all-done');
     wasAllDone = false;
   }
@@ -269,32 +274,41 @@ const FONT_VAR_MAP = {
   font_task_count: '--fs-task-count',
 };
 
-async function applyFontSettings() {
+function applyFontSettings(settings) {
+  const root = document.documentElement;
+  for (const [key, cssVar] of Object.entries(FONT_VAR_MAP)) {
+    if (settings[key]) {
+      root.style.setProperty(cssVar, settings[key] + 'rem');
+    }
+  }
+}
+
+// ═══ Unified Settings Loader ═══
+
+async function loadSettings() {
   try {
     const res = await fetch(`${API_BASE}/settings`);
     if (!res.ok) return;
     const settings = await res.json();
-    const root = document.documentElement;
-
-    for (const [key, cssVar] of Object.entries(FONT_VAR_MAP)) {
-      if (settings[key]) {
-        root.style.setProperty(cssVar, settings[key] + 'rem');
-      }
-    }
+    applyFontSettings(settings);
+    await initI18n(settings);
   } catch (err) {
-    // Silent fail — defaults from CSS apply
+    // Silent fail — defaults apply
+    await initI18n();
   }
 }
 
 // ═══ Init ═══
 
-updateClock();
-updateGreeting();
-updateDateDisplay();
-updateTodayButton();
-fetchTasks();
-fetchWeather();
-applyFontSettings();
+(async () => {
+  await loadSettings();
+  updateClock();
+  updateGreeting();
+  updateDateDisplay();
+  updateTodayButton();
+  fetchTasks();
+  fetchWeather();
+})();
 
 // Date navigation
 document.getElementById('date-prev').addEventListener('click', () => navigateDate(-1));
@@ -311,4 +325,4 @@ setInterval(updateGreeting, 60 * 1000);
 setInterval(updateDate, 60 * 1000);
 setInterval(fetchTasks, POLL_INTERVAL);
 setInterval(fetchWeather, WEATHER_INTERVAL);
-setInterval(applyFontSettings, POLL_INTERVAL); // Sync font changes
+setInterval(loadSettings, POLL_INTERVAL); // Sync font & language changes

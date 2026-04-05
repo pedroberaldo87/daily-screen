@@ -151,7 +151,7 @@ const EMOJI_KEYWORDS = {
 
 const ICON_CATEGORIES = {
   rotina: {
-    label: '⭐ Rotina',
+    labelKey: 'icon.category.routine',
     icons: [
       '💊','💉','🩺','🩹','🧬','🧪','🔬','🫀','🫁','🧠','🦷','🦴','👁️','🩸','🩻',
       '☀️','🌙','⭐','🌡️','💧','🧊','🔥','❄️','🌈',
@@ -165,7 +165,7 @@ const ICON_CATEGORIES = {
     ],
   },
   rostos: {
-    label: '😀 Rostos',
+    labelKey: 'icon.category.faces',
     icons: [
       '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃',
       '😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙',
@@ -185,7 +185,7 @@ const ICON_CATEGORIES = {
     ],
   },
   natureza: {
-    label: '🌿 Natureza',
+    labelKey: 'icon.category.nature',
     icons: [
       '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯',
       '🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔',
@@ -206,7 +206,7 @@ const ICON_CATEGORIES = {
     ],
   },
   comida: {
-    label: '🍔 Comida',
+    labelKey: 'icon.category.food',
     icons: [
       '🍇','🍈','🍉','🍊','🍋','🍌','🍍','🥭','🍎','🍏',
       '🍐','🍑','🍒','🍓','🫐','🥝','🍅','🫒','🥥',
@@ -225,7 +225,7 @@ const ICON_CATEGORIES = {
     ],
   },
   objetos: {
-    label: '🔧 Objetos',
+    labelKey: 'icon.category.objects',
     icons: [
       '⌚','📱','💻','⌨️','🖥️','🖨️','🖱️','💽','💾','📀',
       '🎥','📸','📹','📼','🔍','🔎','🕯️','💡','🔦','🏮',
@@ -248,7 +248,7 @@ const ICON_CATEGORIES = {
     ],
   },
   simbolos: {
-    label: '🔣 Símbolos',
+    labelKey: 'icon.category.symbols',
     icons: [
       '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔',
       '❣️','💕','💞','💓','💗','💖','💘','💝','💟',
@@ -279,7 +279,7 @@ const ICON_CATEGORIES = {
     ],
   },
   bandeiras: {
-    label: '🏳️ Bandeiras',
+    labelKey: 'icon.category.flags',
     icons: [
       '🏁','🚩','🎌','🏴','🏳️','🏳️‍🌈','🏳️‍⚧️','🏴‍☠️',
       '🇧🇷','🇺🇸','🇬🇧','🇫🇷','🇩🇪','🇮🇹','🇪🇸','🇵🇹',
@@ -304,7 +304,7 @@ function createPicker() {
   const header = document.createElement('div');
   header.className = 'ip-header';
   header.innerHTML = `
-    <input type="text" class="ip-search" id="ip-search" placeholder="Buscar emoji..." autocomplete="off">
+    <input type="text" class="ip-search" id="ip-search" placeholder="Buscar emoji..." data-i18n-placeholder="icon.search" autocomplete="off">
   `;
   picker.appendChild(header);
 
@@ -314,11 +314,12 @@ function createPicker() {
   const categoryKeys = Object.keys(ICON_CATEGORIES);
   categoryKeys.forEach((key, i) => {
     const cat = ICON_CATEGORIES[key];
+    const label = typeof t === 'function' ? t(cat.labelKey) : cat.labelKey;
     const tab = document.createElement('button');
     tab.className = `ip-tab${i === 0 ? ' active' : ''}`;
     tab.dataset.category = key;
-    tab.textContent = cat.label.split(' ')[0]; // Just the emoji
-    tab.title = cat.label;
+    tab.textContent = label.split(' ')[0]; // Just the emoji
+    tab.title = label;
     tab.addEventListener('click', () => switchTab(key));
     tabs.appendChild(tab);
   });
@@ -364,7 +365,8 @@ function createPicker() {
       renderGridDirect(results);
     } else {
       const grid = document.getElementById('ip-grid');
-      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text-muted);font-size:0.85rem">Nenhum resultado para "' + q + '"</div>';
+      const noResultsMsg = typeof t === 'function' ? t('icon.noResults', { query: q }) : `Nenhum resultado para "${q}"`;
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text-muted);font-size:0.85rem">' + escapeHtml(noResultsMsg) + '</div>';
     }
   });
 

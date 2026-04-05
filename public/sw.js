@@ -1,8 +1,9 @@
-const CACHE_NAME = 'daily-screen-v2';
+const CACHE_NAME = 'daily-screen-v3';
 const SHELL_ASSETS = [
   '/',
   '/public/style.css',
   '/public/display.js',
+  '/public/i18n.js',
 ];
 
 // Install: cache the app shell

@@ -381,228 +381,238 @@
 </head>
 <body>
   <div class="admin-header">
-    <h1>Daily Screen — Admin</h1>
+    <h1 data-i18n="admin.title">Daily Screen — Admin</h1>
     <nav>
-      <a href="/" target="_blank">Ver tela</a>
-      <a href="/admin/logout">Sair</a>
+      <a href="/" target="_blank" data-i18n="admin.viewScreen">Ver tela</a>
+      <a href="/admin/logout" data-i18n="admin.logout">Sair</a>
     </nav>
   </div>
 
   <!-- Settings button (opens modal) -->
   <div style="margin-bottom:20px">
     <button class="btn btn-secondary" onclick="openSettingsModal()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px">
-      <span style="font-size:1.1rem">⚙️</span> Configurações
+      <span style="font-size:1.1rem">⚙️</span> <span data-i18n="admin.settingsBtn">Configurações</span>
     </button>
   </div>
 
   <!-- ═══ Settings Modal ═══ -->
   <div class="modal-overlay" id="settings-modal">
     <div class="modal" style="max-width:600px">
-      <h2>Configurações</h2>
+      <h2 data-i18n="admin.settings">Configurações</h2>
+
+      <!-- Language -->
+      <div class="form-section" style="border-top:none;margin-top:0;padding-top:0">
+        <div class="form-section-title" data-i18n="admin.language">Idioma</div>
+        <select id="language-select" style="width:100%">
+          <option value="pt-BR">🇧🇷 Português</option>
+          <option value="en">🇺🇸 English</option>
+          <option value="es">🇪🇸 Español</option>
+        </select>
+      </div>
 
       <!-- Location -->
-      <div class="form-section" style="border-top:none;margin-top:0;padding-top:0">
-        <div class="form-section-title">Localização (previsão do tempo)</div>
+      <div class="form-section">
+        <div class="form-section-title" data-i18n="admin.location">Localização (previsão do tempo)</div>
         <div id="current-location" class="current-location" style="display:none"></div>
         <div class="search-wrap">
-          <input type="text" id="location-search" placeholder="Buscar cidade..." style="width:100%">
+          <input type="text" id="location-search" placeholder="Buscar cidade..." data-i18n-placeholder="admin.searchCity" style="width:100%">
           <div class="search-results" id="location-results"></div>
         </div>
       </div>
 
       <!-- Typography -->
       <div class="form-section">
-        <div class="form-section-title">Tipografia (tamanhos de fonte)</div>
+        <div class="form-section-title" data-i18n="admin.typography">Tipografia (tamanhos de fonte)</div>
         <div class="font-panel" id="font-panel">
           <div class="font-control">
-            <label>Relógio <span class="font-value" id="fv-clock">3.6</span></label>
+            <label><span data-i18n="admin.fontClock">Relógio</span> <span class="font-value" id="fv-clock">3.6</span></label>
             <input type="range" id="fs-clock" data-key="font_clock" min="1.5" max="5" step="0.1" value="3.6">
           </div>
           <div class="font-control">
-            <label>Saudação <span class="font-value" id="fv-greeting">1.25</span></label>
+            <label><span data-i18n="admin.fontGreeting">Saudação</span> <span class="font-value" id="fv-greeting">1.25</span></label>
             <input type="range" id="fs-greeting" data-key="font_greeting" min="0.7" max="2.5" step="0.05" value="1.25">
           </div>
           <div class="font-control">
-            <label>Data <span class="font-value" id="fv-date">0.88</span></label>
+            <label><span data-i18n="admin.fontDate">Data</span> <span class="font-value" id="fv-date">0.88</span></label>
             <input type="range" id="fs-date" data-key="font_date" min="0.5" max="1.5" step="0.02" value="0.88">
           </div>
           <div class="font-control">
-            <label>Temperatura <span class="font-value" id="fv-weather-temp">2</span></label>
+            <label><span data-i18n="admin.fontTemp">Temperatura</span> <span class="font-value" id="fv-weather-temp">2</span></label>
             <input type="range" id="fs-weather-temp" data-key="font_weather_temp" min="1" max="4" step="0.1" value="2">
           </div>
           <div class="font-control">
-            <label>Título da tarefa <span class="font-value" id="fv-task-title">1.05</span></label>
+            <label><span data-i18n="admin.fontTaskTitle">Título da tarefa</span> <span class="font-value" id="fv-task-title">1.05</span></label>
             <input type="range" id="fs-task-title" data-key="font_task_title" min="0.7" max="2" step="0.05" value="1.05">
           </div>
           <div class="font-control">
-            <label>Cabeçalho da coluna <span class="font-value" id="fv-col-header">0.8</span></label>
+            <label><span data-i18n="admin.fontColHeader">Cabeçalho da coluna</span> <span class="font-value" id="fv-col-header">0.8</span></label>
             <input type="range" id="fs-col-header" data-key="font_col_header" min="0.5" max="1.5" step="0.02" value="0.8">
           </div>
           <div class="font-control">
-            <label>Ícone da tarefa <span class="font-value" id="fv-task-icon">1.6</span></label>
+            <label><span data-i18n="admin.fontTaskIcon">Ícone da tarefa</span> <span class="font-value" id="fv-task-icon">1.6</span></label>
             <input type="range" id="fs-task-icon" data-key="font_task_icon" min="0.8" max="3" step="0.1" value="1.6">
           </div>
           <div class="font-control">
-            <label>Progresso <span class="font-value" id="fv-progress">0.78</span></label>
+            <label><span data-i18n="admin.fontProgress">Progresso</span> <span class="font-value" id="fv-progress">0.78</span></label>
             <input type="range" id="fs-progress" data-key="font_progress" min="0.5" max="1.5" step="0.02" value="0.78">
           </div>
           <div class="font-control">
-            <label>Contador <span class="font-value" id="fv-task-count">0.6</span></label>
+            <label><span data-i18n="admin.fontCounter">Contador</span> <span class="font-value" id="fv-task-count">0.6</span></label>
             <input type="range" id="fs-task-count" data-key="font_task_count" min="0.4" max="1.2" step="0.02" value="0.6">
           </div>
           <div class="font-panel-actions">
-            <button class="btn btn-secondary btn-sm" onclick="resetFonts()">Voltar ao padrão</button>
-            <button class="btn btn-primary btn-sm" onclick="saveFonts()">Salvar</button>
+            <button class="btn btn-secondary btn-sm" onclick="resetFonts()" data-i18n="admin.resetDefaults">Voltar ao padrão</button>
+            <button class="btn btn-primary btn-sm" onclick="saveFonts()" data-i18n="common.save">Salvar</button>
           </div>
         </div>
       </div>
 
       <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="closeSettingsModal()">Fechar</button>
+        <button type="button" class="btn btn-secondary" onclick="closeSettingsModal()" data-i18n="common.close">Fechar</button>
       </div>
     </div>
   </div>
 
   <!-- ═══ Add Item ═══ -->
   <div class="section">
-    <div class="section-title">Adicionar item</div>
+    <div class="section-title" data-i18n="admin.addItem">Adicionar item</div>
     <div id="add-form-wrap">
       <div class="form-row" style="margin-bottom:10px">
         <div class="narrow">
-          <label>Ícone</label>
+          <label data-i18n="admin.icon">Ícone</label>
           <input id="add-icon" value="✅" maxlength="4" style="width:100%;text-align:center;font-size:1.2rem">
         </div>
         <div>
-          <label>Nome</label>
-          <input id="add-title" placeholder="Nome da tarefa" style="width:100%" required>
+          <label data-i18n="admin.name">Nome</label>
+          <input id="add-title" placeholder="Nome da tarefa" data-i18n-placeholder="admin.namePlaceholder" style="width:100%" required>
         </div>
         <div class="narrow" style="flex:0 0 140px">
-          <label>Categoria</label>
+          <label data-i18n="admin.categoryLabel">Categoria</label>
           <select id="add-category" style="width:100%">
-            <option value="medication">Medicamento</option>
-            <option value="supplement">Suplemento</option>
-            <option value="reminder">Lembrete</option>
+            <option value="medication" data-i18n="category.medication">Medicamento</option>
+            <option value="supplement" data-i18n="category.supplement">Suplemento</option>
+            <option value="reminder" data-i18n="category.reminder">Lembrete</option>
           </select>
         </div>
         <div class="narrow" style="flex:0 0 70px">
-          <label>Ordem</label>
+          <label data-i18n="admin.order">Ordem</label>
           <input id="add-sort" type="number" value="0" style="width:100%;text-align:center">
         </div>
       </div>
-      <button class="btn btn-primary" onclick="quickAdd()">Adicionar</button>
+      <button class="btn btn-primary" onclick="quickAdd()" data-i18n="common.add">Adicionar</button>
     </div>
   </div>
 
   <!-- ═══ Items List ═══ -->
   <div class="section">
-    <div class="section-title">Itens da rotina</div>
+    <div class="section-title" data-i18n="admin.routineItems">Itens da rotina</div>
     <div id="items-list"></div>
   </div>
 
   <div class="display-link">
-    <a href="/" target="_blank">Abrir tela do tablet →</a>
+    <a href="/" target="_blank" data-i18n="admin.openTablet">Abrir tela do tablet →</a>
   </div>
 
   <!-- ═══ Edit Modal ═══ -->
   <div class="modal-overlay" id="edit-modal">
     <div class="modal">
-      <h2 id="modal-title">Editar item</h2>
+      <h2 id="modal-title" data-i18n="admin.editItem">Editar item</h2>
       <form id="edit-form">
         <input type="hidden" id="edit-id">
 
         <!-- Basic -->
         <div class="form-row">
           <div class="narrow">
-            <label>Ícone</label>
+            <label data-i18n="admin.icon">Ícone</label>
             <input id="edit-icon" maxlength="4" style="width:100%;text-align:center;font-size:1.2rem">
           </div>
           <div>
-            <label>Nome</label>
+            <label data-i18n="admin.name">Nome</label>
             <input id="edit-title" required style="width:100%">
           </div>
         </div>
         <div class="form-row" style="margin-top:10px">
           <div>
-            <label>Categoria</label>
+            <label data-i18n="admin.categoryLabel">Categoria</label>
             <select id="edit-category" style="width:100%">
-              <option value="medication">Medicamento</option>
-              <option value="supplement">Suplemento</option>
-              <option value="reminder">Lembrete</option>
+              <option value="medication" data-i18n="category.medication">Medicamento</option>
+              <option value="supplement" data-i18n="category.supplement">Suplemento</option>
+              <option value="reminder" data-i18n="category.reminder">Lembrete</option>
             </select>
           </div>
           <div class="narrow" style="flex:0 0 80px">
-            <label>Ordem</label>
+            <label data-i18n="admin.order">Ordem</label>
             <input id="edit-sort" type="number" style="width:100%;text-align:center">
           </div>
         </div>
 
         <!-- Weekdays -->
         <div class="form-section">
-          <div class="form-section-title">Dias da semana</div>
+          <div class="form-section-title" data-i18n="admin.weekdays">Dias da semana</div>
           <div class="weekday-selector" id="edit-weekdays">
-            <button type="button" class="weekday-btn" data-day="0">Dom</button>
-            <button type="button" class="weekday-btn" data-day="1">Seg</button>
-            <button type="button" class="weekday-btn" data-day="2">Ter</button>
-            <button type="button" class="weekday-btn" data-day="3">Qua</button>
-            <button type="button" class="weekday-btn" data-day="4">Qui</button>
-            <button type="button" class="weekday-btn" data-day="5">Sex</button>
-            <button type="button" class="weekday-btn" data-day="6">Sáb</button>
+            <button type="button" class="weekday-btn" data-day="0" data-i18n="weekday.sun">Dom</button>
+            <button type="button" class="weekday-btn" data-day="1" data-i18n="weekday.mon">Seg</button>
+            <button type="button" class="weekday-btn" data-day="2" data-i18n="weekday.tue">Ter</button>
+            <button type="button" class="weekday-btn" data-day="3" data-i18n="weekday.wed">Qua</button>
+            <button type="button" class="weekday-btn" data-day="4" data-i18n="weekday.thu">Qui</button>
+            <button type="button" class="weekday-btn" data-day="5" data-i18n="weekday.fri">Sex</button>
+            <button type="button" class="weekday-btn" data-day="6" data-i18n="weekday.sat">Sáb</button>
           </div>
         </div>
 
         <!-- Count & Alerts -->
         <div class="form-section">
-          <div class="form-section-title">Repetição e alertas</div>
+          <div class="form-section-title" data-i18n="admin.repetition">Repetição e alertas</div>
           <div class="form-row">
             <div>
-              <label>Total de vezes (vazio = ilimitado)</label>
+              <label data-i18n="admin.totalCount">Total de vezes (vazio = ilimitado)</label>
               <input id="edit-total-count" type="number" min="1" placeholder="∞" style="width:100%">
             </div>
             <div>
-              <label>Já completou</label>
+              <label data-i18n="admin.completed">Já completou</label>
               <input id="edit-completed-count" type="number" min="0" style="width:100%" disabled>
             </div>
           </div>
           <div class="form-group" style="margin-top:10px">
-            <label>Alerta na penúltima vez</label>
-            <input id="edit-alert-penultimate" placeholder="Ex: Quase acabando! Hora de comprar mais" style="width:100%">
+            <label data-i18n="admin.alertPenultimate">Alerta na penúltima vez</label>
+            <input id="edit-alert-penultimate" placeholder="Ex: Quase acabando! Hora de comprar mais" data-i18n-placeholder="admin.alertPenultimatePlaceholder" style="width:100%">
           </div>
           <div class="form-group">
-            <label>Alerta na última vez</label>
-            <input id="edit-alert-last" placeholder="Ex: Última dose! Comprar amanhã" style="width:100%">
+            <label data-i18n="admin.alertLast">Alerta na última vez</label>
+            <input id="edit-alert-last" placeholder="Ex: Última dose! Comprar amanhã" data-i18n-placeholder="admin.alertLastPlaceholder" style="width:100%">
           </div>
         </div>
 
         <!-- Follow-up -->
         <div class="form-section">
-          <div class="form-section-title">Tarefa automática ao concluir todas</div>
-          <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">
+          <div class="form-section-title" data-i18n="admin.followUp">Tarefa automática ao concluir todas</div>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px" data-i18n="admin.followUpDesc">
             Quando o total de repetições for atingido, cria automaticamente esta tarefa:
           </p>
           <div class="form-row">
             <div class="narrow">
-              <label>Ícone</label>
+              <label data-i18n="admin.icon">Ícone</label>
               <input id="edit-followup-icon" maxlength="4" placeholder="📌" style="width:100%;text-align:center;font-size:1.2rem">
             </div>
             <div>
-              <label>Nome da tarefa</label>
-              <input id="edit-followup-title" placeholder="Ex: Comprar Vitamina D" style="width:100%">
+              <label data-i18n="admin.followUpName">Nome da tarefa</label>
+              <input id="edit-followup-title" placeholder="Ex: Comprar Vitamina D" data-i18n-placeholder="admin.followUpPlaceholder" style="width:100%">
             </div>
             <div class="narrow" style="flex:0 0 140px">
-              <label>Categoria</label>
+              <label data-i18n="admin.categoryLabel">Categoria</label>
               <select id="edit-followup-category" style="width:100%">
-                <option value="">(mesma)</option>
-                <option value="medication">Medicamento</option>
-                <option value="supplement">Suplemento</option>
-                <option value="reminder">Lembrete</option>
+                <option value="" data-i18n="admin.followUpSameCategory">(mesma)</option>
+                <option value="medication" data-i18n="category.medication">Medicamento</option>
+                <option value="supplement" data-i18n="category.supplement">Suplemento</option>
+                <option value="reminder" data-i18n="category.reminder">Lembrete</option>
               </select>
             </div>
           </div>
         </div>
 
         <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar</button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal()" data-i18n="common.cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary" data-i18n="common.save">Salvar</button>
         </div>
       </form>
     </div>
@@ -613,13 +623,14 @@
     <div class="confirm-box">
       <p id="confirm-message"></p>
       <div class="btn-row">
-        <button class="btn btn-secondary" onclick="closeConfirm()">Cancelar</button>
-        <button class="btn btn-danger" id="confirm-action" style="background:var(--accent-danger);color:#fff">Confirmar</button>
+        <button class="btn btn-secondary" onclick="closeConfirm()" data-i18n="common.cancel">Cancelar</button>
+        <button class="btn btn-danger" id="confirm-action" style="background:var(--accent-danger);color:#fff" data-i18n="common.confirm">Confirmar</button>
       </div>
     </div>
   </div>
 
   <script src="/public/utils.js"></script>
+  <script src="/public/i18n.js"></script>
   <script src="/public/admin.js"></script>
   <script src="/public/icon-picker.js"></script>
 </body>
