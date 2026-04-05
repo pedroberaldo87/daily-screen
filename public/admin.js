@@ -306,6 +306,7 @@ const FONT_DEFAULTS = {
   font_col_header: '0.8',
   font_task_icon: '1.6',
   font_progress: '0.78',
+  font_task_count: '0.6',
 };
 
 function setupFontSliders() {

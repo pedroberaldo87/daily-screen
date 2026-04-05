@@ -266,6 +266,7 @@ const FONT_VAR_MAP = {
   font_col_header: '--fs-col-header',
   font_task_icon: '--fs-task-icon',
   font_progress: '--fs-progress',
+  font_task_count: '--fs-task-count',
 };
 
 async function applyFontSettings() {

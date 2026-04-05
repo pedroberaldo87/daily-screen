@@ -535,7 +535,7 @@ html, body {
 }
 
 .task-count {
-  font-size: 0.6rem;
+  font-size: var(--fs-task-count, 0.6rem);
   font-weight: 600;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
