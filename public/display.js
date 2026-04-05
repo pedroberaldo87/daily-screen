@@ -160,8 +160,10 @@ function createTaskElement(task) {
       <span class="task-title">${escapeHtml(task.title)}</span>
       ${alertHTML}
     </div>
-    ${countHTML}
-    <span class="task-check"></span>
+    <div class="task-check-group">
+      <span class="task-check"></span>
+      ${countHTML}
+    </div>
   `;
 
   el.addEventListener('click', () => toggleTask(task.id, el));

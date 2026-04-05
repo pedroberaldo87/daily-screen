@@ -526,14 +526,18 @@ html, body {
   border-left-width: 4px;
 }
 
+.task-check-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .task-count {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 600;
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 3px 8px;
-  border-radius: 6px;
-  flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 
