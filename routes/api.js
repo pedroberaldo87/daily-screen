@@ -33,7 +33,7 @@ router.get('/tasks', (req, res) => {
   res.json(tasks);
 });
 
-router.post('/tasks/:id/toggle', requireApiAuth, (req, res) => {
+router.post('/tasks/:id/toggle', (req, res) => {
   const task = toggleTask(Number(req.params.id));
   if (!task) return res.status(404).json({ error: 'Task not found' });
   res.json(task);
