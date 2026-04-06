@@ -209,7 +209,12 @@ All endpoints are prefixed with `/api`.
 
 For the best experience on an Android tablet (e.g., Fire HD 8), use [Open Kiosk](https://github.com/pedroberaldo87/open-kiosk) — a lightweight kiosk browser that locks the tablet to a single URL in fullscreen mode. Just point it to your Daily Screen instance and mount the tablet on the wall.
 
-<a href="docs/screenshots/open-kiosk.png"><img src="docs/screenshots/open-kiosk.png" width="500" alt="Open Kiosk settings overlay on Daily Screen"></a>
+<table>
+  <tr>
+    <td align="center"><a href="docs/screenshots/open-kiosk-playlist.png"><img src="docs/screenshots/open-kiosk-playlist.png" width="400" alt="Open Kiosk — playlist, auto-refresh, sleep & wake"></a><br><sub>Playlist & Sleep settings</sub></td>
+    <td align="center"><a href="docs/screenshots/open-kiosk.png"><img src="docs/screenshots/open-kiosk.png" width="400" alt="Open Kiosk — kiosk mode & language"></a><br><sub>Kiosk & Language settings</sub></td>
+  </tr>
+</table>
 
 ## Contributing
 
