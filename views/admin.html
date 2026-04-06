@@ -131,6 +131,17 @@
       color: var(--text-muted); font-size: 0.72rem; font-style: italic;
     }
 
+    /* Inline auto-save feedback */
+    .save-status {
+      margin-top: 10px;
+      font-size: 0.72rem;
+      text-align: right;
+      transition: opacity 0.3s;
+    }
+    .save-status[hidden] { display: none; }
+    .save-status.ok { color: var(--accent-success); }
+    .save-status.err { color: var(--accent-danger); }
+
     /* Period groups */
     .period-group { margin-bottom: 18px; }
     .period-group-title {
@@ -546,9 +557,7 @@
           </select>
         </div>
 
-        <div style="display:flex;justify-content:flex-end;margin-top:12px">
-          <button class="btn btn-primary btn-sm" type="button" onclick="savePeriodSettings()" data-i18n="common.save">Salvar</button>
-        </div>
+        <div id="period-save-status" class="save-status" hidden></div>
       </div>
 
       <!-- Typography -->

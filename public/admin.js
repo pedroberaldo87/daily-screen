@@ -474,41 +474,69 @@ async function resetFonts() {
 
 // ═══ Period Settings ═══
 
+const PERIOD_SETTINGS_DEFAULTS = {
+  period_morning_start: '05:00',
+  period_afternoon_start: '12:00',
+  period_night_start: '18:00',
+  period_display_mode: 'words',
+};
+
 function applyPeriodSettings(settings) {
-  if (settings.period_morning_start) document.getElementById('setting-morning-start').value = settings.period_morning_start;
-  if (settings.period_afternoon_start) document.getElementById('setting-afternoon-start').value = settings.period_afternoon_start;
-  if (settings.period_night_start) document.getElementById('setting-night-start').value = settings.period_night_start;
-  if (settings.period_display_mode) document.getElementById('setting-display-mode').value = settings.period_display_mode;
+  // Always write — fall back to defaults if a key is absent. Without the
+  // fallback, a revert-after-error leaves the input stuck on the bad value
+  // when no value had been stored yet.
+  const get = (k) => settings[k] || PERIOD_SETTINGS_DEFAULTS[k];
+  document.getElementById('setting-morning-start').value = get('period_morning_start');
+  document.getElementById('setting-afternoon-start').value = get('period_afternoon_start');
+  document.getElementById('setting-night-start').value = get('period_night_start');
+  document.getElementById('setting-display-mode').value = get('period_display_mode');
 }
 
-async function savePeriodSettings() {
-  const payload = {
-    period_morning_start: document.getElementById('setting-morning-start').value,
-    period_afternoon_start: document.getElementById('setting-afternoon-start').value,
-    period_night_start: document.getElementById('setting-night-start').value,
-    period_display_mode: document.getElementById('setting-display-mode').value,
-  };
-  const res = await fetch(`${API}/settings`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const btn = event?.target;
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    if (btn) {
-      const orig = btn.textContent;
-      btn.textContent = '✗ ' + (err.error || 'Erro');
-      btn.style.background = 'var(--accent-danger)';
-      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2500);
+function showSaveStatus(el, text, kind) {
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'save-status ' + kind;
+  el.hidden = false;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.hidden = true; }, 2200);
+}
+
+async function autoSavePeriodSetting(key, value, statusEl) {
+  try {
+    const res = await fetch(`${API}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showSaveStatus(statusEl, '✗ ' + (err.error || 'Erro'), 'err');
+      // Revert: re-fetch settings to restore last good value in the DOM
+      try {
+        const cur = await (await fetch(`${API}/settings`)).json();
+        applyPeriodSettings(cur);
+      } catch {}
+      return false;
     }
-    return;
+    showSaveStatus(statusEl, '✓ ' + t('admin.saved'), 'ok');
+    return true;
+  } catch {
+    showSaveStatus(statusEl, '✗ Erro', 'err');
+    return false;
   }
-  if (btn) {
-    const orig = btn.textContent;
-    btn.textContent = t('admin.saved');
-    setTimeout(() => { btn.textContent = orig; }, 1500);
-  }
+}
+
+function setupPeriodSettingsAutoSave() {
+  const status = document.getElementById('period-save-status');
+  const bind = (id, key) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', () => autoSavePeriodSetting(key, el.value, status));
+  };
+  bind('setting-morning-start', 'period_morning_start');
+  bind('setting-afternoon-start', 'period_afternoon_start');
+  bind('setting-night-start', 'period_night_start');
+  bind('setting-display-mode', 'period_display_mode');
 }
 
 // ═══ Language Selector ═══
@@ -837,6 +865,7 @@ document.getElementById('items-list').addEventListener('click', (e) => {
 setupWeekdayButtons();
 setupPeriodButtons();
 setupFontSliders();
+setupPeriodSettingsAutoSave();
 
 (async () => {
   await loadSettings();
