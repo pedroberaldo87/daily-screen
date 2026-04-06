@@ -124,7 +124,9 @@ function validateSettings(entries) {
 // ═══ Daily Tasks (display screen) ═══
 
 function todayDate() {
-  return new Date().toISOString().split('T')[0];
+  const tz = getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo');
+  const parts = new Date().toLocaleDateString('en-CA', { timeZone: tz }).split('-');
+  return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
 }
 
 router.get('/tasks', (req, res) => {

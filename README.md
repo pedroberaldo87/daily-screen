@@ -6,7 +6,7 @@
 
 ## What is Daily Screen?
 
-An ADHD morning assistant designed for wall-mounted tablets (Fire HD 8, 1280×800 landscape). Displays a daily checklist of medications, supplements, and reminders with progress tracking. Includes a web admin panel to manage items, real-time weather forecast, and intelligent date navigation with auto-reset on idle.
+A wall-mounted daily assistant for tablets (Fire HD 8, 1280×800 landscape). Displays a daily checklist of medications, supplements, and reminders with progress tracking. Includes a web admin panel to manage items, real-time weather forecast, and intelligent date navigation with auto-reset on idle. Especially useful for people who tend to forget daily routines — like those with ADHD.
 
 <table>
   <tr>
@@ -226,4 +226,4 @@ This project is licensed under the [GNU General Public License v3.0](LICENSE). S
 
 ---
 
-**Built for ADHD morning routines. Works offline. No tracking. Open source.**
+**Built for daily routines you can't afford to forget. Works offline. No tracking. Open source.**

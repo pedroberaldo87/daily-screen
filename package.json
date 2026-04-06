@@ -1,7 +1,7 @@
 {
   "name": "daily-screen",
   "version": "1.0.0",
-  "description": "ADHD morning assistant — daily checklist on a wall-mounted tablet",
+  "description": "Wall-mounted daily assistant — medication, supplement & reminder checklist for tablets",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
