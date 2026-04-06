@@ -20,6 +20,8 @@ An ADHD morning assistant designed for wall-mounted tablets (Fire HD 8, 1280×80
 
 ![Admin panel with routine items management](docs/screenshots/admin.png)
 
+![Settings — language, weather location, and typography](docs/screenshots/settings.png)
+
 ## Features
 
 - **Daily checklist** — medications, supplements, reminders with emoji icons
