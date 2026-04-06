@@ -8,19 +8,18 @@
 
 An ADHD morning assistant designed for wall-mounted tablets (Fire HD 8, 1280×800 landscape). Displays a daily checklist of medications, supplements, and reminders with progress tracking. Includes a web admin panel to manage items, real-time weather forecast, and intelligent date navigation with auto-reset on idle.
 
-### Display — Tablet View
-
-![Display view with daily checklist, weather, and clock](docs/screenshots/display.png)
-
-![Progress tracking with partial completion](docs/screenshots/display-progress.png)
-
-![All done celebration screen](docs/screenshots/display-alldone.png)
-
-### Admin Panel
-
-![Admin panel with routine items management](docs/screenshots/admin.png)
-
-![Settings — language, weather location, and typography](docs/screenshots/settings.png)
+<table>
+  <tr>
+    <td align="center"><a href="docs/screenshots/display.png"><img src="docs/screenshots/display.png" width="280" alt="Display — daily checklist"></a><br><sub>Daily checklist</sub></td>
+    <td align="center"><a href="docs/screenshots/display-progress.png"><img src="docs/screenshots/display-progress.png" width="280" alt="Display — progress tracking"></a><br><sub>Progress tracking</sub></td>
+    <td align="center"><a href="docs/screenshots/display-alldone.png"><img src="docs/screenshots/display-alldone.png" width="280" alt="Display — all done celebration"></a><br><sub>All done!</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshots/admin.png"><img src="docs/screenshots/admin.png" width="280" alt="Admin panel"></a><br><sub>Admin panel</sub></td>
+    <td align="center"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" width="280" alt="Settings modal"></a><br><sub>Settings</sub></td>
+    <td></td>
+  </tr>
+</table>
 
 ## Features
 
