@@ -17,7 +17,7 @@ An ADHD morning assistant designed for wall-mounted tablets (Fire HD 8, 1280×80
   <tr>
     <td align="center"><a href="docs/screenshots/admin.png"><img src="docs/screenshots/admin.png" width="280" alt="Admin panel"></a><br><sub>Admin panel</sub></td>
     <td align="center"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" width="280" alt="Settings modal"></a><br><sub>Settings</sub></td>
-    <td></td>
+    <td align="center"><a href="docs/screenshots/edit-item.png"><img src="docs/screenshots/edit-item.png" width="280" alt="Edit item modal"></a><br><sub>Edit item</sub></td>
   </tr>
 </table>
 
