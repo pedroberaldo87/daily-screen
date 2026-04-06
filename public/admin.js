@@ -51,13 +51,13 @@ function buildItemCard(item) {
 
   const statusIcons = [];
   if (item.alert_penultimate) {
-    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.alertPenultimateBadge'))}: ${escapeHtml(item.alert_penultimate)}">⚠️</span>`);
+    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.alertPenultimateBadge'))}: ${escapeHtml(item.alert_penultimate)}"><span class="si-emoji">⚠️</span><span class="si-label">${escapeHtml(t('admin.alertPenultimateShort'))}</span></span>`);
   }
   if (item.alert_last) {
-    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.alertLastBadge'))}: ${escapeHtml(item.alert_last)}">🚨</span>`);
+    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.alertLastBadge'))}: ${escapeHtml(item.alert_last)}"><span class="si-emoji">🚨</span><span class="si-label">${escapeHtml(t('admin.alertLastShort'))}</span></span>`);
   }
   if (item.followup_title) {
-    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.followUpBadge'))}: ${escapeHtml(item.followup_title)}">↻</span>`);
+    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.followUpBadge'))}: ${escapeHtml(item.followup_title)}"><span class="si-emoji">↻</span><span class="si-label">${escapeHtml(t('admin.followUpShort'))}</span></span>`);
   }
 
   const card = document.createElement('div');
@@ -588,19 +588,45 @@ async function loadSettings() {
 
 // ═══ Init ═══
 
+// ═══ Toast ═══
+
+let toastTimer = null;
+function showToast(message, kind = 'ok') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${kind}`;
+  toast.textContent = (kind === 'ok' ? '✓ ' : '✗ ') + message;
+  container.appendChild(toast);
+  // Animate in on next frame
+  requestAnimationFrame(() => toast.classList.add('visible'));
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 1800);
+}
+
 // ═══ Inline Edit Helpers ═══
 
-async function patchItem(id, patch) {
+async function patchItem(id, patch, opts = {}) {
   const res = await fetch(`${API}/items/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   });
   if (!res.ok) {
-    console.error('PATCH failed', await res.text());
+    const err = await res.json().catch(() => ({}));
+    console.error('PATCH failed', err);
+    if (opts.toast !== false) showToast(err.error || 'Erro', 'err');
     return null;
   }
-  return res.json();
+  const data = await res.json();
+  if (opts.toast !== false) showToast(t('admin.toastSaved'));
+  return data;
 }
 
 function startInlineTitleEdit(card) {
@@ -699,7 +725,8 @@ function openWeekdaysPopover(card, anchorEl) {
   const id = Number(card.dataset.id);
   const item = itemsById[id];
   if (!item) return;
-  let current = JSON.parse(item.weekdays || '[0,1,2,3,4,5,6]');
+  const initial = item.weekdays || '[0,1,2,3,4,5,6]';
+  let current = JSON.parse(initial);
 
   const pop = document.createElement('div');
   pop.className = 'inline-popover';
@@ -725,9 +752,11 @@ function openWeekdaysPopover(card, anchorEl) {
     else { current.push(d); current.sort(); btn.classList.add('active'); }
   });
 
-  // Save on close
+  // Save on close (only if the user actually changed something)
   pop._onClose = async () => {
-    const updated = await patchItem(id, { weekdays: JSON.stringify(current) });
+    const next = JSON.stringify(current);
+    if (next === initial) return; // no-op: skip PUT + toast
+    const updated = await patchItem(id, { weekdays: next });
     if (updated) {
       itemsById[id] = updated;
       const pill = card.querySelector('.weekdays-pill');
@@ -741,8 +770,9 @@ function openPeriodsPopover(card, anchorEl) {
   const id = Number(card.dataset.id);
   const item = itemsById[id];
   if (!item) return;
+  const initial = item.periods || '[]';
   let current = [];
-  try { current = JSON.parse(item.periods || '[]'); } catch {}
+  try { current = JSON.parse(initial); } catch {}
 
   const order = ['morning', 'afternoon', 'night'];
   const pop = document.createElement('div');
@@ -775,7 +805,9 @@ function openPeriodsPopover(card, anchorEl) {
   });
 
   pop._onClose = async () => {
-    const updated = await patchItem(id, { periods: JSON.stringify(current) });
+    const next = JSON.stringify(current);
+    if (next === initial) return; // no-op: skip PUT + toast
+    const updated = await patchItem(id, { periods: next });
     if (updated) {
       itemsById[id] = updated;
       // Periods change affects grouping → re-render the whole list
