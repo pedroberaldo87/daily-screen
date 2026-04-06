@@ -10,6 +10,39 @@ let currentDate = todayStr();
 let currentPeriod = 'all'; // 'all' | 'morning' | 'afternoon' | 'night'
 let idleTimer = null;
 
+// Period boundaries (in minutes since midnight). Defaults: 5h / 12h / 18h.
+// Updated by loadSettings(). The "night" range wraps midnight.
+let periodTimes = {
+  morningStart: 5 * 60,
+  afternoonStart: 12 * 60,
+  nightStart: 18 * 60,
+};
+let periodDisplayMode = 'words'; // 'words' | 'icons' | 'both'
+
+const PERIOD_ICONS = {
+  all: '✦',
+  morning: '☀️',
+  afternoon: '🌤',
+  night: '🌙',
+};
+
+function parseHHMMtoMin(str, fallback) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(str || ''));
+  if (!m) return fallback;
+  const h = Number(m[1]); const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return fallback;
+  return h * 60 + min;
+}
+
+function getCurrentPeriod() {
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const { morningStart, afternoonStart, nightStart } = periodTimes;
+  if (cur >= morningStart && cur < afternoonStart) return 'morning';
+  if (cur >= afternoonStart && cur < nightStart) return 'afternoon';
+  return 'night'; // night wraps midnight (>= nightStart OR < morningStart)
+}
+
 // ═══ Date Navigation ═══
 
 function todayStr() {
@@ -59,8 +92,9 @@ function resetIdleTimer() {
     if (currentDate !== todayStr()) {
       goToday();
     }
-    if (currentPeriod !== 'all') {
-      setPeriod('all');
+    const cur = getCurrentPeriod();
+    if (currentPeriod !== cur) {
+      setPeriod(cur);
     }
   }, IDLE_TIMEOUT);
 }
@@ -89,6 +123,42 @@ function setPeriod(period) {
   renderTasks();
 }
 
+function renderPeriodNav() {
+  const labels = {
+    all: t('period.all'),
+    morning: t('period.morning'),
+    afternoon: t('period.afternoon'),
+    night: t('period.night'),
+  };
+  const mode = periodDisplayMode;
+  document.querySelectorAll('.period-nav-btn').forEach(btn => {
+    const p = btn.dataset.period;
+    const icon = PERIOD_ICONS[p];
+    const word = labels[p];
+    let html = '';
+    if (mode === 'icons') {
+      html = `<span class="pn-icon">${icon}</span>`;
+      btn.classList.add('icon-only');
+      btn.classList.remove('with-icon');
+      btn.setAttribute('aria-label', word);
+      btn.title = word;
+    } else if (mode === 'both') {
+      html = `<span class="pn-icon">${icon}</span><span class="pn-word">${word}</span>`;
+      btn.classList.add('with-icon');
+      btn.classList.remove('icon-only');
+      btn.removeAttribute('aria-label');
+      btn.removeAttribute('title');
+    } else {
+      html = `<span class="pn-word">${word}</span>`;
+      btn.classList.remove('icon-only', 'with-icon');
+      btn.removeAttribute('aria-label');
+      btn.removeAttribute('title');
+    }
+    btn.innerHTML = html;
+  });
+  updateCurrentPeriodHighlight();
+}
+
 // ═══ Clock, Date & Greeting ═══
 
 function updateClock() {
@@ -100,12 +170,20 @@ function updateClock() {
 }
 
 function updateGreeting() {
-  const hour = new Date().getHours();
-  let key;
-  if (hour < 12) key = 'greeting.morning';
-  else if (hour < 18) key = 'greeting.afternoon';
-  else key = 'greeting.evening';
+  const period = getCurrentPeriod();
+  const key = period === 'morning' ? 'greeting.morning'
+            : period === 'afternoon' ? 'greeting.afternoon'
+            : 'greeting.evening';
   document.getElementById('greeting').textContent = t(key);
+  // Refresh "current" highlight on the period nav buttons (cheap, runs every minute)
+  updateCurrentPeriodHighlight();
+}
+
+function updateCurrentPeriodHighlight() {
+  const cur = getCurrentPeriod();
+  document.querySelectorAll('.period-nav-btn').forEach(btn => {
+    btn.classList.toggle('is-current', btn.dataset.period === cur);
+  });
 }
 
 function updateDate() {
@@ -320,6 +398,19 @@ function applyFontSettings(settings) {
   }
 }
 
+function applyPeriodSettings(settings) {
+  periodTimes.morningStart = parseHHMMtoMin(settings.period_morning_start, 5 * 60);
+  periodTimes.afternoonStart = parseHHMMtoMin(settings.period_afternoon_start, 12 * 60);
+  periodTimes.nightStart = parseHHMMtoMin(settings.period_night_start, 18 * 60);
+  // Sanity guard: if order got corrupted somehow, fall back to defaults
+  if (!(periodTimes.morningStart < periodTimes.afternoonStart && periodTimes.afternoonStart < periodTimes.nightStart)) {
+    periodTimes = { morningStart: 5 * 60, afternoonStart: 12 * 60, nightStart: 18 * 60 };
+  }
+  if (settings.period_display_mode && ['words', 'icons', 'both'].includes(settings.period_display_mode)) {
+    periodDisplayMode = settings.period_display_mode;
+  }
+}
+
 // ═══ Unified Settings Loader ═══
 
 async function loadSettings() {
@@ -328,10 +419,16 @@ async function loadSettings() {
     if (!res.ok) return;
     const settings = await res.json();
     applyFontSettings(settings);
+    applyPeriodSettings(settings);
     await initI18n(settings);
+    renderPeriodNav();
+    // applyTranslations() (inside initI18n) may have overwritten dynamic text
+    // tied to data-i18n attributes — refresh anything that's parameter-driven.
+    if (typeof tasks !== 'undefined' && tasks.length > 0) updateProgress();
   } catch (err) {
     // Silent fail — defaults apply
     await initI18n();
+    renderPeriodNav();
   }
 }
 
@@ -339,6 +436,8 @@ async function loadSettings() {
 
 (async () => {
   await loadSettings();
+  // Boot into the period that matches the current hour, instead of "all"
+  setPeriod(getCurrentPeriod());
   updateClock();
   updateGreeting();
   updateDateDisplay();

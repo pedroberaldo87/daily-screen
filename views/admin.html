@@ -131,6 +131,26 @@
       color: var(--text-muted); font-size: 0.72rem; font-style: italic;
     }
 
+    /* Period groups */
+    .period-group { margin-bottom: 18px; }
+    .period-group-title {
+      font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin: 0 0 8px 4px; display: flex; align-items: center; gap: 8px;
+    }
+    .period-group-count {
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+      font-size: 0.65rem; font-weight: 600;
+      padding: 1px 7px; border-radius: 10px;
+      text-transform: none; letter-spacing: 0;
+    }
+    .period-group-dayLong .period-group-title { color: var(--accent-sup); }
+    .period-group-morning .period-group-title { color: #ffcd6e; }
+    .period-group-afternoon .period-group-title { color: #f29a55; }
+    .period-group-night .period-group-title { color: #8a9dde; }
+    .period-group-inactive .period-group-title { color: var(--text-muted); }
+
     /* Item cards */
     .item-card {
       background: var(--bg-card); border-radius: var(--radius);
@@ -163,6 +183,66 @@
       font-size: 0.65rem; color: var(--accent-sup);
       background: rgba(232,168,75,0.1); padding: 1px 6px; border-radius: 3px;
     }
+
+    /* Status icons (alerts + follow-up) */
+    .status-icon {
+      font-size: 0.85rem; line-height: 1; cursor: help;
+      filter: saturate(0.85);
+    }
+
+    /* Editable meta pills */
+    .meta-pill {
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid transparent;
+      transition: all 0.15s;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+    .meta-pill:hover {
+      border-color: rgba(232,168,75,0.3);
+      background: rgba(232,168,75,0.06);
+      color: var(--text-primary);
+    }
+
+    /* Inline editable title + icon */
+    .item-title-edit, .item-icon-edit {
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 1px 4px;
+      transition: background 0.12s;
+    }
+    .item-title-edit:hover, .item-icon-edit:hover {
+      background: rgba(232,168,75,0.1);
+    }
+    .inline-title-input {
+      width: 100%;
+      padding: 2px 6px !important;
+      font-size: 0.95rem !important;
+      font-weight: 500 !important;
+      background: var(--bg-input) !important;
+      border: 1px solid var(--accent-sup) !important;
+      border-radius: 4px !important;
+    }
+
+    /* Inline popovers */
+    .inline-popover {
+      background: var(--bg-surface);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 14px 36px rgba(0,0,0,0.5);
+      max-width: 320px;
+    }
+    .popover-title {
+      font-size: 0.7rem; font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .inline-popover .period-help { font-size: 0.68rem; }
 
     /* Modal */
     .modal-overlay {
@@ -435,6 +515,39 @@
         <div class="search-wrap">
           <input type="text" id="location-search" placeholder="Buscar cidade..." data-i18n-placeholder="admin.searchCity" style="width:100%">
           <div class="search-results" id="location-results"></div>
+        </div>
+      </div>
+
+      <!-- Period times + display mode -->
+      <div class="form-section">
+        <div class="form-section-title" data-i18n="admin.periodTimes">Horários dos períodos</div>
+        <div class="form-row">
+          <div>
+            <label data-i18n="admin.morningStart">Manhã começa</label>
+            <input type="time" id="setting-morning-start" value="05:00" style="width:100%">
+          </div>
+          <div>
+            <label data-i18n="admin.afternoonStart">Tarde começa</label>
+            <input type="time" id="setting-afternoon-start" value="12:00" style="width:100%">
+          </div>
+          <div>
+            <label data-i18n="admin.nightStart">Noite começa</label>
+            <input type="time" id="setting-night-start" value="18:00" style="width:100%">
+          </div>
+        </div>
+        <small class="period-help" data-i18n="admin.timesOrderHelp">Os horários precisam estar em ordem crescente (manhã &lt; tarde &lt; noite).</small>
+
+        <div style="margin-top:14px">
+          <label data-i18n="admin.periodDisplayMode">Exibição dos botões de período</label>
+          <select id="setting-display-mode" style="width:100%">
+            <option value="words" data-i18n="admin.modeWords">Palavras</option>
+            <option value="icons" data-i18n="admin.modeIcons">Ícones</option>
+            <option value="both" data-i18n="admin.modeBoth">Palavras + Ícones</option>
+          </select>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-primary btn-sm" type="button" onclick="savePeriodSettings()" data-i18n="common.save">Salvar</button>
         </div>
       </div>
 

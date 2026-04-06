@@ -275,6 +275,39 @@ html, body {
   background: rgba(232, 168, 75, 0.1);
 }
 
+/* Subtle "this is the current real-world period" hint, independent of which
+   button is clicked. Shows a small dot on the bottom edge. */
+.period-nav-btn.is-current::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-sup);
+  box-shadow: 0 0 6px rgba(232, 168, 75, 0.6);
+}
+.period-nav-btn { position: relative; }
+
+/* Display modes for period buttons */
+.period-nav-btn .pn-icon { font-size: 0.95rem; line-height: 1; }
+.period-nav-btn .pn-word { font-size: inherit; }
+.period-nav-btn.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.period-nav-btn.icon-only {
+  padding: 6px 9px;
+  min-width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.period-nav-btn.icon-only .pn-icon { font-size: 1.05rem; }
+
 /* ─── Date Navigation ─── */
 
 .date-nav {

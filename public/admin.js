@@ -15,46 +15,113 @@ async function loadItems() {
   renderItems(items);
 }
 
+// Cache of the latest items list, indexed by id, for quick lookups in popovers
+// and inline editors without re-fetching.
+let itemsById = {};
+
+function weekdaysSummary(weekdays) {
+  if (weekdays.length === 7) return t('admin.everyWeekday');
+  if (weekdays.length === 0) return '—';
+  return weekdays.map(d => t(WEEKDAY_KEYS[d])).join(', ');
+}
+
+function periodsSummary(periods) {
+  if (!periods || periods.length === 0) return t('admin.dayLong');
+  const order = ['morning', 'afternoon', 'night'];
+  return order
+    .filter(p => periods.includes(p))
+    .map(p => t('period.' + p))
+    .join(', ');
+}
+
+function buildItemCard(item) {
+  const weekdays = JSON.parse(item.weekdays || '[0,1,2,3,4,5,6]');
+  let periods = [];
+  try { periods = JSON.parse(item.periods || '[]'); } catch {}
+
+  const countInfo = item.total_count ? `${item.completed_count}/${item.total_count}` : '';
+  const catLabel = t(CATEGORY_KEYS[item.category] || '') || item.category;
+
+  const statusIcons = [];
+  if (item.alert_penultimate) {
+    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.alertPenultimateBadge'))}: ${escapeHtml(item.alert_penultimate)}">⚠️</span>`);
+  }
+  if (item.alert_last) {
+    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.alertLastBadge'))}: ${escapeHtml(item.alert_last)}">🚨</span>`);
+  }
+  if (item.followup_title) {
+    statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.followUpBadge'))}: ${escapeHtml(item.followup_title)}">↻</span>`);
+  }
+
+  const card = document.createElement('div');
+  card.className = `item-card${item.active ? '' : ' inactive'}`;
+  card.dataset.id = item.id;
+  card.innerHTML = `
+    <span class="item-icon item-icon-edit" data-action="edit-icon" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(item.icon)}</span>
+    <div class="item-info">
+      <div class="item-title item-title-edit" data-action="edit-title" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(item.title)}</div>
+      <div class="item-meta">
+        <span class="badge ${escapeHtml(item.category)}">${escapeHtml(catLabel)}</span>
+        <span class="meta-pill weekdays-pill" data-action="edit-weekdays" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(weekdaysSummary(weekdays))}</span>
+        <span class="meta-pill periods-pill" data-action="edit-periods" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(periodsSummary(periods))}</span>
+        ${countInfo ? `<span class="count-badge">${countInfo}</span>` : ''}
+        ${statusIcons.join('')}
+        ${!item.active ? `<em style="color:var(--accent-danger)">${escapeHtml(t('admin.deactivated'))}</em>` : ''}
+      </div>
+    </div>
+    <div class="item-actions">
+      <button class="btn btn-sm btn-secondary" data-action="open-modal">${escapeHtml(t('common.edit'))}</button>
+      ${item.active
+        ? `<button class="btn btn-sm btn-danger" data-action="deactivate">${escapeHtml(t('common.deactivate'))}</button>`
+        : `<button class="btn btn-sm btn-secondary" data-action="reactivate">${escapeHtml(t('common.reactivate'))}</button>`
+      }
+      <button class="btn btn-sm btn-danger" data-delete-id="${item.id}" data-delete-title="${escapeHtml(item.title)}">${escapeHtml(t('common.delete'))}</button>
+    </div>
+  `;
+  return card;
+}
+
 function renderItems(items) {
+  itemsById = {};
+  for (const it of items) itemsById[it.id] = it;
+
   const container = document.getElementById('items-list');
   container.innerHTML = '';
 
+  // Partition items into buckets. Wildcard ([] or null) goes to dayLong only;
+  // multi-period items appear in each matching bucket.
+  const buckets = { dayLong: [], morning: [], afternoon: [], night: [], inactive: [] };
   for (const item of items) {
-    const weekdays = JSON.parse(item.weekdays || '[0,1,2,3,4,5,6]');
-    const weekdayStr = weekdays.length === 7
-      ? t('admin.allDays')
-      : weekdays.map(d => t(WEEKDAY_KEYS[d])).join(', ');
+    if (!item.active) { buckets.inactive.push(item); continue; }
+    let periods = [];
+    try { periods = JSON.parse(item.periods || '[]'); } catch {}
+    if (!Array.isArray(periods) || periods.length === 0) {
+      buckets.dayLong.push(item);
+    } else {
+      for (const p of ['morning', 'afternoon', 'night']) {
+        if (periods.includes(p)) buckets[p].push(item);
+      }
+    }
+  }
 
-    const countInfo = item.total_count
-      ? `${item.completed_count}/${item.total_count}`
-      : '';
+  const sectionDefs = [
+    { key: 'dayLong',   labelKey: 'admin.dayLong' },
+    { key: 'morning',   labelKey: 'period.morning' },
+    { key: 'afternoon', labelKey: 'period.afternoon' },
+    { key: 'night',     labelKey: 'period.night' },
+    { key: 'inactive',  labelKey: 'admin.inactiveItems' },
+  ];
 
-    const catLabel = t(CATEGORY_KEYS[item.category] || '') || escapeHtml(item.category);
-
-    const card = document.createElement('div');
-    card.className = `item-card${item.active ? '' : ' inactive'}`;
-    card.innerHTML = `
-      <span class="item-icon">${escapeHtml(item.icon)}</span>
-      <div class="item-info">
-        <div class="item-title">${escapeHtml(item.title)}</div>
-        <div class="item-meta">
-          <span class="badge ${escapeHtml(item.category)}">${escapeHtml(catLabel)}</span>
-          <span>${escapeHtml(weekdayStr)}</span>
-          ${countInfo ? `<span class="count-badge">${countInfo}</span>` : ''}
-          ${item.followup_title ? `<span style="color:var(--accent-rem)">→ ${escapeHtml(item.followup_title)}</span>` : ''}
-          ${!item.active ? `<em style="color:var(--accent-danger)">${escapeHtml(t('admin.deactivated'))}</em>` : ''}
-        </div>
-      </div>
-      <div class="item-actions">
-        <button class="btn btn-sm btn-secondary" onclick="openEditModal(${item.id})">${escapeHtml(t('common.edit'))}</button>
-        ${item.active
-          ? `<button class="btn btn-sm btn-danger" onclick="deactivateItem(${item.id})">${escapeHtml(t('common.deactivate'))}</button>`
-          : `<button class="btn btn-sm btn-secondary" onclick="reactivateItem(${item.id})">${escapeHtml(t('common.reactivate'))}</button>`
-        }
-        <button class="btn btn-sm btn-danger" data-delete-id="${item.id}" data-delete-title="${escapeHtml(item.title)}">${escapeHtml(t('common.delete'))}</button>
-      </div>
-    `;
-    container.appendChild(card);
+  for (const def of sectionDefs) {
+    const list = buckets[def.key];
+    if (list.length === 0) continue;
+    const section = document.createElement('div');
+    section.className = `period-group period-group-${def.key}`;
+    section.innerHTML = `<h3 class="period-group-title">${escapeHtml(t(def.labelKey))} <span class="period-group-count">${list.length}</span></h3>`;
+    for (const item of list) {
+      section.appendChild(buildItemCard(item));
+    }
+    container.appendChild(section);
   }
 }
 
@@ -405,6 +472,45 @@ async function resetFonts() {
   setTimeout(() => { btn.textContent = orig; }, 1500);
 }
 
+// ═══ Period Settings ═══
+
+function applyPeriodSettings(settings) {
+  if (settings.period_morning_start) document.getElementById('setting-morning-start').value = settings.period_morning_start;
+  if (settings.period_afternoon_start) document.getElementById('setting-afternoon-start').value = settings.period_afternoon_start;
+  if (settings.period_night_start) document.getElementById('setting-night-start').value = settings.period_night_start;
+  if (settings.period_display_mode) document.getElementById('setting-display-mode').value = settings.period_display_mode;
+}
+
+async function savePeriodSettings() {
+  const payload = {
+    period_morning_start: document.getElementById('setting-morning-start').value,
+    period_afternoon_start: document.getElementById('setting-afternoon-start').value,
+    period_night_start: document.getElementById('setting-night-start').value,
+    period_display_mode: document.getElementById('setting-display-mode').value,
+  };
+  const res = await fetch(`${API}/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const btn = event?.target;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = '✗ ' + (err.error || 'Erro');
+      btn.style.background = 'var(--accent-danger)';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2500);
+    }
+    return;
+  }
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = t('admin.saved');
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }
+}
+
 // ═══ Language Selector ═══
 
 function setupLanguageSelector(settings) {
@@ -436,6 +542,7 @@ async function loadSettings() {
     await initI18n(settings);
     applyLocationFromSettings(settings);
     applyFontsFromSettings(settings);
+    applyPeriodSettings(settings);
     setupLanguageSelector(settings);
   } catch (err) {
     await initI18n();
@@ -444,10 +551,287 @@ async function loadSettings() {
 
 // ═══ Init ═══
 
-// Event delegation for delete buttons (avoids inline JS + XSS via title injection)
+// ═══ Inline Edit Helpers ═══
+
+async function patchItem(id, patch) {
+  const res = await fetch(`${API}/items/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    console.error('PATCH failed', await res.text());
+    return null;
+  }
+  return res.json();
+}
+
+function startInlineTitleEdit(card) {
+  const titleEl = card.querySelector('.item-title-edit');
+  if (!titleEl || titleEl.querySelector('input')) return;
+  const id = Number(card.dataset.id);
+  const original = itemsById[id]?.title || titleEl.textContent;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = original;
+  input.className = 'inline-title-input';
+  input.maxLength = 200;
+  titleEl.innerHTML = '';
+  titleEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    const newVal = input.value.trim();
+    if (commit && newVal && newVal !== original) {
+      const updated = await patchItem(id, { title: newVal });
+      if (updated) itemsById[id] = updated;
+      titleEl.textContent = newVal;
+    } else {
+      titleEl.textContent = original;
+    }
+  };
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+}
+
+function startInlineIconEdit(card) {
+  const iconEl = card.querySelector('.item-icon-edit');
+  if (!iconEl) return;
+  const id = Number(card.dataset.id);
+
+  // Reuse the existing icon-picker by giving it a hidden input that fires
+  // an `input` event when the user picks an emoji.
+  let proxy = document.getElementById('inline-icon-proxy');
+  if (!proxy) {
+    proxy = document.createElement('input');
+    proxy.id = 'inline-icon-proxy';
+    proxy.type = 'text';
+    proxy.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+    document.body.appendChild(proxy);
+  }
+  proxy.value = itemsById[id]?.icon || '';
+  // Position the picker visually below the clicked icon.
+  // openPicker() reads getBoundingClientRect() — temporarily make the proxy
+  // overlap the icon so the picker pops up next to it.
+  const rect = iconEl.getBoundingClientRect();
+  proxy.style.left = rect.left + 'px';
+  proxy.style.top = rect.top + 'px';
+  proxy.style.width = rect.width + 'px';
+  proxy.style.height = rect.height + 'px';
+  proxy.style.opacity = '0';
+
+  // Single-shot listener: when the picker writes a new value, PUT it.
+  const handler = async () => {
+    proxy.removeEventListener('input', handler);
+    const newIcon = proxy.value.trim();
+    if (newIcon && newIcon !== itemsById[id]?.icon) {
+      const updated = await patchItem(id, { icon: newIcon });
+      if (updated) {
+        itemsById[id] = updated;
+        iconEl.textContent = newIcon;
+      }
+    }
+  };
+  proxy.addEventListener('input', handler);
+
+  if (typeof openPicker === 'function') {
+    openPicker(proxy);
+  }
+}
+
+// ═══ Popovers (weekdays + periods) ═══
+
+let activePopover = null;
+
+function closePopover() {
+  if (activePopover) {
+    activePopover.remove();
+    activePopover = null;
+  }
+}
+
+function openWeekdaysPopover(card, anchorEl) {
+  closePopover();
+  const id = Number(card.dataset.id);
+  const item = itemsById[id];
+  if (!item) return;
+  let current = JSON.parse(item.weekdays || '[0,1,2,3,4,5,6]');
+
+  const pop = document.createElement('div');
+  pop.className = 'inline-popover';
+  pop.innerHTML = `
+    <div class="popover-title">${escapeHtml(t('admin.weekdays'))}</div>
+    <div class="weekday-selector">
+      ${[0,1,2,3,4,5,6].map(d => `
+        <button type="button" class="weekday-btn${current.includes(d) ? ' active' : ''}" data-day="${d}">${escapeHtml(t(WEEKDAY_KEYS[d]))}</button>
+      `).join('')}
+    </div>
+  `;
+  positionPopover(pop, anchorEl);
+  document.body.appendChild(pop);
+  activePopover = pop;
+
+  pop.addEventListener('click', (e) => {
+    const btn = e.target.closest('.weekday-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    const d = Number(btn.dataset.day);
+    const i = current.indexOf(d);
+    if (i >= 0) { current.splice(i, 1); btn.classList.remove('active'); }
+    else { current.push(d); current.sort(); btn.classList.add('active'); }
+  });
+
+  // Save on close
+  pop._onClose = async () => {
+    const updated = await patchItem(id, { weekdays: JSON.stringify(current) });
+    if (updated) {
+      itemsById[id] = updated;
+      const pill = card.querySelector('.weekdays-pill');
+      if (pill) pill.textContent = weekdaysSummary(current);
+    }
+  };
+}
+
+function openPeriodsPopover(card, anchorEl) {
+  closePopover();
+  const id = Number(card.dataset.id);
+  const item = itemsById[id];
+  if (!item) return;
+  let current = [];
+  try { current = JSON.parse(item.periods || '[]'); } catch {}
+
+  const order = ['morning', 'afternoon', 'night'];
+  const pop = document.createElement('div');
+  pop.className = 'inline-popover';
+  pop.innerHTML = `
+    <div class="popover-title">${escapeHtml(t('admin.periods'))}</div>
+    <div class="period-selector">
+      ${order.map(p => `
+        <button type="button" class="period-btn${current.includes(p) ? ' active' : ''}" data-period="${p}">${escapeHtml(t('period.' + p))}</button>
+      `).join('')}
+    </div>
+    <small class="period-help">${escapeHtml(t('admin.periodsHelp'))}</small>
+  `;
+  positionPopover(pop, anchorEl);
+  document.body.appendChild(pop);
+  activePopover = pop;
+
+  pop.addEventListener('click', (e) => {
+    const btn = e.target.closest('.period-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    const p = btn.dataset.period;
+    const i = current.indexOf(p);
+    if (i >= 0) { current.splice(i, 1); btn.classList.remove('active'); }
+    else {
+      current.push(p);
+      current.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+      btn.classList.add('active');
+    }
+  });
+
+  pop._onClose = async () => {
+    const updated = await patchItem(id, { periods: JSON.stringify(current) });
+    if (updated) {
+      itemsById[id] = updated;
+      // Periods change affects grouping → re-render the whole list
+      loadItems();
+    }
+  };
+}
+
+function positionPopover(pop, anchorEl) {
+  const r = anchorEl.getBoundingClientRect();
+  pop.style.position = 'absolute';
+  pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
+  pop.style.left = (r.left + window.scrollX) + 'px';
+  pop.style.zIndex = '300';
+}
+
+// Close popover when clicking outside it (and trigger save)
+document.addEventListener('click', (e) => {
+  if (!activePopover) return;
+  if (activePopover.contains(e.target)) return;
+  // Don't close if clicking the same trigger (it'll re-open below)
+  if (e.target.closest('[data-action="edit-weekdays"]') || e.target.closest('[data-action="edit-periods"]')) return;
+  const onClose = activePopover._onClose;
+  closePopover();
+  if (typeof onClose === 'function') onClose();
+});
+
+// ═══ Master event delegation for items list ═══
+
 document.getElementById('items-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-delete-id]');
-  if (btn) confirmDelete(Number(btn.dataset.deleteId), btn.dataset.deleteTitle);
+  // Delete (must come first since it has its own data attributes)
+  const delBtn = e.target.closest('[data-delete-id]');
+  if (delBtn) {
+    confirmDelete(Number(delBtn.dataset.deleteId), delBtn.dataset.deleteTitle);
+    return;
+  }
+
+  const card = e.target.closest('.item-card');
+  if (!card) return;
+  const id = Number(card.dataset.id);
+  const actionEl = e.target.closest('[data-action]');
+  if (!actionEl) return;
+  const action = actionEl.dataset.action;
+
+  switch (action) {
+    case 'edit-title':
+      e.stopPropagation();
+      startInlineTitleEdit(card);
+      break;
+    case 'edit-icon':
+      e.stopPropagation();
+      startInlineIconEdit(card);
+      break;
+    case 'edit-weekdays': {
+      e.stopPropagation();
+      const wasOpen = activePopover && activePopover.dataset.kind === 'weekdays' && activePopover.dataset.cardId === String(id);
+      const onClose = activePopover?._onClose;
+      closePopover();
+      if (onClose) onClose();
+      if (!wasOpen) {
+        openWeekdaysPopover(card, actionEl);
+        if (activePopover) {
+          activePopover.dataset.kind = 'weekdays';
+          activePopover.dataset.cardId = String(id);
+        }
+      }
+      break;
+    }
+    case 'edit-periods': {
+      e.stopPropagation();
+      const wasOpen = activePopover && activePopover.dataset.kind === 'periods' && activePopover.dataset.cardId === String(id);
+      const onClose = activePopover?._onClose;
+      closePopover();
+      if (onClose) onClose();
+      if (!wasOpen) {
+        openPeriodsPopover(card, actionEl);
+        if (activePopover) {
+          activePopover.dataset.kind = 'periods';
+          activePopover.dataset.cardId = String(id);
+        }
+      }
+      break;
+    }
+    case 'open-modal':
+      openEditModal(id);
+      break;
+    case 'deactivate':
+      deactivateItem(id);
+      break;
+    case 'reactivate':
+      reactivateItem(id);
+      break;
+  }
 });
 
 setupWeekdayButtons();

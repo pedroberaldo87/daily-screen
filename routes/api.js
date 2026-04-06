@@ -97,9 +97,22 @@ const ALLOWED_SETTINGS = new Set([
   'font_task_title', 'font_col_header', 'font_task_icon', 'font_progress',
   'font_task_count',
   'language',
+  'period_display_mode',
+  'period_morning_start', 'period_afternoon_start', 'period_night_start',
 ]);
 
 const VALID_LANGUAGES = ['pt-BR', 'en', 'es'];
+const VALID_DISPLAY_MODES = ['words', 'icons', 'both'];
+
+// HH:MM → minutes since midnight (returns NaN if invalid)
+function parseHHMM(str) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(str));
+  if (!m) return NaN;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return NaN;
+  return h * 60 + min;
+}
 
 function validateSettings(entries) {
   const errors = [];
@@ -132,7 +145,35 @@ function validateSettings(entries) {
     if (key === 'language' && !VALID_LANGUAGES.includes(str)) {
       errors.push(`language must be one of: ${VALID_LANGUAGES.join(', ')}`);
     }
+    if (key === 'period_display_mode' && !VALID_DISPLAY_MODES.includes(str)) {
+      errors.push(`period_display_mode must be one of: ${VALID_DISPLAY_MODES.join(', ')}`);
+    }
+    if (key === 'period_morning_start' || key === 'period_afternoon_start' || key === 'period_night_start') {
+      if (Number.isNaN(parseHHMM(str))) {
+        errors.push(`${key} must be in HH:MM format (00:00–23:59)`);
+      }
+    }
   }
+
+  // Cross-field check: if any of the 3 period times are being set, validate the
+  // resulting full set is in chronological order. We merge the incoming changes
+  // with the current stored values to evaluate the post-update state.
+  const periodTimeKeys = ['period_morning_start', 'period_afternoon_start', 'period_night_start'];
+  if (periodTimeKeys.some(k => k in entries)) {
+    const merged = {};
+    for (const k of periodTimeKeys) {
+      merged[k] = (k in entries) ? String(entries[k]) : getSetting(k, k === 'period_morning_start' ? '05:00' : k === 'period_afternoon_start' ? '12:00' : '18:00');
+    }
+    const m = parseHHMM(merged.period_morning_start);
+    const a = parseHHMM(merged.period_afternoon_start);
+    const n = parseHHMM(merged.period_night_start);
+    if (!Number.isNaN(m) && !Number.isNaN(a) && !Number.isNaN(n)) {
+      if (!(m < a && a < n)) {
+        errors.push('period times must be in chronological order: morning < afternoon < night');
+      }
+    }
+  }
+
   return errors;
 }
 
