@@ -205,6 +205,10 @@ All endpoints are prefixed with `/api`.
 - `DELETE /api/items/:id/permanent` — Hard delete
 - `PUT /api/settings` — Update settings (key-value pairs)
 
+## Running on a Tablet
+
+For the best experience on an Android tablet (e.g., Fire HD 8), use [Open Kiosk](https://github.com/pedroberaldo87/open-kiosk) — a lightweight kiosk browser that locks the tablet to a single URL in fullscreen mode. Just point it to your Daily Screen instance and mount the tablet on the wall.
+
 ## Contributing
 
 Found a bug? Have a feature idea? Contributions are welcome.
