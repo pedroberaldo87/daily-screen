@@ -110,8 +110,11 @@ function getVisibleTasks() {
     } catch {
       periods = [];
     }
-    // Empty array = day-long: visible in every period
-    return periods.length === 0 || periods.includes(currentPeriod);
+    // "Day-long" = no periods selected OR all 3 selected. Both mean
+    // "visible in every period filter". Users intuitively tick all 3
+    // to express "this matters all day", so we treat it equivalently.
+    if (periods.length === 0 || periods.length >= 3) return true;
+    return periods.includes(currentPeriod);
   });
 }
 

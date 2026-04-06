@@ -25,8 +25,15 @@ function weekdaysSummary(weekdays) {
   return weekdays.map(d => t(WEEKDAY_KEYS[d])).join(', ');
 }
 
+// "Day-long" semantics: an item counts as day-long if it has no periods
+// selected OR if all three are selected. Users intuitively express "runs
+// all day" by ticking every box; we treat that the same as the wildcard.
+function isDayLong(periods) {
+  return !periods || periods.length === 0 || periods.length >= 3;
+}
+
 function periodsSummary(periods) {
-  if (!periods || periods.length === 0) return t('admin.dayLong');
+  if (isDayLong(periods)) return t('admin.dayLong');
   const order = ['morning', 'afternoon', 'night'];
   return order
     .filter(p => periods.includes(p))
@@ -88,14 +95,16 @@ function renderItems(items) {
   const container = document.getElementById('items-list');
   container.innerHTML = '';
 
-  // Partition items into buckets. Wildcard ([] or null) goes to dayLong only;
-  // multi-period items appear in each matching bucket.
+  // Partition items into buckets. Day-long items (empty array OR all 3
+  // periods selected) go to the dayLong bucket only; items with 1-2 periods
+  // appear in each matching bucket.
   const buckets = { dayLong: [], morning: [], afternoon: [], night: [], inactive: [] };
   for (const item of items) {
     if (!item.active) { buckets.inactive.push(item); continue; }
     let periods = [];
     try { periods = JSON.parse(item.periods || '[]'); } catch {}
-    if (!Array.isArray(periods) || periods.length === 0) {
+    if (!Array.isArray(periods)) periods = [];
+    if (isDayLong(periods)) {
       buckets.dayLong.push(item);
     } else {
       for (const p of ['morning', 'afternoon', 'night']) {
