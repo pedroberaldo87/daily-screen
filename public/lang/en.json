@@ -16,6 +16,12 @@
   "display.noData": "no data",
   "display.allDone": "All done!",
   "display.goodWork": "Great job today.",
+  "display.emptyPeriod": "Nothing scheduled for this period.",
+
+  "period.all": "All",
+  "period.morning": "Morning",
+  "period.afternoon": "Afternoon",
+  "period.night": "Night",
 
   "admin.title": "Daily Screen — Admin",
   "admin.viewScreen": "View screen",
@@ -41,6 +47,8 @@
   "admin.openTablet": "Open tablet screen →",
   "admin.editItem": "Edit item",
   "admin.weekdays": "Days of the week",
+  "admin.periods": "Time of day",
+  "admin.periodsHelp": "If none selected, the item shows up all day.",
   "admin.repetition": "Repetition & alerts",
   "admin.totalCount": "Total times (empty = unlimited)",
   "admin.completed": "Already completed",

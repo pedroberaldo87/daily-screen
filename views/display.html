@@ -33,6 +33,13 @@
         <div class="weather-loading">...</div>
       </div>
 
+      <nav class="period-nav" id="period-nav" aria-label="Filtro de período">
+        <button class="period-nav-btn active" data-period="all" data-i18n="period.all">Todos</button>
+        <button class="period-nav-btn" data-period="morning" data-i18n="period.morning">Manhã</button>
+        <button class="period-nav-btn" data-period="afternoon" data-i18n="period.afternoon">Tarde</button>
+        <button class="period-nav-btn" data-period="night" data-i18n="period.night">Noite</button>
+      </nav>
+
       <div class="date-nav" id="date-nav">
         <button class="date-nav-btn" id="date-prev" aria-label="Dia anterior" data-i18n-aria="display.prevDay">‹</button>
         <button class="date-nav-btn date-nav-today" id="date-today" data-i18n="display.today">Hoje</button>
@@ -42,6 +49,10 @@
 
     <!-- Task columns — THE HERO -->
     <div class="columns" id="columns">
+      <div class="period-empty" id="period-empty" hidden>
+        <span class="period-empty-icon">🌙</span>
+        <p class="period-empty-text" data-i18n="display.emptyPeriod">Nada agendado para este período.</p>
+      </div>
       <div class="column col-medication" data-category="medication" id="col-medication">
         <div class="column-header">
           <span class="column-icon">💊</span>

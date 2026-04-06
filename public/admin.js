@@ -83,6 +83,9 @@ async function quickAdd() {
 // ═══ Edit Modal ═══
 
 let currentEditWeekdays = [0, 1, 2, 3, 4, 5, 6];
+let currentEditPeriods = []; // [] = day-long (visible in every period)
+
+const PERIOD_ORDER = ['morning', 'afternoon', 'night'];
 
 function setupWeekdayButtons() {
   document.querySelectorAll('#edit-weekdays .weekday-btn').forEach(btn => {
@@ -95,6 +98,23 @@ function setupWeekdayButtons() {
       } else {
         currentEditWeekdays.push(day);
         currentEditWeekdays.sort();
+        btn.classList.add('active');
+      }
+    });
+  });
+}
+
+function setupPeriodButtons() {
+  document.querySelectorAll('#edit-periods .period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const period = btn.dataset.period;
+      const idx = currentEditPeriods.indexOf(period);
+      if (idx >= 0) {
+        currentEditPeriods.splice(idx, 1);
+        btn.classList.remove('active');
+      } else {
+        currentEditPeriods.push(period);
+        currentEditPeriods.sort((a, b) => PERIOD_ORDER.indexOf(a) - PERIOD_ORDER.indexOf(b));
         btn.classList.add('active');
       }
     });
@@ -118,6 +138,17 @@ async function openEditModal(id) {
   document.querySelectorAll('#edit-weekdays .weekday-btn').forEach(btn => {
     const day = Number(btn.dataset.day);
     btn.classList.toggle('active', currentEditWeekdays.includes(day));
+  });
+
+  // Periods
+  try {
+    currentEditPeriods = JSON.parse(item.periods || '[]');
+  } catch {
+    currentEditPeriods = [];
+  }
+  if (!Array.isArray(currentEditPeriods)) currentEditPeriods = [];
+  document.querySelectorAll('#edit-periods .period-btn').forEach(btn => {
+    btn.classList.toggle('active', currentEditPeriods.includes(btn.dataset.period));
   });
 
   // Count & Alerts
@@ -150,6 +181,7 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     icon: document.getElementById('edit-icon').value.trim(),
     sort_order: Number(document.getElementById('edit-sort').value) || 0,
     weekdays: JSON.stringify(currentEditWeekdays),
+    periods: JSON.stringify(currentEditPeriods),
     total_count: totalCount ? Number(totalCount) : null,
     alert_penultimate: document.getElementById('edit-alert-penultimate').value.trim() || null,
     alert_last: document.getElementById('edit-alert-last').value.trim() || null,
@@ -419,6 +451,7 @@ document.getElementById('items-list').addEventListener('click', (e) => {
 });
 
 setupWeekdayButtons();
+setupPeriodButtons();
 setupFontSliders();
 
 (async () => {

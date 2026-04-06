@@ -26,6 +26,7 @@ function requireApiAuth(req, res, next) {
 // ═══ Input Validation ═══
 
 const VALID_CATEGORIES = ['medication', 'supplement', 'reminder'];
+const VALID_PERIODS = ['morning', 'afternoon', 'night'];
 const MAX_TITLE = 200;
 const MAX_TEXT = 500;
 const MAX_ICON = 10;
@@ -63,6 +64,20 @@ function validateItemData(data, isCreate) {
       }
     } catch {
       errors.push('weekdays must be valid JSON array');
+    }
+  }
+
+  if (data.periods !== undefined) {
+    try {
+      const p = typeof data.periods === 'string' ? JSON.parse(data.periods) : data.periods;
+      if (!Array.isArray(p) || !p.every(v => VALID_PERIODS.includes(v))) {
+        errors.push(`periods must be array containing only: ${VALID_PERIODS.join(', ')}`);
+      } else {
+        // Normalize to JSON string for storage (frontend may send array or string)
+        data.periods = JSON.stringify(p);
+      }
+    } catch {
+      errors.push('periods must be valid JSON array');
     }
   }
 

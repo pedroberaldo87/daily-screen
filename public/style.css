@@ -234,6 +234,47 @@ html, body {
   border-left: 3px solid rgba(232, 168, 75, 0.3);
 }
 
+/* ─── Period Filter ─── */
+
+.period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  padding: 12px 8px 6px;
+}
+
+.period-nav-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s, border-color 0.25s, transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.period-nav-btn:active {
+  transform: scale(0.95);
+}
+
+.period-nav-btn.active {
+  color: var(--accent-sup);
+  border-color: rgba(232, 168, 75, 0.3);
+  background: rgba(232, 168, 75, 0.1);
+}
+
 /* ─── Date Navigation ─── */
 
 .date-nav {
@@ -244,8 +285,7 @@ html, body {
   width: 100%;
   position: relative;
   z-index: 1;
-  margin-top: auto;
-  padding: 12px 8px 4px;
+  padding: 6px 8px 4px;
 }
 
 .date-nav-btn {
@@ -325,6 +365,31 @@ html, body {
 }
 
 .column[data-empty="true"] { display: none; }
+
+/* Empty state when current period has zero tasks */
+.period-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.period-empty[hidden] { display: none; }
+.period-empty-icon {
+  font-size: 4rem;
+  filter: grayscale(0.3);
+}
+.period-empty-text {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
 
 /* ─── Column Headers ─── */
 
@@ -766,7 +831,16 @@ html, body {
   .weather-desc { display: none; }
   .weather-hint { display: none; }
 
-  .date-nav { margin-top: 0; gap: 6px; }
+  .period-nav {
+    margin-top: 0;
+    padding: 0;
+    width: auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .period-nav-btn { padding: 5px 9px; font-size: 0.62rem; }
+
+  .date-nav { margin-top: 0; gap: 6px; padding: 0; }
   .date-nav-btn { min-width: 36px; min-height: 36px; padding: 6px 10px; font-size: 0.85rem; }
   .date-nav-today { font-size: 0.7rem; }
 

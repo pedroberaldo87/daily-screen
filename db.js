@@ -61,6 +61,7 @@ const migrations = [
   ['routine_items', 'followup_title', 'TEXT'],
   ['routine_items', 'followup_category', 'TEXT'],
   ['routine_items', 'followup_icon', 'TEXT'],
+  ['routine_items', 'periods', "TEXT DEFAULT '[]'"],
 ];
 
 for (const [table, column, type] of migrations) {
@@ -99,9 +100,9 @@ function getAllRoutineItems() {
 
 function createRoutineItem(data) {
   const stmt = db.prepare(`
-    INSERT INTO routine_items (title, category, icon, sort_order, weekdays, total_count,
+    INSERT INTO routine_items (title, category, icon, sort_order, weekdays, periods, total_count,
       alert_penultimate, alert_last, followup_title, followup_category, followup_icon)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.title,
@@ -109,6 +110,7 @@ function createRoutineItem(data) {
     data.icon || '✅',
     data.sort_order || 0,
     data.weekdays || '[0,1,2,3,4,5,6]',
+    data.periods || '[]',
     data.total_count || null,
     data.alert_penultimate || null,
     data.alert_last || null,
@@ -126,7 +128,7 @@ function updateRoutineItem(id, data) {
   const stmt = db.prepare(`
     UPDATE routine_items
     SET title = ?, category = ?, icon = ?, sort_order = ?, active = ?,
-        weekdays = ?, total_count = ?, completed_count = ?,
+        weekdays = ?, periods = ?, total_count = ?, completed_count = ?,
         alert_penultimate = ?, alert_last = ?,
         followup_title = ?, followup_category = ?, followup_icon = ?
     WHERE id = ?
@@ -138,6 +140,7 @@ function updateRoutineItem(id, data) {
     data.sort_order ?? item.sort_order,
     data.active ?? item.active,
     data.weekdays ?? item.weekdays,
+    data.periods ?? item.periods,
     data.total_count !== undefined ? data.total_count : item.total_count,
     data.completed_count !== undefined ? data.completed_count : item.completed_count,
     data.alert_penultimate !== undefined ? data.alert_penultimate : item.alert_penultimate,
@@ -198,6 +201,7 @@ function getTasksForDate(date) {
       ri.category,
       ri.icon,
       ri.sort_order,
+      ri.periods,
       ri.total_count,
       ri.completed_count,
       ri.alert_penultimate,
@@ -272,6 +276,7 @@ function toggleTask(id) {
       ri.category,
       ri.icon,
       ri.sort_order,
+      ri.periods,
       ri.total_count,
       ri.completed_count,
       ri.alert_penultimate,

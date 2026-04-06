@@ -113,6 +113,24 @@
       border-color: var(--accent-sup);
     }
 
+    /* Period selector */
+    .period-selector { display: flex; gap: 6px; flex-wrap: wrap; }
+    .period-btn {
+      padding: 7px 14px; height: 34px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--bg-input);
+      color: var(--text-muted); font-family: var(--font);
+      font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .period-btn.active {
+      background: var(--accent-sup); color: #000;
+      border-color: var(--accent-sup);
+    }
+    .period-help {
+      display: block; margin-top: 6px;
+      color: var(--text-muted); font-size: 0.72rem; font-style: italic;
+    }
+
     /* Item cards */
     .item-card {
       background: var(--bg-card); border-radius: var(--radius);
@@ -558,6 +576,17 @@
             <button type="button" class="weekday-btn" data-day="5" data-i18n="weekday.fri">Sex</button>
             <button type="button" class="weekday-btn" data-day="6" data-i18n="weekday.sat">Sáb</button>
           </div>
+        </div>
+
+        <!-- Periods -->
+        <div class="form-section">
+          <div class="form-section-title" data-i18n="admin.periods">Períodos do dia</div>
+          <div class="period-selector" id="edit-periods">
+            <button type="button" class="period-btn" data-period="morning" data-i18n="period.morning">Manhã</button>
+            <button type="button" class="period-btn" data-period="afternoon" data-i18n="period.afternoon">Tarde</button>
+            <button type="button" class="period-btn" data-period="night" data-i18n="period.night">Noite</button>
+          </div>
+          <small class="period-help" data-i18n="admin.periodsHelp">Sem nenhum selecionado, o item aparece o dia todo.</small>
         </div>
 
         <!-- Count & Alerts -->

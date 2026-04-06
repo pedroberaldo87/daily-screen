@@ -7,6 +7,7 @@ const IDLE_TIMEOUT = 5 * 60 * 1000;      // 5 min — auto-reset to today
 let tasks = [];
 let wasAllDone = false;
 let currentDate = todayStr();
+let currentPeriod = 'all'; // 'all' | 'morning' | 'afternoon' | 'night'
 let idleTimer = null;
 
 // ═══ Date Navigation ═══
@@ -58,7 +59,34 @@ function resetIdleTimer() {
     if (currentDate !== todayStr()) {
       goToday();
     }
+    if (currentPeriod !== 'all') {
+      setPeriod('all');
+    }
   }, IDLE_TIMEOUT);
+}
+
+// ═══ Period Filter ═══
+
+function getVisibleTasks() {
+  if (currentPeriod === 'all') return tasks;
+  return tasks.filter(task => {
+    let periods;
+    try {
+      periods = JSON.parse(task.periods || '[]');
+    } catch {
+      periods = [];
+    }
+    // Empty array = day-long: visible in every period
+    return periods.length === 0 || periods.includes(currentPeriod);
+  });
+}
+
+function setPeriod(period) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.period === period);
+  });
+  renderTasks();
 }
 
 // ═══ Clock, Date & Greeting ═══
@@ -127,12 +155,13 @@ async function fetchTasks() {
 }
 
 function renderTasks() {
+  const visible = getVisibleTasks();
   const categories = ['medication', 'supplement', 'reminder'];
 
   for (const cat of categories) {
     const col = document.getElementById(`col-${cat}`);
     const container = col.querySelector('.column-tasks');
-    const catTasks = tasks.filter(t => t.category === cat);
+    const catTasks = visible.filter(t => t.category === cat);
 
     // Hide empty columns
     col.dataset.empty = catTasks.length === 0 ? 'true' : 'false';
@@ -141,6 +170,12 @@ function renderTasks() {
     for (const task of catTasks) {
       container.appendChild(createTaskElement(task));
     }
+  }
+
+  // Show global empty state when the active period has zero visible tasks
+  const emptyEl = document.getElementById('period-empty');
+  if (emptyEl) {
+    emptyEl.hidden = visible.length > 0;
   }
 
   updateProgress();
@@ -204,8 +239,9 @@ async function toggleTask(id, el) {
 // ═══ Progress ═══
 
 function updateProgress() {
-  const total = tasks.length;
-  const done = tasks.filter(t => t.completed).length;
+  const visible = getVisibleTasks();
+  const total = visible.length;
+  const done = visible.filter(t => t.completed).length;
   const pct = total > 0 ? (done / total) * 100 : 0;
 
   const fill = document.getElementById('progress-fill');
@@ -315,6 +351,11 @@ async function loadSettings() {
 document.getElementById('date-prev').addEventListener('click', () => navigateDate(-1));
 document.getElementById('date-next').addEventListener('click', () => navigateDate(1));
 document.getElementById('date-today').addEventListener('click', goToday);
+
+// Period filter
+document.querySelectorAll('.period-nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => setPeriod(btn.dataset.period));
+});
 
 // Idle auto-reset
 document.addEventListener('click', resetIdleTimer);
