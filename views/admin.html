@@ -322,19 +322,88 @@
       text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
     }
 
-    /* ─── Edit-item modal: instrument-panel layout ─── */
-    #edit-modal.modal-overlay { align-items: center; padding: 16px; }
-    .modal--edit-item {
-      max-width: 1200px;
-      padding: 20px 28px 22px;
-    }
-    .modal--edit-item h2 {
+    /* ═══ Instrument-panel modal base (shared by edit-item + settings) ═══ */
+    #edit-modal.modal-overlay,
+    #settings-modal.modal-overlay { align-items: center; padding: 16px; }
+
+    .modal--panel { padding: 20px 28px 22px; }
+    .modal--panel h2 {
       margin: 0 0 14px;
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
     }
 
-    /* Identity strip across the top: icon | name | category | order */
+    /* N-column operation row with vertical dividers */
+    .modal--panel .ops-grid {
+      display: grid;
+      column-gap: 0;
+    }
+    .modal--panel .ops-grid > .ops-col {
+      padding: 0 22px;
+      min-width: 0;
+    }
+    .modal--panel .ops-grid > .ops-col:first-child { padding-left: 0; }
+    .modal--panel .ops-grid > .ops-col:last-child { padding-right: 0; }
+    .modal--panel .ops-grid > .ops-col + .ops-col {
+      border-left: 1px solid var(--border);
+    }
+
+    /* Section titles: accent dot with hanging indent (aligns to first line on wrap) */
+    .modal--panel .panel-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 10px;
+      position: relative;
+      padding-left: 13px;
+      line-height: 1.35;
+    }
+    .modal--panel .panel-title::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.45em;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent-sup);
+      box-shadow: 0 0 8px rgba(232,168,75,0.5);
+    }
+    .modal--panel .panel-block + .panel-block { margin-top: 14px; }
+    .modal--panel .panel-block .form-row + .form-row,
+    .modal--panel .panel-block .form-row + .form-group,
+    .modal--panel .panel-block .form-group + .form-group { margin-top: 8px; }
+    .modal--panel .panel-block .form-group { margin-bottom: 0; }
+    .modal--panel .period-help {
+      font-size: 0.68rem;
+      margin-top: 5px;
+    }
+
+    /* Footer */
+    .modal--panel .modal-actions {
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Compact inputs */
+    .modal--panel input,
+    .modal--panel select {
+      padding: 8px 12px;
+      font-size: 0.85rem;
+    }
+    .modal--panel label {
+      font-size: 0.72rem;
+      margin-bottom: 4px;
+    }
+
+    /* ─── Edit-item modal specifics ─── */
+    .modal--edit-item { max-width: 1200px; }
+    .modal--edit-item .ops-grid {
+      grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.25fr) minmax(260px, 1fr);
+    }
     .modal--edit-item .identity-strip {
       display: grid;
       grid-template-columns: 64px minmax(0, 1fr) 200px 90px;
@@ -350,99 +419,58 @@
       font-size: 1.2rem;
     }
     .modal--edit-item .identity-strip .order-cell input { text-align: center; }
-
-    /* 3-column operation row: Schedule | Rules | Consequence */
-    .modal--edit-item .ops-grid {
-      display: grid;
-      grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.25fr) minmax(260px, 1fr);
-      column-gap: 0;
-    }
-    .modal--edit-item .ops-grid > .ops-col {
-      padding: 0 22px;
-      min-width: 0;
-    }
-    .modal--edit-item .ops-grid > .ops-col:first-child { padding-left: 0; }
-    .modal--edit-item .ops-grid > .ops-col:last-child { padding-right: 0; }
-    .modal--edit-item .ops-grid > .ops-col + .ops-col {
-      border-left: 1px solid var(--border);
-    }
-
-    /* Section titles: instrument-panel style (no borders, accent dot) */
-    .modal--edit-item .panel-title {
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-    }
-    .modal--edit-item .panel-title::before {
-      content: '';
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: var(--accent-sup);
-      box-shadow: 0 0 8px rgba(232,168,75,0.5);
-    }
-    .modal--edit-item .panel-block + .panel-block { margin-top: 14px; }
-    .modal--edit-item .panel-block .form-row + .form-row,
-    .modal--edit-item .panel-block .form-row + .form-group,
-    .modal--edit-item .panel-block .form-group + .form-group { margin-top: 8px; }
-    .modal--edit-item .panel-block .form-group { margin-bottom: 0; }
-
     .modal--edit-item .followup-desc {
       font-size: 0.7rem;
       color: var(--text-muted);
       margin: -4px 0 8px;
       line-height: 1.4;
     }
-    .modal--edit-item .period-help {
-      font-size: 0.68rem;
-      margin-top: 5px;
+
+    /* ─── Settings modal specifics ─── */
+    .modal--settings-panel { max-width: 1100px; }
+    .modal--settings-panel .ops-grid {
+      grid-template-columns: minmax(240px, 0.75fr) minmax(320px, 1fr) minmax(380px, 1.3fr);
+    }
+    .modal--settings-panel .font-panel {
+      gap: 10px 18px;
+    }
+    .modal--settings-panel .font-control label { font-size: 0.7rem; }
+    .modal--settings-panel .font-panel-actions { padding-top: 4px; }
+    .modal--settings-panel .current-location {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    /* Time inputs need enough room to render HH:MM + native picker icon */
+    .modal--settings-panel input[type="time"] {
+      min-width: 0;
+      padding: 8px 10px;
     }
 
-    /* Footer */
-    .modal--edit-item .modal-actions {
-      margin-top: 20px;
-      padding-top: 14px;
-      border-top: 1px solid var(--border);
-    }
-
-    /* Compact inputs slightly inside modal to hit height target */
-    .modal--edit-item input,
-    .modal--edit-item select {
-      padding: 8px 12px;
-      font-size: 0.85rem;
-    }
-    .modal--edit-item label {
-      font-size: 0.72rem;
-      margin-bottom: 4px;
-    }
-
-    /* Responsive: collapse to stacked layout on narrow viewports */
+    /* Responsive: collapse all panel modals to stacked layout */
     @media (max-width: 900px) {
-      .modal--edit-item { max-width: 560px; padding: 22px 24px; }
+      .modal--panel { padding: 22px 24px; }
+      .modal--edit-item,
+      .modal--settings-panel { max-width: 560px; }
       .modal--edit-item .identity-strip {
         grid-template-columns: 64px minmax(0, 1fr);
         row-gap: 10px;
       }
-      .modal--edit-item .identity-strip .category-cell { grid-column: 1 / -1; }
+      .modal--edit-item .identity-strip .category-cell,
       .modal--edit-item .identity-strip .order-cell { grid-column: 1 / -1; }
-      .modal--edit-item .ops-grid {
+      .modal--panel .ops-grid {
         grid-template-columns: 1fr;
       }
-      .modal--edit-item .ops-grid > .ops-col {
+      .modal--panel .ops-grid > .ops-col {
         padding: 14px 0;
         border-left: none !important;
         border-top: 1px solid var(--border);
       }
-      .modal--edit-item .ops-grid > .ops-col:first-child {
+      .modal--panel .ops-grid > .ops-col:first-child {
         padding-top: 0;
         border-top: none;
       }
+      .modal--settings-panel .font-panel { grid-template-columns: 1fr 1fr; }
     }
 
     /* Location search */
@@ -671,105 +699,111 @@
 
   <!-- ═══ Settings Modal ═══ -->
   <div class="modal-overlay" id="settings-modal">
-    <div class="modal" style="max-width:600px">
+    <div class="modal modal--panel modal--settings-panel">
       <h2 data-i18n="admin.settings">Configurações</h2>
 
-      <!-- Language -->
-      <div class="form-section" style="border-top:none;margin-top:0;padding-top:0">
-        <div class="form-section-title" data-i18n="admin.language">Idioma</div>
-        <select id="language-select" style="width:100%">
-          <option value="pt-BR">🇧🇷 Português</option>
-          <option value="en">🇺🇸 English</option>
-          <option value="es">🇪🇸 Español</option>
-        </select>
-      </div>
+      <div class="ops-grid">
 
-      <!-- Location -->
-      <div class="form-section">
-        <div class="form-section-title" data-i18n="admin.location">Localização (previsão do tempo)</div>
-        <div id="current-location" class="current-location" style="display:none"></div>
-        <div class="search-wrap">
-          <input type="text" id="location-search" placeholder="Buscar cidade..." data-i18n-placeholder="admin.searchCity" style="width:100%">
-          <div class="search-results" id="location-results"></div>
-        </div>
-      </div>
-
-      <!-- Period times + display mode -->
-      <div class="form-section">
-        <div class="form-section-title" data-i18n="admin.periodTimes">Horários dos períodos</div>
-        <div class="form-row">
-          <div>
-            <label data-i18n="admin.morningStart">Manhã começa</label>
-            <input type="time" id="setting-morning-start" value="05:00" style="width:100%">
+        <!-- COL A · GERAL -->
+        <div class="ops-col">
+          <div class="panel-block">
+            <div class="panel-title" data-i18n="admin.language">Idioma</div>
+            <select id="language-select" style="width:100%">
+              <option value="pt-BR">🇧🇷 Português</option>
+              <option value="en">🇺🇸 English</option>
+              <option value="es">🇪🇸 Español</option>
+            </select>
           </div>
-          <div>
-            <label data-i18n="admin.afternoonStart">Tarde começa</label>
-            <input type="time" id="setting-afternoon-start" value="12:00" style="width:100%">
-          </div>
-          <div>
-            <label data-i18n="admin.nightStart">Noite começa</label>
-            <input type="time" id="setting-night-start" value="18:00" style="width:100%">
+          <div class="panel-block">
+            <div class="panel-title" data-i18n="admin.location">Localização (previsão do tempo)</div>
+            <div id="current-location" class="current-location" style="display:none"></div>
+            <div class="search-wrap">
+              <input type="text" id="location-search" placeholder="Buscar cidade..." data-i18n-placeholder="admin.searchCity" style="width:100%">
+              <div class="search-results" id="location-results"></div>
+            </div>
           </div>
         </div>
-        <small class="period-help" data-i18n="admin.timesOrderHelp">Os horários precisam estar em ordem crescente (manhã &lt; tarde &lt; noite).</small>
 
-        <div style="margin-top:14px">
-          <label data-i18n="admin.periodDisplayMode">Exibição dos botões de período</label>
-          <select id="setting-display-mode" style="width:100%">
-            <option value="words" data-i18n="admin.modeWords">Palavras</option>
-            <option value="icons" data-i18n="admin.modeIcons">Ícones</option>
-            <option value="both" data-i18n="admin.modeBoth">Palavras + Ícones</option>
-          </select>
+        <!-- COL B · PERÍODOS DO DIA -->
+        <div class="ops-col">
+          <div class="panel-block">
+            <div class="panel-title" data-i18n="admin.periodTimes">Horários dos períodos</div>
+            <div class="form-row">
+              <div>
+                <label data-i18n="admin.morningStart">Manhã começa</label>
+                <input type="time" id="setting-morning-start" value="05:00" style="width:100%">
+              </div>
+              <div>
+                <label data-i18n="admin.afternoonStart">Tarde começa</label>
+                <input type="time" id="setting-afternoon-start" value="12:00" style="width:100%">
+              </div>
+              <div>
+                <label data-i18n="admin.nightStart">Noite começa</label>
+                <input type="time" id="setting-night-start" value="18:00" style="width:100%">
+              </div>
+            </div>
+            <small class="period-help" data-i18n="admin.timesOrderHelp">Os horários precisam estar em ordem crescente (manhã &lt; tarde &lt; noite).</small>
+          </div>
+          <div class="panel-block">
+            <div class="panel-title" data-i18n="admin.periodDisplayMode">Exibição dos botões de período</div>
+            <select id="setting-display-mode" style="width:100%">
+              <option value="words" data-i18n="admin.modeWords">Palavras</option>
+              <option value="icons" data-i18n="admin.modeIcons">Ícones</option>
+              <option value="both" data-i18n="admin.modeBoth">Palavras + Ícones</option>
+            </select>
+            <div id="period-save-status" class="save-status" hidden></div>
+          </div>
         </div>
 
-        <div id="period-save-status" class="save-status" hidden></div>
-      </div>
-
-      <!-- Typography -->
-      <div class="form-section">
-        <div class="form-section-title" data-i18n="admin.typography">Tipografia (tamanhos de fonte)</div>
-        <div class="font-panel" id="font-panel">
-          <div class="font-control">
-            <label><span data-i18n="admin.fontClock">Relógio</span> <span class="font-value" id="fv-clock">3.6</span></label>
-            <input type="range" id="fs-clock" data-key="font_clock" min="1.5" max="5" step="0.1" value="3.6">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontGreeting">Saudação</span> <span class="font-value" id="fv-greeting">1.25</span></label>
-            <input type="range" id="fs-greeting" data-key="font_greeting" min="0.7" max="2.5" step="0.05" value="1.25">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontDate">Data</span> <span class="font-value" id="fv-date">0.88</span></label>
-            <input type="range" id="fs-date" data-key="font_date" min="0.5" max="1.5" step="0.02" value="0.88">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontTemp">Temperatura</span> <span class="font-value" id="fv-weather-temp">2</span></label>
-            <input type="range" id="fs-weather-temp" data-key="font_weather_temp" min="1" max="4" step="0.1" value="2">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontTaskTitle">Título da tarefa</span> <span class="font-value" id="fv-task-title">1.05</span></label>
-            <input type="range" id="fs-task-title" data-key="font_task_title" min="0.7" max="2" step="0.05" value="1.05">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontColHeader">Cabeçalho da coluna</span> <span class="font-value" id="fv-col-header">0.8</span></label>
-            <input type="range" id="fs-col-header" data-key="font_col_header" min="0.5" max="1.5" step="0.02" value="0.8">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontTaskIcon">Ícone da tarefa</span> <span class="font-value" id="fv-task-icon">1.6</span></label>
-            <input type="range" id="fs-task-icon" data-key="font_task_icon" min="0.8" max="3" step="0.1" value="1.6">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontProgress">Progresso</span> <span class="font-value" id="fv-progress">0.78</span></label>
-            <input type="range" id="fs-progress" data-key="font_progress" min="0.5" max="1.5" step="0.02" value="0.78">
-          </div>
-          <div class="font-control">
-            <label><span data-i18n="admin.fontCounter">Contador</span> <span class="font-value" id="fv-task-count">0.6</span></label>
-            <input type="range" id="fs-task-count" data-key="font_task_count" min="0.4" max="1.2" step="0.02" value="0.6">
-          </div>
-          <div class="font-panel-actions">
-            <button class="btn btn-secondary btn-sm" onclick="resetFonts()" data-i18n="admin.resetDefaults">Voltar ao padrão</button>
-            <button class="btn btn-primary btn-sm" onclick="saveFonts()" data-i18n="common.save">Salvar</button>
+        <!-- COL C · TIPOGRAFIA -->
+        <div class="ops-col">
+          <div class="panel-block">
+            <div class="panel-title" data-i18n="admin.typography">Tipografia (tamanhos de fonte)</div>
+            <div class="font-panel" id="font-panel">
+              <div class="font-control">
+                <label><span data-i18n="admin.fontClock">Relógio</span> <span class="font-value" id="fv-clock">3.6</span></label>
+                <input type="range" id="fs-clock" data-key="font_clock" min="1.5" max="5" step="0.1" value="3.6">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontGreeting">Saudação</span> <span class="font-value" id="fv-greeting">1.25</span></label>
+                <input type="range" id="fs-greeting" data-key="font_greeting" min="0.7" max="2.5" step="0.05" value="1.25">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontDate">Data</span> <span class="font-value" id="fv-date">0.88</span></label>
+                <input type="range" id="fs-date" data-key="font_date" min="0.5" max="1.5" step="0.02" value="0.88">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontTemp">Temperatura</span> <span class="font-value" id="fv-weather-temp">2</span></label>
+                <input type="range" id="fs-weather-temp" data-key="font_weather_temp" min="1" max="4" step="0.1" value="2">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontTaskTitle">Título da tarefa</span> <span class="font-value" id="fv-task-title">1.05</span></label>
+                <input type="range" id="fs-task-title" data-key="font_task_title" min="0.7" max="2" step="0.05" value="1.05">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontColHeader">Cabeçalho da coluna</span> <span class="font-value" id="fv-col-header">0.8</span></label>
+                <input type="range" id="fs-col-header" data-key="font_col_header" min="0.5" max="1.5" step="0.02" value="0.8">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontTaskIcon">Ícone da tarefa</span> <span class="font-value" id="fv-task-icon">1.6</span></label>
+                <input type="range" id="fs-task-icon" data-key="font_task_icon" min="0.8" max="3" step="0.1" value="1.6">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontProgress">Progresso</span> <span class="font-value" id="fv-progress">0.78</span></label>
+                <input type="range" id="fs-progress" data-key="font_progress" min="0.5" max="1.5" step="0.02" value="0.78">
+              </div>
+              <div class="font-control">
+                <label><span data-i18n="admin.fontCounter">Contador</span> <span class="font-value" id="fv-task-count">0.6</span></label>
+                <input type="range" id="fs-task-count" data-key="font_task_count" min="0.4" max="1.2" step="0.02" value="0.6">
+              </div>
+              <div class="font-panel-actions">
+                <button class="btn btn-secondary btn-sm" onclick="resetFonts()" data-i18n="admin.resetDefaults">Voltar ao padrão</button>
+                <button class="btn btn-primary btn-sm" onclick="saveFonts()" data-i18n="common.save">Salvar</button>
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
 
       <div class="modal-actions">
@@ -820,7 +854,7 @@
 
   <!-- ═══ Edit Modal ═══ -->
   <div class="modal-overlay" id="edit-modal">
-    <div class="modal modal--edit-item">
+    <div class="modal modal--panel modal--edit-item">
       <h2 id="modal-title" data-i18n="admin.editItem">Editar item</h2>
       <form id="edit-form">
         <input type="hidden" id="edit-id">
