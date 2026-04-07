@@ -322,6 +322,129 @@
       text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
     }
 
+    /* ─── Edit-item modal: instrument-panel layout ─── */
+    #edit-modal.modal-overlay { align-items: center; padding: 16px; }
+    .modal--edit-item {
+      max-width: 1200px;
+      padding: 20px 28px 22px;
+    }
+    .modal--edit-item h2 {
+      margin: 0 0 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Identity strip across the top: icon | name | category | order */
+    .modal--edit-item .identity-strip {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr) 200px 90px;
+      column-gap: 14px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+    .modal--edit-item .identity-strip label { margin-bottom: 5px; }
+    .modal--edit-item .identity-strip input,
+    .modal--edit-item .identity-strip select { width: 100%; }
+    .modal--edit-item .identity-strip .icon-cell input {
+      text-align: center;
+      font-size: 1.2rem;
+    }
+    .modal--edit-item .identity-strip .order-cell input { text-align: center; }
+
+    /* 3-column operation row: Schedule | Rules | Consequence */
+    .modal--edit-item .ops-grid {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.25fr) minmax(260px, 1fr);
+      column-gap: 0;
+    }
+    .modal--edit-item .ops-grid > .ops-col {
+      padding: 0 22px;
+      min-width: 0;
+    }
+    .modal--edit-item .ops-grid > .ops-col:first-child { padding-left: 0; }
+    .modal--edit-item .ops-grid > .ops-col:last-child { padding-right: 0; }
+    .modal--edit-item .ops-grid > .ops-col + .ops-col {
+      border-left: 1px solid var(--border);
+    }
+
+    /* Section titles: instrument-panel style (no borders, accent dot) */
+    .modal--edit-item .panel-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .modal--edit-item .panel-title::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent-sup);
+      box-shadow: 0 0 8px rgba(232,168,75,0.5);
+    }
+    .modal--edit-item .panel-block + .panel-block { margin-top: 14px; }
+    .modal--edit-item .panel-block .form-row + .form-row,
+    .modal--edit-item .panel-block .form-row + .form-group,
+    .modal--edit-item .panel-block .form-group + .form-group { margin-top: 8px; }
+    .modal--edit-item .panel-block .form-group { margin-bottom: 0; }
+
+    .modal--edit-item .followup-desc {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin: -4px 0 8px;
+      line-height: 1.4;
+    }
+    .modal--edit-item .period-help {
+      font-size: 0.68rem;
+      margin-top: 5px;
+    }
+
+    /* Footer */
+    .modal--edit-item .modal-actions {
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Compact inputs slightly inside modal to hit height target */
+    .modal--edit-item input,
+    .modal--edit-item select {
+      padding: 8px 12px;
+      font-size: 0.85rem;
+    }
+    .modal--edit-item label {
+      font-size: 0.72rem;
+      margin-bottom: 4px;
+    }
+
+    /* Responsive: collapse to stacked layout on narrow viewports */
+    @media (max-width: 900px) {
+      .modal--edit-item { max-width: 560px; padding: 22px 24px; }
+      .modal--edit-item .identity-strip {
+        grid-template-columns: 64px minmax(0, 1fr);
+        row-gap: 10px;
+      }
+      .modal--edit-item .identity-strip .category-cell { grid-column: 1 / -1; }
+      .modal--edit-item .identity-strip .order-cell { grid-column: 1 / -1; }
+      .modal--edit-item .ops-grid {
+        grid-template-columns: 1fr;
+      }
+      .modal--edit-item .ops-grid > .ops-col {
+        padding: 14px 0;
+        border-left: none !important;
+        border-top: 1px solid var(--border);
+      }
+      .modal--edit-item .ops-grid > .ops-col:first-child {
+        padding-top: 0;
+        border-top: none;
+      }
+    }
+
     /* Location search */
     .search-wrap { position: relative; }
     .search-results {
@@ -697,110 +820,117 @@
 
   <!-- ═══ Edit Modal ═══ -->
   <div class="modal-overlay" id="edit-modal">
-    <div class="modal">
+    <div class="modal modal--edit-item">
       <h2 id="modal-title" data-i18n="admin.editItem">Editar item</h2>
       <form id="edit-form">
         <input type="hidden" id="edit-id">
 
-        <!-- Basic -->
-        <div class="form-row">
-          <div class="narrow">
+        <!-- ── Identity strip (full width) ── -->
+        <div class="identity-strip">
+          <div class="icon-cell">
             <label data-i18n="admin.icon">Ícone</label>
-            <input id="edit-icon" maxlength="4" style="width:100%;text-align:center;font-size:1.2rem">
+            <input id="edit-icon" maxlength="4">
           </div>
-          <div>
+          <div class="name-cell">
             <label data-i18n="admin.name">Nome</label>
-            <input id="edit-title" required style="width:100%">
+            <input id="edit-title" required>
           </div>
-        </div>
-        <div class="form-row" style="margin-top:10px">
-          <div>
+          <div class="category-cell">
             <label data-i18n="admin.categoryLabel">Categoria</label>
-            <select id="edit-category" style="width:100%">
+            <select id="edit-category">
               <option value="medication" data-i18n="category.medication">Medicamento</option>
               <option value="supplement" data-i18n="category.supplement">Suplemento</option>
               <option value="reminder" data-i18n="category.reminder">Lembrete</option>
             </select>
           </div>
-          <div class="narrow" style="flex:0 0 80px">
+          <div class="order-cell">
             <label data-i18n="admin.order">Ordem</label>
-            <input id="edit-sort" type="number" style="width:100%;text-align:center">
+            <input id="edit-sort" type="number">
           </div>
         </div>
 
-        <!-- Weekdays -->
-        <div class="form-section">
-          <div class="form-section-title" data-i18n="admin.weekdays">Dias da semana</div>
-          <div class="weekday-selector" id="edit-weekdays">
-            <button type="button" class="weekday-btn" data-day="0" data-i18n="weekday.sun">Dom</button>
-            <button type="button" class="weekday-btn" data-day="1" data-i18n="weekday.mon">Seg</button>
-            <button type="button" class="weekday-btn" data-day="2" data-i18n="weekday.tue">Ter</button>
-            <button type="button" class="weekday-btn" data-day="3" data-i18n="weekday.wed">Qua</button>
-            <button type="button" class="weekday-btn" data-day="4" data-i18n="weekday.thu">Qui</button>
-            <button type="button" class="weekday-btn" data-day="5" data-i18n="weekday.fri">Sex</button>
-            <button type="button" class="weekday-btn" data-day="6" data-i18n="weekday.sat">Sáb</button>
-          </div>
-        </div>
+        <!-- ── Operation row: 3 semantic columns ── -->
+        <div class="ops-grid">
 
-        <!-- Periods -->
-        <div class="form-section">
-          <div class="form-section-title" data-i18n="admin.periods">Períodos do dia</div>
-          <div class="period-selector" id="edit-periods">
-            <button type="button" class="period-btn" data-period="morning" data-i18n="period.morning">Manhã</button>
-            <button type="button" class="period-btn" data-period="afternoon" data-i18n="period.afternoon">Tarde</button>
-            <button type="button" class="period-btn" data-period="night" data-i18n="period.night">Noite</button>
+          <!-- COL A · QUANDO -->
+          <div class="ops-col">
+            <div class="panel-block">
+              <div class="panel-title" data-i18n="admin.weekdays">Dias da semana</div>
+              <div class="weekday-selector" id="edit-weekdays">
+                <button type="button" class="weekday-btn" data-day="0" data-i18n="weekday.sun">Dom</button>
+                <button type="button" class="weekday-btn" data-day="1" data-i18n="weekday.mon">Seg</button>
+                <button type="button" class="weekday-btn" data-day="2" data-i18n="weekday.tue">Ter</button>
+                <button type="button" class="weekday-btn" data-day="3" data-i18n="weekday.wed">Qua</button>
+                <button type="button" class="weekday-btn" data-day="4" data-i18n="weekday.thu">Qui</button>
+                <button type="button" class="weekday-btn" data-day="5" data-i18n="weekday.fri">Sex</button>
+                <button type="button" class="weekday-btn" data-day="6" data-i18n="weekday.sat">Sáb</button>
+              </div>
+            </div>
+            <div class="panel-block">
+              <div class="panel-title" data-i18n="admin.periods">Períodos do dia</div>
+              <div class="period-selector" id="edit-periods">
+                <button type="button" class="period-btn" data-period="morning" data-i18n="period.morning">Manhã</button>
+                <button type="button" class="period-btn" data-period="afternoon" data-i18n="period.afternoon">Tarde</button>
+                <button type="button" class="period-btn" data-period="night" data-i18n="period.night">Noite</button>
+              </div>
+              <small class="period-help" data-i18n="admin.periodsHelp">Sem nenhum selecionado, o item aparece o dia todo.</small>
+            </div>
           </div>
-          <small class="period-help" data-i18n="admin.periodsHelp">Sem nenhum selecionado, o item aparece o dia todo.</small>
-        </div>
 
-        <!-- Count & Alerts -->
-        <div class="form-section">
-          <div class="form-section-title" data-i18n="admin.repetition">Repetição e alertas</div>
-          <div class="form-row">
-            <div>
-              <label data-i18n="admin.totalCount">Total de vezes (vazio = ilimitado)</label>
-              <input id="edit-total-count" type="number" min="1" placeholder="∞" style="width:100%">
+          <!-- COL B · REGRAS -->
+          <div class="ops-col">
+            <div class="panel-block">
+              <div class="panel-title" data-i18n="admin.repetition">Repetição e alertas</div>
+              <div class="form-row">
+                <div>
+                  <label data-i18n="admin.totalCount">Total de vezes (vazio = ilimitado)</label>
+                  <input id="edit-total-count" type="number" min="1" placeholder="∞" style="width:100%">
+                </div>
+                <div>
+                  <label data-i18n="admin.completed">Já completou</label>
+                  <input id="edit-completed-count" type="number" min="0" style="width:100%" disabled>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n="admin.alertPenultimate">Alerta na penúltima vez</label>
+                <input id="edit-alert-penultimate" placeholder="Ex: Quase acabando! Hora de comprar mais" data-i18n-placeholder="admin.alertPenultimatePlaceholder" style="width:100%">
+              </div>
+              <div class="form-group">
+                <label data-i18n="admin.alertLast">Alerta na última vez</label>
+                <input id="edit-alert-last" placeholder="Ex: Última dose! Comprar amanhã" data-i18n-placeholder="admin.alertLastPlaceholder" style="width:100%">
+              </div>
             </div>
-            <div>
-              <label data-i18n="admin.completed">Já completou</label>
-              <input id="edit-completed-count" type="number" min="0" style="width:100%" disabled>
-            </div>
           </div>
-          <div class="form-group" style="margin-top:10px">
-            <label data-i18n="admin.alertPenultimate">Alerta na penúltima vez</label>
-            <input id="edit-alert-penultimate" placeholder="Ex: Quase acabando! Hora de comprar mais" data-i18n-placeholder="admin.alertPenultimatePlaceholder" style="width:100%">
-          </div>
-          <div class="form-group">
-            <label data-i18n="admin.alertLast">Alerta na última vez</label>
-            <input id="edit-alert-last" placeholder="Ex: Última dose! Comprar amanhã" data-i18n-placeholder="admin.alertLastPlaceholder" style="width:100%">
-          </div>
-        </div>
 
-        <!-- Follow-up -->
-        <div class="form-section">
-          <div class="form-section-title" data-i18n="admin.followUp">Tarefa automática ao concluir todas</div>
-          <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px" data-i18n="admin.followUpDesc">
-            Quando o total de repetições for atingido, cria automaticamente esta tarefa:
-          </p>
-          <div class="form-row">
-            <div class="narrow">
-              <label data-i18n="admin.icon">Ícone</label>
-              <input id="edit-followup-icon" maxlength="4" placeholder="📌" style="width:100%;text-align:center;font-size:1.2rem">
-            </div>
-            <div>
-              <label data-i18n="admin.followUpName">Nome da tarefa</label>
-              <input id="edit-followup-title" placeholder="Ex: Comprar Vitamina D" data-i18n-placeholder="admin.followUpPlaceholder" style="width:100%">
-            </div>
-            <div class="narrow" style="flex:0 0 140px">
-              <label data-i18n="admin.categoryLabel">Categoria</label>
-              <select id="edit-followup-category" style="width:100%">
-                <option value="" data-i18n="admin.followUpSameCategory">(mesma)</option>
-                <option value="medication" data-i18n="category.medication">Medicamento</option>
-                <option value="supplement" data-i18n="category.supplement">Suplemento</option>
-                <option value="reminder" data-i18n="category.reminder">Lembrete</option>
-              </select>
+          <!-- COL C · CONSEQUÊNCIA -->
+          <div class="ops-col">
+            <div class="panel-block">
+              <div class="panel-title" data-i18n="admin.followUp">Tarefa automática ao concluir todas</div>
+              <p class="followup-desc" data-i18n="admin.followUpDesc">
+                Quando o total de repetições for atingido, cria automaticamente esta tarefa:
+              </p>
+              <div class="form-row">
+                <div class="narrow">
+                  <label data-i18n="admin.icon">Ícone</label>
+                  <input id="edit-followup-icon" maxlength="4" placeholder="📌" style="width:100%;text-align:center;font-size:1.2rem">
+                </div>
+                <div>
+                  <label data-i18n="admin.followUpName">Nome da tarefa</label>
+                  <input id="edit-followup-title" placeholder="Ex: Comprar Vitamina D" data-i18n-placeholder="admin.followUpPlaceholder" style="width:100%">
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n="admin.categoryLabel">Categoria</label>
+                <select id="edit-followup-category" style="width:100%">
+                  <option value="" data-i18n="admin.followUpSameCategory">(mesma)</option>
+                  <option value="medication" data-i18n="category.medication">Medicamento</option>
+                  <option value="supplement" data-i18n="category.supplement">Suplemento</option>
+                  <option value="reminder" data-i18n="category.reminder">Lembrete</option>
+                </select>
+              </div>
             </div>
           </div>
+
         </div>
 
         <div class="modal-actions">
