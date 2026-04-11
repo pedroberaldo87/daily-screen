@@ -147,21 +147,277 @@ const EMOJI_KEYWORDS = {
   '🧲': 'ímã ima magnésio magnesio magnet',
   '🧰': 'caixa ferramentas toolbox',
   '♻️': 'reciclar recycle reciclagem',
+
+  // Acessórios pessoais / sair de casa
+  '👓': 'óculos oculos glasses vista enxergar leitura',
+  '🕶️': 'óculos oculos sol sunglasses escuros',
+  '🥽': 'óculos oculos proteção protecao goggles lab segurança seguranca',
+  '🪪': 'documento id identidade rg cnh carteira identification',
+  '🗝️': 'chave antiga velha key',
+  '👛': 'carteira wallet porta moedas purse',
+  '💼': 'maleta pasta briefcase trabalho work',
+  '👜': 'bolsa handbag feminina',
+  '🛍️': 'sacola compras shopping bag',
+  '⌚': 'relógio relogio watch pulso hora',
+  '🔋': 'bateria battery carregar charge',
+  '🔌': 'tomada plug carregador charger energia',
+  '🎧': 'fone fones headphone headphones áudio audio música musica',
+  '📷': 'câmera camera foto photo',
+  '☂️': 'guarda chuva umbrella',
+  '🌂': 'guarda chuva fechado umbrella closed',
+  '👒': 'chapéu chapeu hat sol',
+  '🎩': 'cartola top hat formal',
+  '💍': 'anel ring aliança alianca casamento joia',
+
+  // Roupas
+  '🧣': 'cachecol scarf inverno frio',
+  '🧤': 'luva luvas gloves frio',
+  '🧦': 'meia meias socks',
+  '👕': 'camiseta tshirt',
+  '👖': 'calça calca jeans pants',
+  '👗': 'vestido dress',
+  '🩳': 'short bermuda shorts',
+  '👞': 'sapato shoe masculino',
+  '🥾': 'bota boot trilha hike',
+  '👠': 'salto heel sapato feminino',
+
+  // Higiene extras
+  '🪞': 'espelho mirror',
+  '🧻': 'papel higiênico higienico toilet paper',
+  '💄': 'batom lipstick maquiagem makeup',
+  '💋': 'beijo kiss batom lábios labios',
+  '🪮': 'pente comb cabelo',
+  '🫧': 'bolhas bubbles sabão sabao',
+
+  // Bebidas extras
+  '🧋': 'bubble tea boba chá cha',
+  '🍶': 'saquê sake garrafa',
+  '🧉': 'mate chimarrão chimarrao tereré terere cuia',
+  '🍼': 'mamadeira baby bottle leite bebê bebe',
+
+  // Comida extras
+  '🍗': 'frango chicken coxa ave',
+  '🍤': 'camarão camarao shrimp',
+  '🍱': 'marmita bento lunch box',
+  '🍽️': 'prato talheres refeição refeicao dish plate',
+  '🥄': 'colher spoon',
+  '🍴': 'garfo faca fork knife talheres',
+  '🔪': 'faca knife cortar cozinha',
+
+  // Corpo e saúde extras
+  '👂': 'orelha ear ouvido audição audicao',
+  '🩼': 'muleta crutch',
+  '🤒': 'febre termômetro termometro doente sick',
+  '🤕': 'machucado injury bandagem',
+  '🤧': 'espirro gripe resfriado sneeze cold',
+  '😷': 'máscara mascara mask doença doenca',
+  '💆': 'massagem massage rosto',
+  '💇': 'corte cabelo haircut salão salao',
+
+  // Casa e tarefas
+  '🪣': 'balde bucket limpar',
+  '🧺': 'cesto roupa suja laundry basket',
+  '🗑️': 'lixo trash garbage lixeira',
+  '🪠': 'desentupidor plunger',
+  '🚪': 'porta door entrada saída saida',
+  '🛋️': 'sofá sofa couch',
+  '🪑': 'cadeira chair',
+  '🪴': 'planta vaso plant pot',
+  '🌱': 'muda seedling broto crescer grow',
+  '🌿': 'folhas erva herb folhagem',
+  '🕯️': 'vela candle',
+  '🌷': 'tulipa tulip flor',
+  '🌸': 'flor cereja sakura cherry blossom',
+  '🌻': 'girassol sunflower',
+  '🌹': 'rosa rose flor',
+  '🪻': 'jacinto hyacinth lilás lilas flor',
+  '🌼': 'margarida daisy flor',
+  '🌳': 'árvore arvore tree',
+  '🪵': 'tora madeira wood log',
+  '🏡': 'casa home jardim garden',
+
+  // Pets
+  '🐕': 'cachorro dog cão cao pet passear walk',
+  '🐈': 'gato cat pet gatinho',
+  '🐾': 'pegadas paws patas pet',
+  '🐹': 'hamster pet',
+  '🐰': 'coelho rabbit pet',
+  '🐠': 'peixe fish aquário aquario pet',
+
+  // Trabalho e produtividade extras
+  '🖥️': 'monitor desktop computador screen pc',
+  '⌨️': 'teclado keyboard',
+  '🖱️': 'mouse',
+  '🖨️': 'impressora printer imprimir',
+  '☎️': 'telefone fixo landline phone',
+  '📲': 'celular mobile chamada phone',
+  '💬': 'balão balao mensagem chat conversa',
+  '💭': 'pensamento thought ideia bolha',
+  '📣': 'megafone megaphone aviso anúncio anuncio',
+  '📢': 'alto falante speaker loudspeaker anúncio anuncio',
+  '🖊️': 'caneta pen esferográfica esferografica',
+  '📒': 'caderno notebook ledger',
+  '📔': 'caderno diário diario journal',
+  '📕': 'livro book vermelho',
+  '📖': 'livro aberto open book leitura ler read',
+  '🔖': 'marcador bookmark',
+  '🧮': 'ábaco abaco abacus calculadora',
+  '📊': 'gráfico grafico barras chart',
+  '📈': 'gráfico grafico alta crescimento up',
+  '📉': 'gráfico grafico queda down',
+  '📏': 'régua regua ruler medir',
+  '🗒️': 'bloco notes spiral',
+  '🎓': 'formatura graduation escola faculdade',
+  '🏢': 'prédio predio escritório escritorio office',
+  '🏫': 'escola school colégio colegio',
+
+  // Financeiro
+  '💵': 'dolar dólar nota money cash',
+  '🪙': 'moeda coin',
+  '🧾': 'nota fiscal recibo receipt',
+  '💸': 'dinheiro gastar voando fly money spend',
+  '💹': 'gráfico grafico yen investimento',
+  '🏦': 'banco bank',
+  '🏧': 'caixa eletrônico eletronico atm banco',
+  '💱': 'câmbio cambio moeda exchange',
+
+  // Compras
+  '🏪': 'loja conveniência conveniencia store',
+  '🏬': 'loja departamento shopping mall',
+  '🚚': 'caminhão caminhao entrega delivery truck',
+  '🏷️': 'etiqueta tag preço preco label',
+
+  // Comunicação
+  '📨': 'email envelope carta recebida',
+  '📤': 'email enviado outbox out',
+  '📥': 'email inbox recebido in',
+
+  // Transporte
+  '🚕': 'táxi taxi uber amarelo',
+  '🚌': 'ônibus onibus bus',
+  '🚐': 'van minibus',
+  '🏍️': 'moto motorcycle motocicleta',
+  '🛵': 'moto scooter lambreta',
+  '🚲': 'bicicleta bike bicycle pedal',
+  '🛴': 'patinete kick scooter',
+  '🚑': 'ambulância ambulancia ambulance emergência emergencia',
+  '✈️': 'avião aviao airplane voo',
+  '🚆': 'trem train',
+  '🚢': 'navio ship barco',
+  '⛽': 'gasolina combustível combustivel fuel posto',
+  '🅿️': 'estacionamento parking park',
+
+  // Clima extras
+  '🌤️': 'sol nuvem parcial partly sunny',
+  '⛅': 'parcialmente nublado partly cloudy',
+  '🌦️': 'sol e chuva sun rain',
+  '🌨️': 'nevando neve snow',
+  '☃️': 'boneco neve snowman',
+  '⛄': 'boneco neve snowman',
+  '💨': 'vento wind dash ar',
+  '🌫️': 'névoa nevoa neblina fog',
+  '☔': 'guarda chuva umbrella chuva rain',
+  '🌞': 'sol sorriso sun smile',
+  '🌝': 'lua cheia sorriso moon smile',
+
+  // Humor e emoções
+  '😀': 'feliz happy sorriso smile grande',
+  '😊': 'sorriso feliz corado blush',
+  '🙂': 'sorriso leve slight smile',
+  '😌': 'aliviado relieved calmo',
+  '😔': 'pensativo triste pensive sad',
+  '😢': 'chorar cry lágrima lagrima triste',
+  '😡': 'bravo raiva angry furioso',
+  '🥺': 'suplicante pleading carente',
+  '🤯': 'explodindo mind blown choque',
+  '💔': 'coração coracao partido broken heart',
+  '🙏': 'mãos maos juntas pray rezar obrigado gratidão gratidao thanks',
+  '💫': 'tontura dizzy estrela estonteado',
+
+  // Hobbies e lazer
+  '🎨': 'paleta arte pintura art',
+  '🎬': 'claquete filme movie cinema',
+  '🎸': 'guitarra guitar violão violao',
+  '🎹': 'piano teclado keyboard',
+  '🥁': 'bateria drum',
+  '🎵': 'nota música musica music',
+  '🎶': 'música musica notas notes',
+  '🧩': 'quebra cabeça cabeca puzzle',
+  '🎲': 'dado dice jogo',
+  '🎮': 'controle video game gamepad',
+  '🎯': 'alvo dardo target meta foco focus',
+  '📺': 'televisão televisao tv',
+  '📻': 'rádio radio',
+  '♟️': 'xadrez chess peão peao',
+  '🎤': 'microfone microphone karaoke cantar',
+
+  // Família
+  '👪': 'família familia family',
+  '👫': 'casal couple',
+  '👶': 'bebê bebe baby',
+  '👴': 'idoso vovô vovo grandpa',
+  '👵': 'idosa vovó vovo grandma',
+  '🎉': 'festa party comemoração comemoracao',
+  '🎂': 'bolo cake aniversário aniversario',
+  '🎁': 'presente gift',
+  '🎈': 'balão balao balloon festa',
+  '💝': 'presente coração coracao gift heart',
+
+  // Checklist
+  '☑️': 'check box marcado checkbox',
+  '✔️': 'check certo correto',
+  '⚠️': 'aviso warning atenção atencao alerta',
+  '💯': 'cem 100 perfeito pontos',
+  '🏆': 'troféu trofeu trophy vencedor premio prêmio',
+  '🔕': 'sino mudo mute silencioso',
+  '⏰': 'alarme alarm despertador hora time',
+  '💥': 'explosão explosao boom impacto',
 };
 
 const ICON_CATEGORIES = {
   rotina: {
     labelKey: 'icon.category.routine',
     icons: [
-      '💊','💉','🩺','🩹','🧬','🧪','🔬','🫀','🫁','🧠','🦷','🦴','👁️','🩸','🩻',
-      '☀️','🌙','⭐','🌡️','💧','🧊','🔥','❄️','🌈',
-      '🍎','🍊','🍋','🥑','🥦','🥕','🧄','🫚','🥛','🧃','🍵','☕','🥤','🫗',
-      '💪','🏃','🧘','🚶','🏋️','🚴','🧗','🤸','🏊','⚡',
-      '📋','📌','📝','✅','❌','⏰','🔔','🗓️','📅','📎',
-      '🏠','🚗','🔑','💳','📱','💻','🎒','👔','👟','🧥',
-      '🪥','🧴','🧼','🪒','💈','🚿','🛁',
-      '🛒','💰','🏦','📦','✉️','📞',
-      '😴','🛌','☕','🌅','🌇',
+      // Saúde e corpo
+      '💊','💉','🩺','🩹','🩼','🩻','🧬','🧪','🔬','🫀','🫁','🧠','🦷','🦴','👁️','👂','🩸','🤒','🤕','🤧','😷','🌡️','💆','💇',
+      // Acessórios e sair de casa
+      '👓','🕶️','🥽','🪪','🔑','🗝️','👛','💼','🎒','👜','🛍️','💳','💰','📱','⌚','⏰','🔋','🔌','🎧','📷','☂️','🌂','🧢','👒','🎩','💍',
+      // Roupas
+      '🧥','🧣','🧤','🧦','👔','👕','👖','👗','🩳','👟','👞','🥾','👠',
+      // Higiene
+      '🪥','🧴','🧼','🪒','💈','🚿','🛁','🪞','🧽','🧻','💄','💋','🪮','🫧',
+      // Hidratação
+      '💧','🥛','🧃','☕','🍵','🧋','🍶','🥤','🍼','🧊','🫗','🧉',
+      // Alimentação
+      '🍎','🍊','🍋','🍌','🍇','🍓','🫐','🥝','🥭','🍍','🥑','🥦','🥕','🌽','🍅','🧅','🧄','🫚','🍠','🥜','🫘','🌰','🥚','🍳','🥣','🥗','🍚','🍞','🥐','🧀','🥩','🍗','🐟','🍤','🍱','🍽️','🥄','🍴','🔪','🧂',
+      // Exercício e movimento
+      '💪','🏃','🚶','🧘','🧗','🏋️','🚴','🚵','🤸','🏊','⚽','🎾','🥊','🛹','⛷️','🏂','🤿','🏄',
+      // Sono
+      '😴','🛌','🛏️','💤','🌙','🌛','⭐','✨',
+      // Casa e tarefas
+      '🏠','🏡','🧹','🪣','🧺','🗑️','🪠','🚪','🛋️','🪑','🪴','🌱','🌿','💐','🌷','🌸','🌻','🌹','🪻','🌼','🌳','🪵','🕯️',
+      // Pets
+      '🐕','🐶','🐈','🐱','🐦','🐹','🐰','🐠','🐾',
+      // Trabalho e produtividade
+      '💻','🖥️','⌨️','🖱️','🖨️','☎️','📧','✉️','💬','🔔','📝','✏️','🖊️','📒','📔','📕','📖','📚','🔖','📋','📌','📍','📎','📏','🧮','📊','📈','📉','🗒️','🗓️','📅','📆','🔍','💡','🎓','🏢','🏫',
+      // Financeiro
+      '💵','🪙','🧾','💸','💹','🏦','🏧','💱',
+      // Compras
+      '🛒','🏪','🏬','📦','🚚','🏷️',
+      // Comunicação
+      '📞','📲','📨','📤','📥','💭','📣','📢',
+      // Transporte
+      '🚗','🚕','🚌','🚐','🏍️','🛵','🚲','🛴','🚑','✈️','🚆','🚢','⛽','🅿️',
+      // Clima
+      '☀️','🌤️','⛅','☁️','🌧️','⛈️','🌨️','❄️','☃️','💨','🌪️','🌫️','🌈','☔','🌞','🌝',
+      // Humor e mente
+      '😀','😊','🙂','😌','😔','😢','😡','🥺','🤯','❤️','💔','🙏','💫','🔥','⚡',
+      // Hobbies e lazer
+      '🎨','🎬','🎸','🎹','🥁','🎵','🎶','🧩','🎲','🎮','🎯','📺','📻','♟️','🎤',
+      // Família e social
+      '👪','👫','👶','👴','👵','🎉','🎂','🎁','🎈','💝',
+      // Checklist e lembretes
+      '✅','☑️','✔️','❌','⭕','⛔','🚫','⚠️','❗','❓','‼️','💯','🔴','🟠','🟡','🟢','🔵','♻️','🔕','🏁','🚩','🏆','💥',
     ],
   },
   rostos: {
@@ -278,14 +534,76 @@ const ICON_CATEGORIES = {
       '🔶','🔷','🔸','🔹','🔺','🔻','💠','🔘','🔳','🔲',
     ],
   },
+  atividades: {
+    labelKey: 'icon.category.activities',
+    icons: [
+      '⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱',
+      '🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳',
+      '🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷',
+      '⛸️','🥌','🎿','⛷️','🏂','🪂','🏋️','🤼','🤸','⛹️',
+      '🤺','🤾','🏌️','🏇','🧘','🏄','🏊','🤽','🚣','🧗',
+      '🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖️','🏵️','🎗️',
+      '🎫','🎟️','🎪','🤹','🎭','🩰','🎨','🎬','🎤','🎧',
+      '🎼','🎹','🥁','🪘','🎷','🎺','🎸','🪕','🎻','🪗',
+      '🎲','♟️','🎯','🎳','🎮','🕹️','🎰','🧩','🪅','🪆',
+      '🖼️','🧵','🪡','🧶','🪢',
+    ],
+  },
+  viagens: {
+    labelKey: 'icon.category.travel',
+    icons: [
+      '🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐',
+      '🛻','🚚','🚛','🚜','🦯','🦽','🦼','🛴','🚲','🛵',
+      '🏍️','🛺','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟',
+      '🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇',
+      '🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸',
+      '🚁','🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢','⚓','🪝',
+      '⛽','🚧','🚦','🚥','🗺️','🗿','🗽','🗼','🏰','🏯',
+      '🏟️','🎡','🎢','🎠','⛲','⛱️','🏖️','🏝️','🏜️','🌋',
+      '⛰️','🏔️','🗻','🏕️','⛺','🛖','🏠','🏡','🏘️','🏚️',
+      '🏗️','🏭','🏢','🏬','🏣','🏤','🏥','🏦','🏨','🏪',
+      '🏫','🏩','💒','🏛️','⛪','🕌','🛕','🕍','⛩️','🕋',
+      '🌁','🌃','🏙️','🌄','🌅','🌆','🌇','🌉','🎑',
+      '🗾','🌐','🌍','🌎','🌏','🧭',
+    ],
+  },
   bandeiras: {
     labelKey: 'icon.category.flags',
     icons: [
       '🏁','🚩','🎌','🏴','🏳️','🏳️‍🌈','🏳️‍⚧️','🏴‍☠️',
-      '🇧🇷','🇺🇸','🇬🇧','🇫🇷','🇩🇪','🇮🇹','🇪🇸','🇵🇹',
-      '🇯🇵','🇰🇷','🇨🇳','🇮🇳','🇷🇺','🇦🇺','🇨🇦','🇲🇽',
-      '🇦🇷','🇨🇴','🇨🇱','🇵🇪','🇺🇾','🇪🇨','🇧🇴','🇵🇾',
-      '🇻🇪','🇨🇺','🇩🇴','🇵🇦','🇨🇷','🇬🇹','🇭🇳','🇸🇻',
+      // Américas
+      '🇧🇷','🇺🇸','🇨🇦','🇲🇽','🇦🇷','🇨🇴','🇨🇱','🇵🇪',
+      '🇺🇾','🇪🇨','🇧🇴','🇵🇾','🇻🇪','🇨🇺','🇩🇴','🇵🇦',
+      '🇨🇷','🇬🇹','🇭🇳','🇸🇻','🇳🇮','🇯🇲','🇭🇹','🇹🇹',
+      '🇧🇸','🇧🇧','🇵🇷','🇬🇾','🇸🇷','🇧🇿',
+      // Europa
+      '🇬🇧','🇫🇷','🇩🇪','🇮🇹','🇪🇸','🇵🇹','🇳🇱','🇧🇪',
+      '🇨🇭','🇦🇹','🇮🇪','🇩🇰','🇸🇪','🇳🇴','🇫🇮','🇮🇸',
+      '🇵🇱','🇨🇿','🇸🇰','🇭🇺','🇷🇴','🇧🇬','🇬🇷','🇷🇸',
+      '🇭🇷','🇸🇮','🇧🇦','🇲🇰','🇦🇱','🇲🇪','🇽🇰','🇪🇪',
+      '🇱🇻','🇱🇹','🇧🇾','🇺🇦','🇲🇩','🇱🇺','🇲🇹','🇨🇾',
+      '🇻🇦','🇲🇨','🇦🇩','🇸🇲','🇱🇮','🇪🇺',
+      // Ásia
+      '🇷🇺','🇯🇵','🇰🇷','🇰🇵','🇨🇳','🇹🇼','🇭🇰','🇲🇴',
+      '🇮🇳','🇵🇰','🇧🇩','🇱🇰','🇳🇵','🇧🇹','🇲🇻','🇦🇫',
+      '🇮🇷','🇮🇶','🇸🇦','🇦🇪','🇶🇦','🇧🇭','🇰🇼','🇴🇲',
+      '🇾🇪','🇯🇴','🇱🇧','🇸🇾','🇮🇱','🇵🇸','🇹🇷','🇦🇲',
+      '🇬🇪','🇦🇿','🇰🇿','🇺🇿','🇹🇯','🇰🇬','🇹🇲','🇲🇳',
+      '🇹🇭','🇻🇳','🇱🇦','🇰🇭','🇲🇲','🇲🇾','🇸🇬','🇮🇩',
+      '🇵🇭','🇧🇳','🇹🇱',
+      // África
+      '🇪🇬','🇿🇦','🇳🇬','🇰🇪','🇪🇹','🇬🇭','🇲🇦','🇩🇿',
+      '🇹🇳','🇱🇾','🇸🇩','🇸🇸','🇸🇳','🇨🇮','🇨🇲','🇺🇬',
+      '🇹🇿','🇿🇼','🇿🇲','🇲🇿','🇦🇴','🇳🇦','🇧🇼','🇲🇬',
+      '🇲🇺','🇷🇼','🇧🇮','🇨🇩','🇨🇬','🇬🇦','🇬🇶','🇨🇫',
+      '🇹🇩','🇳🇪','🇲🇱','🇧🇫','🇲🇷','🇬🇲','🇬🇼','🇬🇳',
+      '🇸🇱','🇱🇷','🇹🇬','🇧🇯','🇪🇷','🇩🇯','🇸🇴','🇰🇲',
+      '🇸🇨','🇸🇹','🇨🇻','🇱🇸','🇸🇿','🇲🇼',
+      // Oceania
+      '🇦🇺','🇳🇿','🇫🇯','🇵🇬','🇼🇸','🇹🇴','🇻🇺','🇸🇧',
+      '🇵🇫','🇳🇨','🇰🇮','🇲🇭','🇫🇲','🇵🇼','🇳🇷','🇹🇻',
+      // Organizações
+      '🇺🇳',
     ],
   },
 };
