@@ -43,6 +43,15 @@ db.exec(`
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS protocols (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    repeat_indefinitely INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // ═══ Migrations (add columns to existing DBs) ═══
@@ -62,6 +71,10 @@ const migrations = [
   ['routine_items', 'followup_category', 'TEXT'],
   ['routine_items', 'followup_icon', 'TEXT'],
   ['routine_items', 'periods', "TEXT DEFAULT '[]'"],
+  ['routine_items', 'protocol_id', 'INTEGER REFERENCES protocols(id) ON DELETE CASCADE'],
+  ['routine_items', 'phase_order', 'INTEGER'],
+  ['routine_items', 'start_date', 'TEXT'],
+  ['routine_items', 'end_date', 'TEXT'],
 ];
 
 for (const [table, column, type] of migrations) {
@@ -90,12 +103,21 @@ function getAllSettings() {
 
 // ═══ Routine Items (admin CRUD) ═══
 
+// Standalone items only (protocol_id IS NULL). Used by admin listing and public
+// API so protocol phases don't leak into the generic "items" view — they are
+// managed through the protocol modal.
 function getRoutineItems() {
-  return db.prepare('SELECT * FROM routine_items WHERE active = 1 ORDER BY sort_order, id').all();
+  return db.prepare('SELECT * FROM routine_items WHERE active = 1 AND protocol_id IS NULL ORDER BY sort_order, id').all();
 }
 
 function getAllRoutineItems() {
-  return db.prepare('SELECT * FROM routine_items ORDER BY active DESC, sort_order, id').all();
+  return db.prepare('SELECT * FROM routine_items WHERE protocol_id IS NULL ORDER BY active DESC, sort_order, id').all();
+}
+
+// Every active item — standalone OR protocol phase. Used internally by
+// generateDailyTasks to produce tasks for both sources uniformly.
+function getActiveItemsForGeneration() {
+  return db.prepare('SELECT * FROM routine_items WHERE active = 1 ORDER BY sort_order, id').all();
 }
 
 function createRoutineItem(data) {
@@ -162,10 +184,134 @@ function deleteRoutineItemPermanently(id) {
   db.prepare('DELETE FROM routine_items WHERE id = ?').run(id);
 }
 
+// ═══ Protocols (sequences of dated phases) ═══
+
+// Add N days to a YYYY-MM-DD date using UTC to avoid DST drift.
+function addDays(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+// Given a start date and an ordered list of phases with duration_days,
+// produce each phase's inclusive [start_date, end_date] window. Last phase
+// gets end_date = null when repeat_indefinitely is true.
+function computePhaseDates(startDate, phases, repeatIndefinitely) {
+  let cursor = startDate;
+  return phases.map((phase, i) => {
+    const isLast = i === phases.length - 1;
+    const duration = Number(phase.duration_days) || 1;
+    const start = cursor;
+    const end = (isLast && repeatIndefinitely) ? null : addDays(start, duration - 1);
+    cursor = addDays(start, duration);
+    return { ...phase, start_date: start, end_date: end };
+  });
+}
+
+function getProtocols() {
+  const protocols = db.prepare('SELECT * FROM protocols ORDER BY active DESC, created_at DESC').all();
+  const phaseStmt = db.prepare(
+    'SELECT * FROM routine_items WHERE protocol_id = ? ORDER BY phase_order, id'
+  );
+  return protocols.map(p => ({ ...p, phases: phaseStmt.all(p.id) }));
+}
+
+function getProtocol(id) {
+  const p = db.prepare('SELECT * FROM protocols WHERE id = ?').get(id);
+  if (!p) return null;
+  p.phases = db.prepare(
+    'SELECT * FROM routine_items WHERE protocol_id = ? ORDER BY phase_order, id'
+  ).all(p.id);
+  return p;
+}
+
+function insertPhasesForProtocol(protocolId, startDate, phases, repeatIndefinitely, baseActive) {
+  const withDates = computePhaseDates(startDate, phases, repeatIndefinitely);
+  const stmt = db.prepare(`
+    INSERT INTO routine_items (
+      title, category, icon, sort_order, active, weekdays, periods,
+      total_count, alert_penultimate, alert_last,
+      followup_title, followup_category, followup_icon,
+      protocol_id, phase_order, start_date, end_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  withDates.forEach((phase, i) => {
+    stmt.run(
+      phase.title,
+      phase.category,
+      phase.icon || '💊',
+      phase.sort_order || 0,
+      baseActive,
+      typeof phase.weekdays === 'string' ? phase.weekdays : JSON.stringify(phase.weekdays || [0,1,2,3,4,5,6]),
+      typeof phase.periods === 'string' ? phase.periods : JSON.stringify(phase.periods || []),
+      phase.total_count || null,
+      phase.alert_penultimate || null,
+      phase.alert_last || null,
+      phase.followup_title || null,
+      phase.followup_category || null,
+      phase.followup_icon || null,
+      protocolId,
+      i,
+      phase.start_date,
+      phase.end_date,
+    );
+  });
+}
+
+function createProtocol({ name, start_date, repeat_indefinitely, phases }) {
+  const tx = db.transaction(() => {
+    const result = db.prepare(`
+      INSERT INTO protocols (name, start_date, repeat_indefinitely, active)
+      VALUES (?, ?, ?, 1)
+    `).run(name, start_date, repeat_indefinitely ? 1 : 0);
+    const id = result.lastInsertRowid;
+    insertPhasesForProtocol(id, start_date, phases, !!repeat_indefinitely, 1);
+    return id;
+  });
+  return tx();
+}
+
+// Update strategy: delete-and-recreate all phases when `phases` is provided.
+// Simpler than diffing, and the price (losing past daily_tasks of edited
+// phases via CASCADE) is acceptable for a routine-tracking app.
+function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, active }) {
+  const existing = db.prepare('SELECT * FROM protocols WHERE id = ?').get(id);
+  if (!existing) return null;
+
+  const nextName = name ?? existing.name;
+  const nextStart = start_date ?? existing.start_date;
+  const nextRepeat = repeat_indefinitely !== undefined
+    ? (repeat_indefinitely ? 1 : 0)
+    : existing.repeat_indefinitely;
+  const nextActive = active !== undefined ? (active ? 1 : 0) : existing.active;
+
+  const tx = db.transaction(() => {
+    db.prepare(`
+      UPDATE protocols SET name = ?, start_date = ?, repeat_indefinitely = ?, active = ?
+      WHERE id = ?
+    `).run(nextName, nextStart, nextRepeat, nextActive, id);
+
+    if (Array.isArray(phases)) {
+      db.prepare('DELETE FROM routine_items WHERE protocol_id = ?').run(id);
+      insertPhasesForProtocol(id, nextStart, phases, !!nextRepeat, nextActive);
+    } else if (active !== undefined) {
+      db.prepare('UPDATE routine_items SET active = ? WHERE protocol_id = ?').run(nextActive, id);
+    }
+  });
+  tx();
+
+  return getProtocol(id);
+}
+
+function deleteProtocol(id) {
+  db.prepare('DELETE FROM protocols WHERE id = ?').run(id);
+}
+
 // ═══ Daily Tasks ═══
 
 function generateDailyTasks(date) {
-  const items = getRoutineItems();
+  const items = getActiveItemsForGeneration();
   const dayOfWeek = new Date(date + 'T12:00:00').getDay(); // 0=Sun, 6=Sat
 
   const insert = db.prepare(
@@ -174,6 +320,12 @@ function generateDailyTasks(date) {
 
   const insertMany = db.transaction((items) => {
     for (const item of items) {
+      // Check date window (protocol phases set start_date/end_date; standalone
+      // items leave both NULL and are always in-window). Lexicographic compare
+      // is correct because dates are YYYY-MM-DD.
+      if (item.start_date && date < item.start_date) continue;
+      if (item.end_date && date > item.end_date) continue;
+
       // Check weekday filter
       const weekdays = JSON.parse(item.weekdays || '[0,1,2,3,4,5,6]');
       if (!weekdays.includes(dayOfWeek)) continue;
@@ -321,4 +473,9 @@ module.exports = {
   getSetting,
   setSetting,
   getAllSettings,
+  getProtocols,
+  getProtocol,
+  createProtocol,
+  updateProtocol,
+  deleteProtocol,
 };

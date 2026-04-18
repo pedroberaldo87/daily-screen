@@ -10,6 +10,11 @@ const {
   getSetting,
   setSetting,
   getAllSettings,
+  getProtocols,
+  getProtocol,
+  createProtocol,
+  updateProtocol,
+  deleteProtocol,
 } = require('../db');
 const { fetchWeather } = require('../weather');
 
@@ -295,6 +300,98 @@ router.delete('/items/:id', requireApiAuth, (req, res) => {
 // Permanent delete
 router.delete('/items/:id/permanent', requireApiAuth, (req, res) => {
   deleteRoutineItemPermanently(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// ═══ Protocols (sequences of dated phases) ═══
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_PHASES = 20;
+
+function validateProtocolData(data, isCreate) {
+  const errors = [];
+
+  if (isCreate || data.name !== undefined) {
+    if (!data.name || typeof data.name !== 'string' || !data.name.trim()) {
+      errors.push('name is required');
+    } else if (data.name.length > MAX_TITLE) {
+      errors.push(`name max ${MAX_TITLE} chars`);
+    }
+  }
+
+  if (isCreate || data.start_date !== undefined) {
+    if (!data.start_date || !DATE_RE.test(String(data.start_date))) {
+      errors.push('start_date must be YYYY-MM-DD');
+    } else {
+      // Validate it's an actual date (rejects 2026-02-30 etc.)
+      const d = new Date(data.start_date + 'T12:00:00');
+      if (isNaN(d.getTime())) errors.push('start_date is not a valid date');
+    }
+  }
+
+  if (data.repeat_indefinitely !== undefined
+      && data.repeat_indefinitely !== true
+      && data.repeat_indefinitely !== false
+      && data.repeat_indefinitely !== 0
+      && data.repeat_indefinitely !== 1) {
+    errors.push('repeat_indefinitely must be boolean');
+  }
+
+  if (data.phases !== undefined) {
+    if (!Array.isArray(data.phases) || data.phases.length === 0) {
+      errors.push('phases must be a non-empty array');
+    } else if (data.phases.length > MAX_PHASES) {
+      errors.push(`phases max ${MAX_PHASES}`);
+    } else {
+      data.phases.forEach((phase, i) => {
+        const label = `phases[${i}]`;
+        if (!phase || typeof phase !== 'object') {
+          errors.push(`${label} must be object`);
+          return;
+        }
+        const duration = Number(phase.duration_days);
+        if (!Number.isInteger(duration) || duration < 1 || duration > 3650) {
+          errors.push(`${label}.duration_days must be integer 1–3650`);
+        }
+        // Reuse item validation for the config payload (title, category, etc.)
+        const phaseErrors = validateItemData(phase, true);
+        for (const err of phaseErrors) errors.push(`${label}: ${err}`);
+      });
+    }
+  } else if (isCreate) {
+    errors.push('phases is required');
+  }
+
+  return errors;
+}
+
+router.get('/protocols', requireApiAuth, (req, res) => {
+  res.json(getProtocols());
+});
+
+router.get('/protocols/:id', requireApiAuth, (req, res) => {
+  const p = getProtocol(Number(req.params.id));
+  if (!p) return res.status(404).json({ error: 'Protocol not found' });
+  res.json(p);
+});
+
+router.post('/protocols', requireApiAuth, (req, res) => {
+  const errors = validateProtocolData(req.body, true);
+  if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+  const id = createProtocol(req.body);
+  res.status(201).json(getProtocol(id));
+});
+
+router.put('/protocols/:id', requireApiAuth, (req, res) => {
+  const errors = validateProtocolData(req.body, false);
+  if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+  const updated = updateProtocol(Number(req.params.id), req.body);
+  if (!updated) return res.status(404).json({ error: 'Protocol not found' });
+  res.json(updated);
+});
+
+router.delete('/protocols/:id', requireApiAuth, (req, res) => {
+  deleteProtocol(Number(req.params.id));
   res.json({ ok: true });
 });
 

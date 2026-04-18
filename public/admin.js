@@ -134,6 +134,390 @@ function renderItems(items) {
   }
 }
 
+// ═══ Protocols ═══
+
+const PERIOD_ORDER_PROTOCOL = ['morning', 'afternoon', 'night'];
+
+function addDaysLocal(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(getLocale(), {
+      day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
+    });
+  } catch { return dateStr; }
+}
+
+function todayISO() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+}
+
+function computePhaseWindows(startDate, durations, repeatIndefinitely) {
+  // durations: number[]. Returns [{start, end, days}] with end=null on last if repeat.
+  let cursor = startDate;
+  return durations.map((dur, i) => {
+    const isLast = i === durations.length - 1;
+    const safeDur = Number(dur) > 0 ? Number(dur) : 1;
+    const start = cursor;
+    const end = (isLast && repeatIndefinitely) ? null : addDaysLocal(start, safeDur - 1);
+    cursor = addDaysLocal(start, safeDur);
+    return { start, end, days: safeDur };
+  });
+}
+
+function currentPhaseIndex(startDate, durations, repeatIndefinitely, today) {
+  const windows = computePhaseWindows(startDate, durations, repeatIndefinitely);
+  for (let i = 0; i < windows.length; i++) {
+    const w = windows[i];
+    if (today < w.start) return { index: -1, state: 'upcoming', first: w.start };
+    if (w.end === null) return { index: i, state: 'active' };
+    if (today >= w.start && today <= w.end) return { index: i, state: 'active' };
+  }
+  const last = windows[windows.length - 1];
+  return { index: -1, state: 'ended', endedOn: last ? last.end : null };
+}
+
+async function loadProtocols() {
+  try {
+    const res = await fetch(`${API}/protocols`);
+    if (!res.ok) {
+      document.getElementById('protocols-list').innerHTML = '';
+      return;
+    }
+    const protocols = await res.json();
+    renderProtocols(protocols);
+  } catch {
+    document.getElementById('protocols-list').innerHTML = '';
+  }
+}
+
+function renderProtocols(protocols) {
+  const container = document.getElementById('protocols-list');
+  container.innerHTML = '';
+
+  if (!protocols.length) {
+    container.innerHTML = `<p style="font-size:0.82rem;color:var(--text-muted);padding:10px 0">${escapeHtml(t('admin.noProtocols'))}</p>`;
+    return;
+  }
+
+  const today = todayISO();
+
+  for (const p of protocols) {
+    const phases = (p.phases || []);
+    const durations = phases.map(ph => ph.end_date
+      ? (dayDiff(ph.start_date, ph.end_date) + 1)
+      : 1);
+    // If last phase has end_date null, we don't know its duration from DB alone;
+    // but for the status we only need to know if today is >= last start_date.
+    const status = phaseStatusForProtocol(p, phases, today);
+
+    const card = document.createElement('div');
+    card.className = `protocol-card${p.active ? '' : ' inactive'}`;
+    card.dataset.id = p.id;
+    card.innerHTML = `
+      <div class="protocol-card-head">
+        <div class="protocol-card-info">
+          <div class="protocol-card-title">${escapeHtml(p.name)}</div>
+          <div class="protocol-card-meta">
+            <span>📅 ${escapeHtml(formatDate(p.start_date))}</span>
+            <span>${escapeHtml(t('admin.protocolPhaseCount', { n: phases.length }))}</span>
+            ${status.label ? `<span class="protocol-status ${status.kind}">${escapeHtml(status.label)}</span>` : ''}
+          </div>
+        </div>
+        <div class="protocol-card-actions">
+          <button class="btn btn-sm btn-secondary" data-action="edit-protocol">${escapeHtml(t('common.edit'))}</button>
+          <button class="btn btn-sm btn-danger" data-action="delete-protocol">${escapeHtml(t('common.delete'))}</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  }
+}
+
+function dayDiff(startStr, endStr) {
+  const [ys, ms, ds] = startStr.split('-').map(Number);
+  const [ye, me, de] = endStr.split('-').map(Number);
+  const s = Date.UTC(ys, ms - 1, ds);
+  const e = Date.UTC(ye, me - 1, de);
+  return Math.round((e - s) / 86400000);
+}
+
+function phaseStatusForProtocol(protocol, phases, today) {
+  if (!phases.length) return { kind: 'ended', label: '' };
+  const first = phases[0];
+  const last = phases[phases.length - 1];
+
+  if (today < first.start_date) {
+    return { kind: 'upcoming', label: t('admin.protocolNotStarted', { date: formatDate(first.start_date) }) };
+  }
+
+  // Find active phase
+  for (let i = 0; i < phases.length; i++) {
+    const ph = phases[i];
+    const inWindow = ph.end_date
+      ? (today >= ph.start_date && today <= ph.end_date)
+      : (today >= ph.start_date);
+    if (inWindow) {
+      return { kind: 'active', label: t('admin.currentPhase', { n: i + 1 }) };
+    }
+  }
+
+  return { kind: 'ended', label: t('admin.protocolEnded', { date: formatDate(last.end_date || last.start_date) }) };
+}
+
+// ═══ Protocol Modal ═══
+
+function openProtocolModal(id) {
+  document.getElementById('protocol-form').reset();
+  document.getElementById('protocol-id').value = '';
+  document.getElementById('phases-container').innerHTML = '';
+  document.getElementById('protocol-modal-title').textContent = id
+    ? t('admin.editProtocol')
+    : t('admin.newProtocol');
+
+  if (id) {
+    fetch(`${API}/protocols/${id}`).then(r => r.ok ? r.json() : null).then(p => {
+      if (!p) return;
+      document.getElementById('protocol-id').value = p.id;
+      document.getElementById('protocol-name').value = p.name;
+      document.getElementById('protocol-start-date').value = p.start_date;
+      document.getElementById('protocol-repeat-indefinitely').checked = !!p.repeat_indefinitely;
+      const phases = p.phases || [];
+      for (const phase of phases) {
+        const dur = phase.end_date
+          ? (dayDiff(phase.start_date, phase.end_date) + 1)
+          : 1;
+        addPhaseToForm({ ...phase, duration_days: dur });
+      }
+      if (!phases.length) addPhaseToForm();
+      renderPhaseTimeline();
+    });
+  } else {
+    document.getElementById('protocol-start-date').value = todayISO();
+    document.getElementById('protocol-repeat-indefinitely').checked = false;
+    addPhaseToForm();
+    renderPhaseTimeline();
+  }
+
+  document.getElementById('protocol-modal').classList.add('active');
+}
+
+function closeProtocolModal() {
+  document.getElementById('protocol-modal').classList.remove('active');
+}
+
+document.getElementById('protocol-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'protocol-modal') closeProtocolModal();
+});
+
+function buildPhaseCard(phase = {}) {
+  const card = document.createElement('div');
+  card.className = 'phase-card';
+
+  let periods = [];
+  try { periods = JSON.parse(phase.periods || '[]'); } catch {}
+  if (!Array.isArray(periods)) periods = [];
+
+  const cat = phase.category || 'medication';
+
+  card.innerHTML = `
+    <div class="phase-header">
+      <span class="phase-number"></span>
+      <input type="number" class="phase-duration" min="1" max="3650" value="${phase.duration_days != null ? phase.duration_days : ''}" placeholder="${escapeHtml(t('admin.phaseDuration'))}" required>
+      <div></div>
+      <div></div>
+      <button type="button" class="phase-remove" data-action="remove-phase" title="${escapeHtml(t('admin.removePhase'))}">✕</button>
+    </div>
+    <div class="phase-body">
+      <div class="phase-row">
+        <input class="phase-icon icon-input-trigger" maxlength="4" value="${escapeHtml(phase.icon || '💊')}" readonly>
+        <input class="phase-title" value="${escapeHtml(phase.title || '')}" placeholder="${escapeHtml(t('admin.phaseTitlePlaceholder'))}" maxlength="200" required>
+        <select class="phase-category">
+          <option value="medication" ${cat === 'medication' ? 'selected' : ''}>${escapeHtml(t('category.medication'))}</option>
+          <option value="supplement" ${cat === 'supplement' ? 'selected' : ''}>${escapeHtml(t('category.supplement'))}</option>
+          <option value="reminder" ${cat === 'reminder' ? 'selected' : ''}>${escapeHtml(t('category.reminder'))}</option>
+        </select>
+      </div>
+      <div class="period-selector phase-periods">
+        <button type="button" class="period-btn${periods.includes('morning') ? ' active' : ''}" data-period="morning">${escapeHtml(t('period.morning'))}</button>
+        <button type="button" class="period-btn${periods.includes('afternoon') ? ' active' : ''}" data-period="afternoon">${escapeHtml(t('period.afternoon'))}</button>
+        <button type="button" class="period-btn${periods.includes('night') ? ' active' : ''}" data-period="night">${escapeHtml(t('period.night'))}</button>
+      </div>
+    </div>
+  `;
+
+  // Wire icon picker on the icon input
+  const iconInput = card.querySelector('.phase-icon');
+  iconInput.style.cursor = 'pointer';
+  iconInput.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof openPicker === 'function') openPicker(iconInput);
+  });
+  // Listen for picker output to keep the field consistent
+  iconInput.addEventListener('input', () => renderPhaseTimeline());
+
+  // Period buttons (local toggle state)
+  card.querySelectorAll('.phase-periods .period-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      btn.classList.toggle('active');
+    });
+  });
+
+  // Trigger timeline refresh on duration change
+  card.querySelector('.phase-duration').addEventListener('input', () => renderPhaseTimeline());
+
+  return card;
+}
+
+function addPhaseToForm(phase) {
+  const container = document.getElementById('phases-container');
+  container.appendChild(buildPhaseCard(phase || {}));
+  refreshPhaseNumbers();
+  renderPhaseTimeline();
+}
+
+function refreshPhaseNumbers() {
+  const cards = document.querySelectorAll('#phases-container .phase-card');
+  cards.forEach((card, i) => {
+    const numEl = card.querySelector('.phase-number');
+    if (numEl) numEl.textContent = t('admin.phaseNumber', { n: i + 1 });
+    // Only allow remove if there are 2+ phases
+    const rm = card.querySelector('.phase-remove');
+    if (rm) rm.style.visibility = cards.length > 1 ? '' : 'hidden';
+  });
+}
+
+// Event delegation for remove buttons
+document.getElementById('phases-container').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="remove-phase"]');
+  if (!btn) return;
+  const card = btn.closest('.phase-card');
+  if (card) {
+    card.remove();
+    refreshPhaseNumbers();
+    renderPhaseTimeline();
+  }
+});
+
+function collectPhasesFromForm() {
+  const cards = document.querySelectorAll('#phases-container .phase-card');
+  return Array.from(cards).map(card => {
+    const periods = Array.from(card.querySelectorAll('.phase-periods .period-btn.active'))
+      .map(b => b.dataset.period);
+    periods.sort((a, b) => PERIOD_ORDER_PROTOCOL.indexOf(a) - PERIOD_ORDER_PROTOCOL.indexOf(b));
+    return {
+      duration_days: Number(card.querySelector('.phase-duration').value) || 1,
+      title: card.querySelector('.phase-title').value.trim(),
+      icon: card.querySelector('.phase-icon').value.trim() || '💊',
+      category: card.querySelector('.phase-category').value,
+      periods: JSON.stringify(periods),
+      weekdays: '[0,1,2,3,4,5,6]',
+    };
+  });
+}
+
+function renderPhaseTimeline() {
+  const container = document.getElementById('phases-timeline');
+  if (!container) return;
+  const startDate = document.getElementById('protocol-start-date').value;
+  const repeatIndef = document.getElementById('protocol-repeat-indefinitely').checked;
+  if (!startDate) { container.innerHTML = ''; return; }
+
+  const cards = document.querySelectorAll('#phases-container .phase-card');
+  if (!cards.length) { container.innerHTML = ''; return; }
+
+  const durations = Array.from(cards).map(c => Number(c.querySelector('.phase-duration').value) || 1);
+  const windows = computePhaseWindows(startDate, durations, repeatIndef);
+  const today = todayISO();
+  const status = currentPhaseIndex(startDate, durations, repeatIndef, today);
+
+  container.innerHTML = windows.map((w, i) => {
+    const labelText = t('admin.phaseNumber', { n: i + 1 });
+    const rangeText = w.end === null
+      ? t('admin.timelineForever', { start: formatDate(w.start) })
+      : t('admin.timelineRange', { start: formatDate(w.start), end: formatDate(w.end), days: w.days });
+    const isCurrent = (status.state === 'active' && status.index === i);
+    return `<div class="phase-timeline-row">
+      <span class="${isCurrent ? 'tl-current' : 'tl-label'}">${escapeHtml(labelText)}${isCurrent ? ' ●' : ''}</span>
+      <span>${escapeHtml(rangeText)}</span>
+    </div>`;
+  }).join('');
+}
+
+// Live recalc on identity changes
+document.getElementById('protocol-start-date').addEventListener('input', renderPhaseTimeline);
+document.getElementById('protocol-repeat-indefinitely').addEventListener('change', renderPhaseTimeline);
+
+// Submit
+document.getElementById('protocol-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const id = document.getElementById('protocol-id').value;
+  const payload = {
+    name: document.getElementById('protocol-name').value.trim(),
+    start_date: document.getElementById('protocol-start-date').value,
+    repeat_indefinitely: document.getElementById('protocol-repeat-indefinitely').checked,
+    phases: collectPhasesFromForm(),
+  };
+
+  if (!payload.phases.length) {
+    showToast(t('admin.phases') + ' ≥ 1', 'err');
+    return;
+  }
+
+  const url = id ? `${API}/protocols/${id}` : `${API}/protocols`;
+  const method = id ? 'PUT' : 'POST';
+
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.error || 'Erro', 'err');
+    return;
+  }
+
+  showToast(t('admin.protocolSaved'));
+  closeProtocolModal();
+  loadProtocols();
+  loadItems();
+});
+
+// Protocol list event delegation
+document.getElementById('protocols-list').addEventListener('click', async (e) => {
+  const card = e.target.closest('.protocol-card');
+  if (!card) return;
+  const id = Number(card.dataset.id);
+  const actionEl = e.target.closest('[data-action]');
+  if (!actionEl) return;
+
+  if (actionEl.dataset.action === 'edit-protocol') {
+    openProtocolModal(id);
+  } else if (actionEl.dataset.action === 'delete-protocol') {
+    const title = card.querySelector('.protocol-card-title')?.textContent || '';
+    document.getElementById('confirm-message').textContent =
+      t('admin.deleteProtocolConfirm', { name: title });
+    document.getElementById('confirm-dialog').classList.add('active');
+    pendingAction = async () => {
+      await fetch(`${API}/protocols/${id}`, { method: 'DELETE' });
+      loadProtocols();
+      loadItems();
+    };
+  }
+});
+
 // ═══ Quick Add ═══
 
 async function quickAdd() {
@@ -567,6 +951,7 @@ function setupLanguageSelector(settings) {
     });
     await setLanguage(lang);
     loadItems();
+    loadProtocols();
   });
 }
 
@@ -911,4 +1296,5 @@ setupPeriodSettingsAutoSave();
 (async () => {
   await loadSettings();
   loadItems();
+  loadProtocols();
 })();

@@ -322,9 +322,10 @@
       text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
     }
 
-    /* ═══ Instrument-panel modal base (shared by edit-item + settings) ═══ */
+    /* ═══ Instrument-panel modal base (shared by edit-item + settings + protocol) ═══ */
     #edit-modal.modal-overlay,
-    #settings-modal.modal-overlay { align-items: center; padding: 16px; }
+    #settings-modal.modal-overlay,
+    #protocol-modal.modal-overlay { align-items: center; padding: 16px; }
 
     .modal--panel { padding: 20px 28px 22px; }
     .modal--panel h2 {
@@ -451,7 +452,8 @@
     @media (max-width: 900px) {
       .modal--panel { padding: 22px 24px; }
       .modal--edit-item,
-      .modal--settings-panel { max-width: 560px; }
+      .modal--settings-panel,
+      .modal--protocol-panel { max-width: 560px; }
       .modal--edit-item .identity-strip {
         grid-template-columns: 64px minmax(0, 1fr);
         row-gap: 10px;
@@ -471,7 +473,181 @@
         border-top: none;
       }
       .modal--settings-panel .font-panel { grid-template-columns: 1fr 1fr; }
+      .modal--protocol-panel .protocol-identity-strip { grid-template-columns: 1fr; }
     }
+
+    /* ─── Protocol modal specifics ─── */
+    .modal--protocol-panel { max-width: 960px; }
+    .modal--protocol-panel .protocol-identity-strip {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) 180px minmax(0, 1.1fr);
+      column-gap: 18px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+    .modal--protocol-panel .protocol-identity-strip label { margin-bottom: 5px; }
+    .modal--protocol-panel .protocol-identity-strip input[type="date"] { width: 100%; }
+    .modal--protocol-panel .protocol-identity-strip .repeat-toggle {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      line-height: 1.35;
+    }
+    .modal--protocol-panel .protocol-identity-strip .repeat-toggle input { margin-top: 2px; }
+    .modal--protocol-panel .protocol-identity-strip .repeat-toggle-text {
+      font-size: 0.78rem;
+      color: var(--text-primary);
+    }
+    .modal--protocol-panel .protocol-identity-strip .repeat-toggle-hint {
+      display: block;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+      line-height: 1.35;
+    }
+
+    /* Phase cards */
+    .phase-list { display: flex; flex-direction: column; gap: 10px; }
+    .phase-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      transition: border-color 0.15s;
+    }
+    .phase-card:focus-within { border-color: rgba(232,168,75,0.35); }
+    .phase-header {
+      display: grid;
+      grid-template-columns: auto 90px auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .phase-number {
+      font-size: 0.7rem; font-weight: 600;
+      color: var(--accent-sup);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      padding: 3px 8px;
+      background: rgba(232,168,75,0.1);
+      border-radius: 4px;
+    }
+    .phase-duration-wrap { display: flex; align-items: center; gap: 6px; }
+    .phase-duration {
+      width: 56px !important;
+      text-align: center;
+      padding: 6px 8px !important;
+      font-size: 0.85rem !important;
+    }
+    .phase-duration-suffix {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+    }
+    .phase-remove {
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .phase-remove:hover {
+      color: var(--accent-danger);
+      border-color: rgba(231,76,60,0.3);
+    }
+    .phase-body { display: flex; flex-direction: column; gap: 8px; }
+    .phase-row {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 2fr) minmax(0, 1fr);
+      gap: 10px;
+    }
+    .phase-row .phase-icon {
+      text-align: center;
+      font-size: 1.1rem;
+      padding: 7px 6px !important;
+    }
+    .phase-periods {
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .phase-add-btn {
+      margin-top: 12px;
+      width: 100%;
+      background: transparent;
+      color: var(--accent-sup);
+      border: 1px dashed rgba(232,168,75,0.4);
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .phase-add-btn:hover {
+      background: rgba(232,168,75,0.06);
+      border-color: var(--accent-sup);
+    }
+
+    /* Timeline preview */
+    .phase-timeline {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 10px 12px;
+      background: var(--bg-input);
+      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+    }
+    .phase-timeline-row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      color: var(--text-secondary);
+    }
+    .phase-timeline-row .tl-label {
+      color: var(--accent-sup);
+      font-weight: 600;
+    }
+    .phase-timeline-row .tl-current {
+      color: var(--accent-success);
+      font-weight: 600;
+    }
+
+    /* Protocol cards on listing */
+    .protocol-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+      transition: border-color 0.15s;
+    }
+    .protocol-card:hover { border-color: rgba(255,255,255,0.14); }
+    .protocol-card.inactive { opacity: 0.5; }
+    .protocol-card-head {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .protocol-card-info { flex: 1; min-width: 0; }
+    .protocol-card-title {
+      font-weight: 600; font-size: 0.98rem;
+    }
+    .protocol-card-meta {
+      font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    .protocol-status {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.66rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .protocol-status.active { background: rgba(94,194,106,0.14); color: var(--accent-success); }
+    .protocol-status.upcoming { background: rgba(107,143,212,0.14); color: var(--accent-rem); }
+    .protocol-status.ended { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+    .protocol-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
     /* Location search */
     .search-wrap { position: relative; }
@@ -842,6 +1018,14 @@
     </div>
   </div>
 
+  <!-- ═══ Protocols (dated sequences) ═══ -->
+  <div class="section">
+    <div class="section-title" data-i18n="admin.protocols">Protocolos</div>
+    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px" data-i18n="admin.protocolsDesc">Sequências de doses com datas e fases (ex: medicação que escalona).</p>
+    <button class="btn btn-secondary" onclick="openProtocolModal()" style="margin-bottom:12px" data-i18n="admin.newProtocol">+ Novo protocolo</button>
+    <div id="protocols-list"></div>
+  </div>
+
   <!-- ═══ Items List ═══ -->
   <div class="section">
     <div class="section-title" data-i18n="admin.routineItems">Itens da rotina</div>
@@ -969,6 +1153,54 @@
 
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="closeModal()" data-i18n="common.cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary" data-i18n="common.save">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ Protocol Modal ═══ -->
+  <div class="modal-overlay" id="protocol-modal">
+    <div class="modal modal--panel modal--protocol-panel">
+      <h2 id="protocol-modal-title" data-i18n="admin.newProtocol">Novo protocolo</h2>
+      <form id="protocol-form">
+        <input type="hidden" id="protocol-id">
+
+        <!-- Identity strip -->
+        <div class="protocol-identity-strip">
+          <div>
+            <label data-i18n="admin.protocolName">Nome do protocolo</label>
+            <input id="protocol-name" placeholder="Ex: Escitalopram" data-i18n-placeholder="admin.protocolNamePlaceholder" required style="width:100%">
+          </div>
+          <div>
+            <label data-i18n="admin.protocolStartDate">Data de início</label>
+            <input id="protocol-start-date" type="date" required>
+          </div>
+          <label class="repeat-toggle">
+            <input type="checkbox" id="protocol-repeat-indefinitely">
+            <span>
+              <span class="repeat-toggle-text" data-i18n="admin.repeatIndefinitely">Última fase repete indefinidamente</span>
+              <small class="repeat-toggle-hint" data-i18n="admin.repeatIndefinitelyHelp">Quando ligado, a última fase continua valendo todos os dias após sua duração.</small>
+            </span>
+          </label>
+        </div>
+
+        <!-- Phases section -->
+        <div class="panel-block">
+          <div class="panel-title" data-i18n="admin.phases">Fases</div>
+          <small class="period-help" style="display:block;margin-bottom:10px" data-i18n="admin.phasesHelp">Cada fase vira uma rotina ativa no período de datas calculado abaixo.</small>
+          <div id="phases-container" class="phase-list"></div>
+          <button type="button" class="phase-add-btn" onclick="addPhaseToForm()" data-i18n="admin.addPhase">+ Adicionar fase</button>
+        </div>
+
+        <!-- Timeline preview -->
+        <div class="panel-block">
+          <div class="panel-title" data-i18n="admin.timeline">Linha do tempo</div>
+          <div id="phases-timeline" class="phase-timeline"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeProtocolModal()" data-i18n="common.cancel">Cancelar</button>
           <button type="submit" class="btn btn-primary" data-i18n="common.save">Salvar</button>
         </div>
       </form>
