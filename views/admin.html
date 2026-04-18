@@ -476,6 +476,45 @@
       .modal--protocol-panel .protocol-identity-strip { grid-template-columns: 1fr; }
     }
 
+    /* ─── Top blocks (Settings + Protocols side by side) ─── */
+    .top-blocks {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .top-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .top-block-head { line-height: 1.2; }
+    .top-block .section-title { margin-bottom: 2px; }
+    .top-block-subtext {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .top-block-btn {
+      align-self: flex-start;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      font-size: 0.8rem;
+    }
+    #protocols-list:empty { display: none; }
+    #protocols-list .protocol-card { margin-bottom: 6px; }
+    @media (max-width: 700px) {
+      .top-blocks { grid-template-columns: 1fr; }
+    }
+
     /* ─── Protocol modal specifics ─── */
     .modal--protocol-panel { max-width: 960px; }
     .modal--protocol-panel .protocol-identity-strip {
@@ -521,9 +560,9 @@
     .phase-card:focus-within { border-color: rgba(232,168,75,0.35); }
     .phase-header {
       display: grid;
-      grid-template-columns: auto 90px auto 1fr auto;
+      grid-template-columns: auto 1fr auto;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       margin-bottom: 10px;
     }
     .phase-number {
@@ -533,13 +572,41 @@
       padding: 3px 8px;
       background: rgba(232,168,75,0.1);
       border-radius: 4px;
+      white-space: nowrap;
     }
-    .phase-duration-wrap { display: flex; align-items: center; gap: 6px; }
+    .phase-duration-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: border-color 0.15s;
+      width: fit-content;
+    }
+    .phase-duration-group:focus-within { border-color: var(--border-focus); }
+    .phase-duration-label {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
     .phase-duration {
-      width: 56px !important;
+      width: 52px !important;
       text-align: center;
-      padding: 6px 8px !important;
-      font-size: 0.85rem !important;
+      padding: 4px 6px !important;
+      font-size: 0.9rem !important;
+      background: transparent !important;
+      border: none !important;
+      border-bottom: 1px solid var(--border) !important;
+      border-radius: 0 !important;
+      font-variant-numeric: tabular-nums;
+    }
+    .phase-duration:focus { border-bottom-color: var(--accent-sup) !important; }
+    .phase-duration::-webkit-inner-spin-button,
+    .phase-duration::-webkit-outer-spin-button {
+      opacity: 0.4;
     }
     .phase-duration-suffix {
       font-size: 0.72rem;
@@ -866,11 +933,25 @@
     </nav>
   </div>
 
-  <!-- Settings button (opens modal) -->
-  <div style="margin-bottom:20px">
-    <button class="btn btn-secondary" onclick="openSettingsModal()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px">
-      <span style="font-size:1.1rem">⚙️</span> <span data-i18n="admin.settingsBtn">Configurações</span>
-    </button>
+  <!-- ═══ Top blocks: Settings + Protocols side by side ═══ -->
+  <div class="top-blocks">
+    <div class="top-block">
+      <div class="top-block-head">
+        <div class="section-title" data-i18n="admin.settings">Configurações</div>
+        <div class="top-block-subtext" data-i18n="admin.settingsDesc">Idioma, localização, fontes</div>
+      </div>
+      <button class="btn btn-secondary top-block-btn" onclick="openSettingsModal()">
+        <span>⚙️</span> <span data-i18n="admin.settingsBtn">Configurações</span>
+      </button>
+    </div>
+    <div class="top-block">
+      <div class="top-block-head">
+        <div class="section-title" data-i18n="admin.protocols">Protocolos</div>
+        <div class="top-block-subtext" data-i18n="admin.protocolsDesc">Sequências de doses datadas</div>
+      </div>
+      <button class="btn btn-secondary top-block-btn" onclick="openProtocolModal()" data-i18n="admin.newProtocol">+ Novo protocolo</button>
+      <div id="protocols-list"></div>
+    </div>
   </div>
 
   <!-- ═══ Settings Modal ═══ -->
@@ -1016,14 +1097,6 @@
       </div>
       <button class="btn btn-primary" onclick="quickAdd()" data-i18n="common.add">Adicionar</button>
     </div>
-  </div>
-
-  <!-- ═══ Protocols (dated sequences) ═══ -->
-  <div class="section">
-    <div class="section-title" data-i18n="admin.protocols">Protocolos</div>
-    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px" data-i18n="admin.protocolsDesc">Sequências de doses com datas e fases (ex: medicação que escalona).</p>
-    <button class="btn btn-secondary" onclick="openProtocolModal()" style="margin-bottom:12px" data-i18n="admin.newProtocol">+ Novo protocolo</button>
-    <div id="protocols-list"></div>
   </div>
 
   <!-- ═══ Items List ═══ -->

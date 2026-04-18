@@ -202,11 +202,7 @@ async function loadProtocols() {
 function renderProtocols(protocols) {
   const container = document.getElementById('protocols-list');
   container.innerHTML = '';
-
-  if (!protocols.length) {
-    container.innerHTML = `<p style="font-size:0.82rem;color:var(--text-muted);padding:10px 0">${escapeHtml(t('admin.noProtocols'))}</p>`;
-    return;
-  }
+  if (!protocols.length) return;
 
   const today = todayISO();
 
@@ -331,9 +327,11 @@ function buildPhaseCard(phase = {}) {
   card.innerHTML = `
     <div class="phase-header">
       <span class="phase-number"></span>
-      <input type="number" class="phase-duration" min="1" max="3650" value="${phase.duration_days != null ? phase.duration_days : ''}" placeholder="${escapeHtml(t('admin.phaseDuration'))}" required>
-      <div></div>
-      <div></div>
+      <label class="phase-duration-group">
+        <span class="phase-duration-label">${escapeHtml(t('admin.phaseDuration'))}</span>
+        <input type="number" class="phase-duration" min="1" max="3650" value="${phase.duration_days != null ? phase.duration_days : ''}" required>
+        <span class="phase-duration-suffix">${escapeHtml(t('admin.daysUnit'))}</span>
+      </label>
       <button type="button" class="phase-remove" data-action="remove-phase" title="${escapeHtml(t('admin.removePhase'))}">✕</button>
     </div>
     <div class="phase-body">
@@ -378,8 +376,31 @@ function buildPhaseCard(phase = {}) {
   return card;
 }
 
+function snapshotPhaseCard(card) {
+  // Serialize the current DOM state of a phase card into the shape expected
+  // by buildPhaseCard. Used so "+ Adicionar fase" pre-fills from the last
+  // phase — escalation protocols typically vary only the title between steps.
+  const activePeriods = Array.from(card.querySelectorAll('.phase-periods .period-btn.active'))
+    .map(b => b.dataset.period);
+  return {
+    duration_days: Number(card.querySelector('.phase-duration').value) || '',
+    title: card.querySelector('.phase-title').value,
+    icon: card.querySelector('.phase-icon').value,
+    category: card.querySelector('.phase-category').value,
+    periods: JSON.stringify(activePeriods),
+  };
+}
+
 function addPhaseToForm(phase) {
   const container = document.getElementById('phases-container');
+  // If caller didn't pass a phase and there's already one on the form, clone
+  // its values so the user doesn't have to re-pick icon/category/periods.
+  if (phase === undefined) {
+    const existing = container.querySelectorAll('.phase-card');
+    if (existing.length > 0) {
+      phase = snapshotPhaseCard(existing[existing.length - 1]);
+    }
+  }
   container.appendChild(buildPhaseCard(phase || {}));
   refreshPhaseNumbers();
   renderPhaseTimeline();
