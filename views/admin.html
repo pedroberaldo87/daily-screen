@@ -516,7 +516,31 @@
     }
 
     /* ─── Protocol modal specifics ─── */
-    .modal--protocol-panel { max-width: 960px; }
+    .modal--protocol-panel {
+      max-width: 960px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    /* Scrollbar styling for the modal */
+    .modal--protocol-panel::-webkit-scrollbar { width: 8px; }
+    .modal--protocol-panel::-webkit-scrollbar-track { background: transparent; }
+    .modal--protocol-panel::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+    }
+    .modal--protocol-panel::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+    /* Keep Cancel/Save visible when the form overflows */
+    .modal--protocol-panel .modal-actions {
+      position: sticky;
+      bottom: calc(-22px);
+      margin-left: -28px;
+      margin-right: -28px;
+      margin-bottom: -22px;
+      padding: 14px 28px 16px;
+      background: var(--bg-surface);
+      z-index: 2;
+    }
     .modal--protocol-panel .protocol-identity-strip {
       display: grid;
       grid-template-columns: minmax(0, 1.2fr) 180px minmax(0, 1.1fr);
