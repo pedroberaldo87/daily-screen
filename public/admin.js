@@ -10,9 +10,15 @@ const CATEGORY_KEYS = {
 // ═══ Items List ═══
 
 async function loadItems() {
-  const res = await fetch(`${API}/items`);
-  const items = await res.json();
-  renderItems(items);
+  // Fetch standalone items and protocols in parallel — the unified listing
+  // renders both in the same #items-list container.
+  const [itemsRes, protocolsRes] = await Promise.all([
+    fetch(`${API}/items`),
+    fetch(`${API}/protocols`).catch(() => null),
+  ]);
+  const items = itemsRes.ok ? await itemsRes.json() : [];
+  const protocols = (protocolsRes && protocolsRes.ok) ? await protocolsRes.json() : [];
+  renderItems(items, protocols);
 }
 
 // Cache of the latest items list, indexed by id, for quick lookups in popovers
@@ -49,6 +55,22 @@ function buildItemCard(item) {
   const countInfo = item.total_count ? `${item.completed_count}/${item.total_count}` : '';
   const catLabel = t(CATEGORY_KEYS[item.category] || '') || item.category;
 
+  // Window pill: shown when the standalone item has a start/end date (antibiotic
+  // courses, temporary routines). Protocol phases are filtered upstream so they
+  // never reach this card.
+  let windowPillHtml = '';
+  if (item.start_date || item.end_date) {
+    let windowText;
+    if (item.start_date && item.end_date) {
+      windowText = t('admin.itemWindow', { start: formatDate(item.start_date), end: formatDate(item.end_date) });
+    } else if (item.end_date) {
+      windowText = t('admin.itemWindowOpenStart', { end: formatDate(item.end_date) });
+    } else {
+      windowText = t('admin.itemWindowOpenEnd', { start: formatDate(item.start_date) });
+    }
+    windowPillHtml = `<span class="window-pill">📅 ${escapeHtml(windowText)}</span>`;
+  }
+
   const statusIcons = [];
   if (item.alert_penultimate) {
     statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.alertPenultimateBadge'))}: ${escapeHtml(item.alert_penultimate)}"><span class="si-emoji">⚠️</span><span class="si-label">${escapeHtml(t('admin.alertPenultimateShort'))}</span></span>`);
@@ -71,6 +93,7 @@ function buildItemCard(item) {
         <span class="badge ${escapeHtml(item.category)}">${escapeHtml(catLabel)}</span>
         <span class="meta-pill weekdays-pill" data-action="edit-weekdays" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(weekdaysSummary(weekdays))}</span>
         <span class="meta-pill periods-pill" data-action="edit-periods" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(periodsSummary(periods))}</span>
+        ${windowPillHtml}
         ${countInfo ? `<span class="count-badge">${countInfo}</span>` : ''}
         ${statusIcons.join('')}
         ${!item.active ? `<em style="color:var(--accent-danger)">${escapeHtml(t('admin.deactivated'))}</em>` : ''}
@@ -88,12 +111,24 @@ function buildItemCard(item) {
   return card;
 }
 
-function renderItems(items) {
+function renderItems(items, protocols = []) {
   itemsById = {};
   for (const it of items) itemsById[it.id] = it;
 
   const container = document.getElementById('items-list');
   container.innerHTML = '';
+
+  // Protocols section (shown first when any exist) — aggregated cards, one per
+  // protocol. Fases are hidden from the listing; click → protocol modal.
+  if (protocols.length > 0) {
+    const section = document.createElement('div');
+    section.className = 'period-group period-group-protocols';
+    section.innerHTML = `<h3 class="period-group-title">${escapeHtml(t('admin.protocols'))} <span class="period-group-count">${protocols.length}</span></h3>`;
+    for (const p of protocols) {
+      section.appendChild(buildProtocolCard(p));
+    }
+    container.appendChild(section);
+  }
 
   // Partition items into buckets. Day-long items (empty array OR all 3
   // periods selected) go to the dayLong bucket only; items with 1-2 periods
@@ -185,57 +220,58 @@ function currentPhaseIndex(startDate, durations, repeatIndefinitely, today) {
   return { index: -1, state: 'ended', endedOn: last ? last.end : null };
 }
 
-async function loadProtocols() {
-  try {
-    const res = await fetch(`${API}/protocols`);
-    if (!res.ok) {
-      document.getElementById('protocols-list').innerHTML = '';
-      return;
-    }
-    const protocols = await res.json();
-    renderProtocols(protocols);
-  } catch {
-    document.getElementById('protocols-list').innerHTML = '';
-  }
-}
-
-function renderProtocols(protocols) {
-  const container = document.getElementById('protocols-list');
-  container.innerHTML = '';
-  if (!protocols.length) return;
-
+// Build a unified card for a protocol. Uses .item-card skeleton with the
+// .is-protocol modifier so it fits in the same listing as standalone items,
+// distinguished by an accent stripe and a 📋 badge in the meta.
+function buildProtocolCard(p) {
+  const phases = p.phases || [];
   const today = todayISO();
+  const status = phaseStatusForProtocol(p, phases, today);
 
-  for (const p of protocols) {
-    const phases = (p.phases || []);
-    const durations = phases.map(ph => ph.end_date
-      ? (dayDiff(ph.start_date, ph.end_date) + 1)
-      : 1);
-    // If last phase has end_date null, we don't know its duration from DB alone;
-    // but for the status we only need to know if today is >= last start_date.
-    const status = phaseStatusForProtocol(p, phases, today);
+  // Active phase picks the icon + title; upcoming uses first phase; ended uses last.
+  let pivotPhase;
+  if (status.kind === 'active' && phases[status.index]) pivotPhase = phases[status.index];
+  else if (status.kind === 'upcoming') pivotPhase = phases[0];
+  else pivotPhase = phases[phases.length - 1];
+  const cardIcon = (pivotPhase && pivotPhase.icon) || '💊';
 
-    const card = document.createElement('div');
-    card.className = `protocol-card${p.active ? '' : ' inactive'}`;
-    card.dataset.id = p.id;
-    card.innerHTML = `
-      <div class="protocol-card-head">
-        <div class="protocol-card-info">
-          <div class="protocol-card-title">${escapeHtml(p.name)}</div>
-          <div class="protocol-card-meta">
-            <span>📅 ${escapeHtml(formatDate(p.start_date))}</span>
-            <span>${escapeHtml(t('admin.protocolPhaseCount', { n: phases.length }))}</span>
-            ${status.label ? `<span class="protocol-status ${status.kind}">${escapeHtml(status.label)}</span>` : ''}
-          </div>
-        </div>
-        <div class="protocol-card-actions">
-          <button class="btn btn-sm btn-secondary" data-action="edit-protocol">${escapeHtml(t('common.edit'))}</button>
-          <button class="btn btn-sm btn-danger" data-action="delete-protocol">${escapeHtml(t('common.delete'))}</button>
-        </div>
-      </div>
-    `;
-    container.appendChild(card);
+  // Meta text: "Fase 2 de 3 · Escitalopram 20mg · até 22/abr" (or variants)
+  const metaParts = [];
+  if (status.kind === 'active' && pivotPhase) {
+    metaParts.push(t('admin.protocolCardCurrent', {
+      current: status.index + 1,
+      total: phases.length,
+      title: pivotPhase.title || p.name,
+    }));
+    if (pivotPhase.end_date === null) {
+      metaParts.push(t('admin.protocolCardForever'));
+    } else if (pivotPhase.end_date) {
+      metaParts.push(t('admin.protocolCardUntil', { date: formatDate(pivotPhase.end_date) }));
+    }
+  } else if (status.kind === 'upcoming' && pivotPhase) {
+    metaParts.push(t('admin.protocolCardUpcoming', { date: formatDate(pivotPhase.start_date) }));
+  } else if (status.kind === 'ended') {
+    metaParts.push(t('admin.protocolCardEnded'));
   }
+
+  const card = document.createElement('div');
+  card.className = `item-card is-protocol${p.active ? '' : ' inactive'}`;
+  card.dataset.protocolId = p.id;
+  card.innerHTML = `
+    <span class="item-icon">${escapeHtml(cardIcon)}</span>
+    <div class="item-info">
+      <div class="item-title">${escapeHtml(p.name)}</div>
+      <div class="item-meta">
+        <span class="protocol-badge">📋</span>
+        <span>${escapeHtml(metaParts.join(' · '))}</span>
+      </div>
+    </div>
+    <div class="item-actions">
+      <button class="btn btn-sm btn-secondary" data-action="edit-protocol">${escapeHtml(t('common.edit'))}</button>
+      <button class="btn btn-sm btn-danger" data-action="delete-protocol">${escapeHtml(t('common.delete'))}</button>
+    </div>
+  `;
+  return card;
 }
 
 function dayDiff(startStr, endStr) {
@@ -247,12 +283,16 @@ function dayDiff(startStr, endStr) {
 }
 
 function phaseStatusForProtocol(protocol, phases, today) {
-  if (!phases.length) return { kind: 'ended', label: '' };
+  if (!phases.length) return { kind: 'ended', index: -1, label: '' };
   const first = phases[0];
   const last = phases[phases.length - 1];
 
   if (today < first.start_date) {
-    return { kind: 'upcoming', label: t('admin.protocolNotStarted', { date: formatDate(first.start_date) }) };
+    return {
+      kind: 'upcoming',
+      index: -1,
+      label: t('admin.protocolNotStarted', { date: formatDate(first.start_date) }),
+    };
   }
 
   // Find active phase
@@ -262,11 +302,15 @@ function phaseStatusForProtocol(protocol, phases, today) {
       ? (today >= ph.start_date && today <= ph.end_date)
       : (today >= ph.start_date);
     if (inWindow) {
-      return { kind: 'active', label: t('admin.currentPhase', { n: i + 1 }) };
+      return { kind: 'active', index: i, label: t('admin.currentPhase', { n: i + 1 }) };
     }
   }
 
-  return { kind: 'ended', label: t('admin.protocolEnded', { date: formatDate(last.end_date || last.start_date) }) };
+  return {
+    kind: 'ended',
+    index: -1,
+    label: t('admin.protocolEnded', { date: formatDate(last.end_date || last.start_date) }),
+  };
 }
 
 // ═══ Protocol Modal ═══
@@ -512,32 +556,11 @@ document.getElementById('protocol-form').addEventListener('submit', async (e) =>
 
   showToast(t('admin.protocolSaved'));
   closeProtocolModal();
-  loadProtocols();
   loadItems();
 });
 
-// Protocol list event delegation
-document.getElementById('protocols-list').addEventListener('click', async (e) => {
-  const card = e.target.closest('.protocol-card');
-  if (!card) return;
-  const id = Number(card.dataset.id);
-  const actionEl = e.target.closest('[data-action]');
-  if (!actionEl) return;
-
-  if (actionEl.dataset.action === 'edit-protocol') {
-    openProtocolModal(id);
-  } else if (actionEl.dataset.action === 'delete-protocol') {
-    const title = card.querySelector('.protocol-card-title')?.textContent || '';
-    document.getElementById('confirm-message').textContent =
-      t('admin.deleteProtocolConfirm', { name: title });
-    document.getElementById('confirm-dialog').classList.add('active');
-    pendingAction = async () => {
-      await fetch(`${API}/protocols/${id}`, { method: 'DELETE' });
-      loadProtocols();
-      loadItems();
-    };
-  }
-});
+// Protocol card actions are handled in the unified #items-list delegation
+// (see "Master event delegation for items list" below).
 
 // ═══ Quick Add ═══
 
@@ -643,11 +666,75 @@ async function openEditModal(id) {
   document.getElementById('edit-followup-title').value = item.followup_title || '';
   document.getElementById('edit-followup-category').value = item.followup_category || '';
 
+  // Schedule (date window) — auto-expand if the item already has a window
+  document.getElementById('edit-start-date').value = item.start_date || '';
+  document.getElementById('edit-end-date').value = item.end_date || '';
+  setScheduleRowExpanded(!!(item.start_date || item.end_date));
+  updateScheduleSummary();
+
   document.getElementById('edit-modal').classList.add('active');
 }
 
 function closeModal() {
   document.getElementById('edit-modal').classList.remove('active');
+}
+
+// ═══ Schedule row (item date window + convert-to-protocol handoff) ═══
+
+function setScheduleRowExpanded(expanded) {
+  const row = document.getElementById('schedule-row');
+  const fields = document.getElementById('schedule-fields');
+  const actions = document.getElementById('schedule-actions');
+  const btn = document.getElementById('schedule-toggle-btn');
+  if (!row) return;
+  row.classList.toggle('expanded', expanded);
+  fields.hidden = !expanded;
+  actions.hidden = !expanded;
+  btn.textContent = expanded ? t('admin.collapse') : t('admin.configure');
+}
+
+function toggleScheduleRow() {
+  const row = document.getElementById('schedule-row');
+  setScheduleRowExpanded(!row.classList.contains('expanded'));
+}
+
+function updateScheduleSummary() {
+  const start = document.getElementById('edit-start-date')?.value || '';
+  const end = document.getElementById('edit-end-date')?.value || '';
+  const el = document.getElementById('schedule-summary-text');
+  if (!el) return;
+  if (!start && !end) {
+    el.textContent = t('admin.scheduleCollapsed');
+  } else if (start && end) {
+    el.textContent = t('admin.itemWindow', { start: formatDate(start), end: formatDate(end) });
+  } else if (start) {
+    el.textContent = t('admin.itemWindowOpenEnd', { start: formatDate(start) });
+  } else {
+    el.textContent = t('admin.itemWindowOpenStart', { end: formatDate(end) });
+  }
+}
+
+// Live update of the summary when the user types a date
+document.getElementById('edit-start-date')?.addEventListener('input', updateScheduleSummary);
+document.getElementById('edit-end-date')?.addEventListener('input', updateScheduleSummary);
+
+async function convertEditItemToProtocol() {
+  const id = Number(document.getElementById('edit-id').value);
+  if (!id) return;
+  const res = await fetch(`${API}/items/${id}/convert-to-protocol`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.error || 'Erro', 'err');
+    return;
+  }
+  const protocol = await res.json();
+  closeModal();
+  openProtocolModal(protocol.id);
+  loadItems();
 }
 
 document.getElementById('edit-form').addEventListener('submit', async (e) => {
@@ -669,6 +756,8 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     followup_title: document.getElementById('edit-followup-title').value.trim() || null,
     followup_category: document.getElementById('edit-followup-category').value || null,
     followup_icon: document.getElementById('edit-followup-icon').value.trim() || null,
+    start_date: document.getElementById('edit-start-date').value || null,
+    end_date: document.getElementById('edit-end-date').value || null,
   };
 
   await fetch(`${API}/items/${id}`, {
@@ -972,7 +1061,6 @@ function setupLanguageSelector(settings) {
     });
     await setLanguage(lang);
     loadItems();
-    loadProtocols();
   });
 }
 
@@ -1253,10 +1341,30 @@ document.getElementById('items-list').addEventListener('click', (e) => {
 
   const card = e.target.closest('.item-card');
   if (!card) return;
-  const id = Number(card.dataset.id);
   const actionEl = e.target.closest('[data-action]');
   if (!actionEl) return;
   const action = actionEl.dataset.action;
+
+  // Protocol cards have their own dataset + actions (edit/delete only — no
+  // inline editing of title, icon, weekdays, periods at the protocol level).
+  if (card.classList.contains('is-protocol')) {
+    const pid = Number(card.dataset.protocolId);
+    if (action === 'edit-protocol') {
+      openProtocolModal(pid);
+    } else if (action === 'delete-protocol') {
+      const name = card.querySelector('.item-title')?.textContent || '';
+      document.getElementById('confirm-message').textContent =
+        t('admin.deleteProtocolConfirm', { name });
+      document.getElementById('confirm-dialog').classList.add('active');
+      pendingAction = async () => {
+        await fetch(`${API}/protocols/${pid}`, { method: 'DELETE' });
+        loadItems();
+      };
+    }
+    return;
+  }
+
+  const id = Number(card.dataset.id);
 
   switch (action) {
     case 'edit-title':
@@ -1317,5 +1425,4 @@ setupPeriodSettingsAutoSave();
 (async () => {
   await loadSettings();
   loadItems();
-  loadProtocols();
 })();

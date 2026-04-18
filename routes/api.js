@@ -15,6 +15,7 @@ const {
   createProtocol,
   updateProtocol,
   deleteProtocol,
+  convertItemToProtocol,
 } = require('../db');
 const { fetchWeather } = require('../weather');
 
@@ -90,6 +91,23 @@ function validateItemData(data, isCreate) {
     if (data[field] && typeof data[field] === 'string' && data[field].length > MAX_TEXT) {
       errors.push(`${field} max ${MAX_TEXT} chars`);
     }
+  }
+
+  // Optional date window on standalone items. Empty string / null clears it.
+  for (const dateField of ['start_date', 'end_date']) {
+    if (data[dateField] !== undefined && data[dateField] !== null && data[dateField] !== '') {
+      if (typeof data[dateField] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data[dateField])) {
+        errors.push(`${dateField} must be YYYY-MM-DD`);
+      } else {
+        const d = new Date(data[dateField] + 'T12:00:00');
+        if (isNaN(d.getTime())) errors.push(`${dateField} is not a valid date`);
+      }
+    }
+  }
+  if (data.start_date && data.end_date
+      && typeof data.start_date === 'string' && typeof data.end_date === 'string'
+      && data.start_date > data.end_date) {
+    errors.push('start_date must be on or before end_date');
   }
 
   return errors;
@@ -301,6 +319,21 @@ router.delete('/items/:id', requireApiAuth, (req, res) => {
 router.delete('/items/:id/permanent', requireApiAuth, (req, res) => {
   deleteRoutineItemPermanently(Number(req.params.id));
   res.json({ ok: true });
+});
+
+// Convert a standalone item into the first phase of a new protocol.
+// Body: { name?, first_phase_duration?, second_phase_duration?, repeat_indefinitely? }
+router.post('/items/:id/convert-to-protocol', requireApiAuth, (req, res) => {
+  try {
+    const protocol = convertItemToProtocol(Number(req.params.id), req.body || {});
+    if (!protocol) return res.status(404).json({ error: 'Item not found' });
+    res.status(201).json(protocol);
+  } catch (err) {
+    if (err.code === 'ALREADY_PHASE') {
+      return res.status(409).json({ error: 'Item is already a protocol phase' });
+    }
+    res.status(400).json({ error: err.message || 'Conversion failed' });
+  }
 });
 
 // ═══ Protocols (sequences of dated phases) ═══

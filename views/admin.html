@@ -476,43 +476,103 @@
       .modal--protocol-panel .protocol-identity-strip { grid-template-columns: 1fr; }
     }
 
-    /* ─── Top blocks (Settings + Protocols side by side) ─── */
-    .top-blocks {
+    /* ─── Schedule row (in edit-item modal) ─── */
+    .schedule-row {
+      margin-bottom: 18px;
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      transition: border-color 0.15s;
+    }
+    .schedule-row.expanded {
+      flex-direction: column;
+      align-items: stretch;
+      background: var(--bg-card);
+      border-color: rgba(232,168,75,0.25);
+    }
+    .schedule-summary { display: flex; align-items: center; gap: 8px; flex: 1; }
+    .schedule-summary .sch-icon { font-size: 1rem; }
+    .schedule-summary strong { color: var(--text-primary); font-weight: 500; }
+    .schedule-toggle {
+      background: transparent;
+      border: none;
+      color: var(--accent-sup);
+      font-family: var(--font);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 3px 6px;
+    }
+    .schedule-toggle:hover { text-decoration: underline; }
+    .schedule-fields {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-    .top-block {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
       gap: 10px;
+      margin-top: 6px;
     }
-    .top-block-head { line-height: 1.2; }
-    .top-block .section-title { margin-bottom: 2px; }
-    .top-block-subtext {
+    .schedule-fields[hidden],
+    .schedule-actions[hidden] { display: none !important; }
+    .schedule-fields label {
+      display: block; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 4px;
+    }
+    .schedule-fields input[type="date"] { width: 100%; }
+    .schedule-actions {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+      margin-top: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .schedule-actions .convert-hint {
       font-size: 0.7rem;
       color: var(--text-muted);
-      font-weight: 400;
-      text-transform: none;
-      letter-spacing: 0;
+      flex: 1; min-width: 200px;
+      line-height: 1.35;
     }
-    .top-block-btn {
-      align-self: flex-start;
+    @media (max-width: 560px) {
+      .schedule-fields { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Protocol card in the unified listing ─── */
+    .item-card.is-protocol {
+      border-left: 3px solid var(--accent-sup);
+      padding-left: 13px;
+    }
+    .item-card.is-protocol .item-icon {
+      filter: drop-shadow(0 0 6px rgba(232,168,75,0.35));
+    }
+    .item-card.is-protocol .protocol-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 7px 12px;
-      font-size: 0.8rem;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: rgba(232,168,75,0.14);
+      color: var(--accent-sup);
+      font-size: 0.66rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
-    #protocols-list:empty { display: none; }
-    #protocols-list .protocol-card { margin-bottom: 6px; }
-    @media (max-width: 700px) {
-      .top-blocks { grid-template-columns: 1fr; }
+
+    /* ─── Window pill (item with date range, no phases) ─── */
+    .window-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: rgba(107,143,212,0.1);
+      color: var(--accent-rem);
+      font-size: 0.68rem;
+      font-weight: 500;
     }
 
     /* ─── Protocol modal specifics ─── */
@@ -952,31 +1012,12 @@
   <div class="admin-header">
     <h1 data-i18n="admin.title">Daily Screen — Admin</h1>
     <nav>
+      <a href="#" onclick="event.preventDefault(); openSettingsModal();"><span style="font-size:0.95rem">⚙️</span> <span data-i18n="admin.settings">Configurações</span></a>
       <a href="/" target="_blank" data-i18n="admin.viewScreen">Ver tela</a>
       <a href="/admin/logout" data-i18n="admin.logout">Sair</a>
     </nav>
   </div>
 
-  <!-- ═══ Top blocks: Settings + Protocols side by side ═══ -->
-  <div class="top-blocks">
-    <div class="top-block">
-      <div class="top-block-head">
-        <div class="section-title" data-i18n="admin.settings">Configurações</div>
-        <div class="top-block-subtext" data-i18n="admin.settingsDesc">Idioma, localização, fontes</div>
-      </div>
-      <button class="btn btn-secondary top-block-btn" onclick="openSettingsModal()">
-        <span>⚙️</span> <span data-i18n="admin.settingsBtn">Configurações</span>
-      </button>
-    </div>
-    <div class="top-block">
-      <div class="top-block-head">
-        <div class="section-title" data-i18n="admin.protocols">Protocolos</div>
-        <div class="top-block-subtext" data-i18n="admin.protocolsDesc">Sequências de doses datadas</div>
-      </div>
-      <button class="btn btn-secondary top-block-btn" onclick="openProtocolModal()" data-i18n="admin.newProtocol">+ Novo protocolo</button>
-      <div id="protocols-list"></div>
-    </div>
-  </div>
 
   <!-- ═══ Settings Modal ═══ -->
   <div class="modal-overlay" id="settings-modal">
@@ -1119,7 +1160,10 @@
           <input id="add-sort" type="number" value="0" style="width:100%;text-align:center">
         </div>
       </div>
-      <button class="btn btn-primary" onclick="quickAdd()" data-i18n="common.add">Adicionar</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="quickAdd()" data-i18n="common.add">Adicionar</button>
+        <button class="btn btn-secondary" onclick="openProtocolModal()" data-i18n="admin.newProtocolShort">+ Protocolo</button>
+      </div>
     </div>
   </div>
 
@@ -1161,6 +1205,29 @@
           <div class="order-cell">
             <label data-i18n="admin.order">Ordem</label>
             <input id="edit-sort" type="number">
+          </div>
+        </div>
+
+        <!-- ── Schedule row (window + convert-to-protocol) ── -->
+        <div class="schedule-row" id="schedule-row">
+          <div class="schedule-summary">
+            <span class="sch-icon">🗓</span>
+            <span><strong data-i18n="admin.schedule">Cronograma</strong> · <span id="schedule-summary-text" data-i18n="admin.scheduleCollapsed">Todo dia, sem janela</span></span>
+          </div>
+          <button type="button" class="schedule-toggle" id="schedule-toggle-btn" onclick="toggleScheduleRow()" data-i18n="admin.configure">Configurar</button>
+          <div class="schedule-fields" id="schedule-fields" hidden>
+            <div>
+              <label data-i18n="admin.windowStart">Data de início (opcional)</label>
+              <input type="date" id="edit-start-date">
+            </div>
+            <div>
+              <label data-i18n="admin.windowEnd">Data de fim (opcional)</label>
+              <input type="date" id="edit-end-date">
+            </div>
+          </div>
+          <div class="schedule-actions" id="schedule-actions" hidden>
+            <small class="convert-hint" data-i18n="admin.convertToProtocolHint">Cria um protocolo com este item como Fase 1 e uma Fase 2 em branco pra você ajustar.</small>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="convertEditItemToProtocol()" data-i18n="admin.convertToProtocol">Virar protocolo</button>
           </div>
         </div>
 

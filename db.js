@@ -147,12 +147,20 @@ function updateRoutineItem(id, data) {
   const item = db.prepare('SELECT * FROM routine_items WHERE id = ?').get(id);
   if (!item) return null;
 
+  // Normalize "" to null for date fields so clearing the form clears the window.
+  const normalizeDate = (v, fallback) => {
+    if (v === undefined) return fallback;
+    if (v === '' || v === null) return null;
+    return v;
+  };
+
   const stmt = db.prepare(`
     UPDATE routine_items
     SET title = ?, category = ?, icon = ?, sort_order = ?, active = ?,
         weekdays = ?, periods = ?, total_count = ?, completed_count = ?,
         alert_penultimate = ?, alert_last = ?,
-        followup_title = ?, followup_category = ?, followup_icon = ?
+        followup_title = ?, followup_category = ?, followup_icon = ?,
+        start_date = ?, end_date = ?
     WHERE id = ?
   `);
   stmt.run(
@@ -170,6 +178,8 @@ function updateRoutineItem(id, data) {
     data.followup_title !== undefined ? data.followup_title : item.followup_title,
     data.followup_category !== undefined ? data.followup_category : item.followup_category,
     data.followup_icon !== undefined ? data.followup_icon : item.followup_icon,
+    normalizeDate(data.start_date, item.start_date),
+    normalizeDate(data.end_date, item.end_date),
     id,
   );
   return db.prepare('SELECT * FROM routine_items WHERE id = ?').get(id);
@@ -306,6 +316,65 @@ function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, act
 
 function deleteProtocol(id) {
   db.prepare('DELETE FROM protocols WHERE id = ?').run(id);
+}
+
+// Convert a standalone routine_item into the first phase of a new protocol.
+// Non-destructive: the routine_item keeps its id, so any daily_tasks already
+// marked as completed continue pointing to the same row. A second blank phase
+// (cloned from the first) is created so the user has something to edit.
+function convertItemToProtocol(itemId, opts = {}) {
+  const item = db.prepare('SELECT * FROM routine_items WHERE id = ?').get(itemId);
+  if (!item) return null;
+  if (item.protocol_id) {
+    const err = new Error('Item is already a protocol phase');
+    err.code = 'ALREADY_PHASE';
+    throw err;
+  }
+
+  const name = (opts.name && opts.name.trim()) || item.title;
+  const firstDur = Math.max(1, Math.min(3650, Number(opts.first_phase_duration) || 7));
+  const secondDur = Math.max(1, Math.min(3650, Number(opts.second_phase_duration) || 7));
+  const repeat = !!opts.repeat_indefinitely;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const tx = db.transaction(() => {
+    const result = db.prepare(
+      'INSERT INTO protocols (name, start_date, repeat_indefinitely, active) VALUES (?, ?, ?, 1)'
+    ).run(name, today, repeat ? 1 : 0);
+    const protocolId = result.lastInsertRowid;
+
+    // Phase 0: existing item becomes the first phase (id preserved → daily_tasks history kept)
+    const firstEnd = addDays(today, firstDur - 1);
+    db.prepare(
+      'UPDATE routine_items SET protocol_id = ?, phase_order = 0, start_date = ?, end_date = ? WHERE id = ?'
+    ).run(protocolId, today, firstEnd, itemId);
+
+    // Phase 1: blank clone so the user has an editable row. If repeat=true this
+    // is also the tail phase (end_date null). Otherwise closes after secondDur.
+    const secondStart = addDays(today, firstDur);
+    const secondEnd = repeat ? null : addDays(secondStart, secondDur - 1);
+    db.prepare(`
+      INSERT INTO routine_items (
+        title, category, icon, sort_order, active, weekdays, periods,
+        protocol_id, phase_order, start_date, end_date
+      ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, 1, ?, ?)
+    `).run(
+      item.title,
+      item.category,
+      item.icon,
+      item.sort_order || 0,
+      item.weekdays || '[0,1,2,3,4,5,6]',
+      item.periods || '[]',
+      protocolId,
+      secondStart,
+      secondEnd,
+    );
+
+    return protocolId;
+  });
+
+  const id = tx();
+  return getProtocol(id);
 }
 
 // ═══ Daily Tasks ═══
@@ -478,4 +547,5 @@ module.exports = {
   createProtocol,
   updateProtocol,
   deleteProtocol,
+  convertItemToProtocol,
 };
