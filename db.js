@@ -55,6 +55,19 @@ db.exec(`
     active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS api_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    token_prefix TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT DEFAULT (datetime('now')),
+    last_used_at TEXT,
+    revoked_at TEXT,
+    expires_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
 `);
 
 // ═══ Migrations (add columns to existing DBs) ═══
@@ -744,6 +757,42 @@ function seedIfEmpty() {
   }
 }
 
+// ═══ API Tokens (bearer auth for external integrations) ═══
+
+function createApiToken({ name, tokenPrefix, tokenHash, expiresAt }) {
+  const result = db.prepare(`
+    INSERT INTO api_tokens (name, token_prefix, token_hash, expires_at)
+    VALUES (?, ?, ?, ?)
+  `).run(name, tokenPrefix, tokenHash, expiresAt || null);
+  return db.prepare('SELECT id, name, token_prefix, created_at, last_used_at, revoked_at, expires_at FROM api_tokens WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function getApiTokenByHash(tokenHash) {
+  return db.prepare('SELECT * FROM api_tokens WHERE token_hash = ?').get(tokenHash);
+}
+
+function listApiTokens() {
+  return db.prepare(`
+    SELECT id, name, token_prefix, created_at, last_used_at, revoked_at, expires_at
+    FROM api_tokens
+    ORDER BY (revoked_at IS NOT NULL), id DESC
+  `).all();
+}
+
+function touchApiToken(id) {
+  db.prepare("UPDATE api_tokens SET last_used_at = datetime('now') WHERE id = ?").run(id);
+}
+
+function revokeApiToken(id) {
+  const result = db.prepare("UPDATE api_tokens SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL").run(id);
+  return result.changes > 0;
+}
+
+function deleteApiToken(id) {
+  const result = db.prepare('DELETE FROM api_tokens WHERE id = ?').run(id);
+  return result.changes > 0;
+}
+
 module.exports = {
   db,
   getRoutineItems,
@@ -765,4 +814,10 @@ module.exports = {
   updateProtocol,
   deleteProtocol,
   convertItemToProtocol,
+  createApiToken,
+  getApiTokenByHash,
+  listApiTokens,
+  touchApiToken,
+  revokeApiToken,
+  deleteApiToken,
 };

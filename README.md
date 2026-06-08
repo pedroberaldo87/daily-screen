@@ -205,6 +205,17 @@ All endpoints are prefixed with `/api`.
 - `DELETE /api/items/:id/permanent` — Hard delete
 - `PUT /api/settings` — Update settings (key-value pairs)
 
+### Integration API (token-authenticated)
+
+For external agents (scripts, cron jobs, other LLM-driven tools), there's a parallel token-authenticated surface at `/integration/v1/*` with full CRUD coverage of items, protocols, tasks, and settings. Tokens are managed in the admin panel under **Tokens** (top nav).
+
+See [`docs/2026-04-20-integration-api.md`](docs/2026-04-20-integration-api.md) for the complete guide — includes data models, endpoint reference with curl + Node.js examples, gotchas, and a ready-to-copy skill template for Claude Code.
+
+```bash
+curl -H "Authorization: Bearer dsk_live_..." \
+  https://daily.aiworks.app.br/integration/v1/health
+```
+
 ## Running on a Tablet
 
 For the best experience on an Android tablet (e.g., Fire HD 8), use [Open Kiosk](https://github.com/pedroberaldo87/open-kiosk) — a lightweight kiosk browser that locks the tablet to a single URL in fullscreen mode. Just point it to your Daily Screen instance and mount the tablet on the wall.

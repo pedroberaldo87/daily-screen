@@ -51,8 +51,10 @@ app.use(session({
 
 // Routes
 app.use('/', require('./routes/display'));
+app.use('/admin', require('./routes/admin-tokens'));
 app.use('/admin', require('./routes/admin'));
 app.use('/api', require('./routes/api'));
+app.use('/integration/v1', require('./routes/integration'));
 
 // Seed development data
 seedIfEmpty();

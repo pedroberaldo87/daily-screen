@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Screen — Integration Tokens</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0c0a0f;
+      --bg-surface: #14121a;
+      --bg-card: #1a1722;
+      --bg-input: #1e1b26;
+      --border: rgba(255,255,255,0.08);
+      --border-focus: #e8a84b;
+      --text-primary: #f0ece4;
+      --text-secondary: #7d7889;
+      --text-muted: #4a4656;
+      --accent-sup: #e8a84b;
+      --accent-success: #5ec26a;
+      --accent-danger: #e74c3c;
+      --accent-info: #6b8fd4;
+      --font: 'Outfit', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font);
+      padding: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .admin-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 24px; padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .admin-header h1 { font-size: 1.3rem; font-weight: 600; }
+    .admin-header nav { display: flex; gap: 16px; }
+    .admin-header a {
+      color: var(--text-secondary); text-decoration: none; font-size: 0.85rem;
+    }
+    .admin-header a:hover { color: var(--text-primary); }
+
+    .intro {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+    .intro code {
+      font-family: var(--mono);
+      background: var(--bg-input);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      color: var(--accent-sup);
+    }
+    .intro a {
+      color: var(--accent-info);
+      text-decoration: none;
+    }
+    .intro a:hover { text-decoration: underline; }
+
+    .toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+
+    .btn {
+      padding: 9px 18px; border: none; border-radius: var(--radius-sm);
+      font-family: var(--font); font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent-success); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-secondary { background: var(--bg-card); color: var(--text-secondary); }
+    .btn-secondary:hover { background: var(--bg-input); color: var(--text-primary); }
+    .btn-danger {
+      background: transparent; color: var(--accent-danger);
+      font-size: 0.78rem; padding: 6px 10px;
+    }
+    .btn-danger:hover { background: rgba(231,76,60,0.12); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+    .token-list {
+      display: grid; gap: 10px;
+    }
+    .token-row {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .token-row.revoked {
+      opacity: 0.5;
+    }
+    .token-info .name {
+      font-size: 0.98rem; font-weight: 600; color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+    .token-info .prefix {
+      font-family: var(--mono); font-size: 0.78rem;
+      color: var(--accent-sup);
+    }
+    .token-info .meta {
+      font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;
+    }
+    .token-info .meta strong {
+      color: var(--text-secondary); font-weight: 500;
+    }
+    .token-actions { display: flex; gap: 8px; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .badge-active { background: rgba(94,194,106,0.18); color: var(--accent-success); }
+    .badge-revoked { background: rgba(125,120,137,0.18); color: var(--text-secondary); }
+    .badge-expired { background: rgba(231,76,60,0.18); color: var(--accent-danger); }
+
+    .empty-state {
+      text-align: center; padding: 40px 20px;
+      color: var(--text-muted); font-size: 0.9rem;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      max-width: 560px;
+      width: calc(100% - 40px);
+    }
+    .modal h2 {
+      font-size: 1.1rem; font-weight: 600; margin-bottom: 18px;
+    }
+    .form-group { margin-bottom: 14px; }
+    label {
+      display: block; font-size: 0.78rem; font-weight: 500;
+      color: var(--text-secondary); margin-bottom: 6px;
+    }
+    input[type="text"], input[type="datetime-local"] {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 0.9rem;
+      outline: none;
+    }
+    input:focus { border-color: var(--border-focus); }
+    .modal-footer {
+      display: flex; gap: 10px; justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    /* Plaintext reveal */
+    .reveal-box {
+      background: var(--bg-input);
+      border: 1px solid var(--accent-sup);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      margin: 12px 0;
+    }
+    .reveal-box .plaintext {
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      color: var(--accent-sup);
+      word-break: break-all;
+      padding: 10px 12px;
+      background: var(--bg-deep);
+      border-radius: 6px;
+      margin: 10px 0;
+      user-select: all;
+    }
+    .warning {
+      font-size: 0.8rem;
+      color: var(--accent-danger);
+      line-height: 1.5;
+      margin: 10px 0;
+    }
+    .warning strong { font-weight: 600; }
+
+    .toast {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--accent-success);
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem; font-weight: 500;
+      opacity: 0; transition: all 0.25s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="admin-header">
+    <h1 data-i18n="tokens.title">Integration Tokens</h1>
+    <nav>
+      <a href="/admin" data-i18n="tokens.backToAdmin">← Admin</a>
+      <a href="/admin/logout" data-i18n="admin.logout">Sair</a>
+    </nav>
+  </div>
+
+  <div class="intro">
+    <span data-i18n="tokens.intro">
+      Tokens permitem que um agente externo faça CRUD via API autenticada.
+      Cada token tem acesso total ao app — trate como senha.
+      Veja a documentação completa em
+    </span>
+    <code>docs/2026-04-20-integration-api.md</code>.
+  </div>
+
+  <div class="toolbar">
+    <div class="section-title" data-i18n="tokens.listTitle">Seus tokens</div>
+    <button class="btn btn-primary" onclick="openCreateModal()">
+      <span data-i18n="tokens.new">Novo token</span>
+    </button>
+  </div>
+
+  <div id="token-list" class="token-list">
+    <div class="empty-state" data-i18n="tokens.loading">Carregando…</div>
+  </div>
+
+  <!-- Create modal -->
+  <div class="modal-overlay" id="create-modal">
+    <div class="modal">
+      <h2 data-i18n="tokens.newTitle">Criar novo token</h2>
+      <div class="form-group">
+        <label data-i18n="tokens.nameLabel">Nome descritivo</label>
+        <input type="text" id="token-name" placeholder="claude-code-laptop" maxlength="100">
+      </div>
+      <div class="form-group">
+        <label data-i18n="tokens.expiresLabel">Expira em (opcional)</label>
+        <input type="datetime-local" id="token-expires">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCreateModal()" data-i18n="tokens.cancel">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitCreate()" data-i18n="tokens.create">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reveal modal -->
+  <div class="modal-overlay" id="reveal-modal">
+    <div class="modal">
+      <h2 data-i18n="tokens.createdTitle">Token criado</h2>
+      <div class="warning">
+        <strong data-i18n="tokens.copyWarningStrong">Copie agora.</strong>
+        <span data-i18n="tokens.copyWarning">Este valor não será mostrado novamente. Se perder, você precisará criar outro.</span>
+      </div>
+      <div class="reveal-box">
+        <label data-i18n="tokens.tokenLabel">Token</label>
+        <div class="plaintext" id="plaintext-value"></div>
+        <button class="btn btn-secondary btn-sm" onclick="copyToken()" data-i18n="tokens.copy">Copiar</button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeRevealModal()" data-i18n="tokens.done">Pronto</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/public/i18n.js"></script>
+  <script src="/public/admin-tokens.js"></script>
+</body>
+</html>
