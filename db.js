@@ -87,6 +87,7 @@ const migrations = [
   ['routine_items', 'followup_category', 'TEXT'],
   ['routine_items', 'followup_icon', 'TEXT'],
   ['routine_items', 'followup_recreate', 'INTEGER DEFAULT 0'],
+  ['routine_items', 'followup_created', 'INTEGER DEFAULT 0'],
   ['routine_items', 'recreate_item_id', 'INTEGER'],
   ['routine_items', 'recreate_protocol_id', 'INTEGER'],
   ['routine_items', 'periods', "TEXT DEFAULT '[]'"],
@@ -678,6 +679,81 @@ function getTasksForDate(date) {
   });
 }
 
+// Keep the count-based follow-up cycle consistent after ANY toggle (mark OR
+// unmark), instead of a one-way trigger. Closing: once the total is reached,
+// spawn the one-time follow-up and deactivate the item. Reopening: if a later
+// edit drops the count below the total, reactivate the item and undo the
+// still-pending follow-up. Idempotent via followup_created, so editing history
+// can always be walked back.
+function reconcileItemCycle(itemId) {
+  const item = db.prepare('SELECT * FROM routine_items WHERE id = ?').get(itemId);
+  if (!item || !item.total_count || !item.followup_title) return;
+  const reached = item.completed_count >= item.total_count;
+
+  if (reached && !item.followup_created) {
+    // Don't duplicate a follow-up that's already pending for this item — match
+    // by the reversal link OR by title (legacy follow-ups have no link).
+    const pending = db.prepare(
+      'SELECT 1 FROM routine_items WHERE active = 1 AND (recreate_item_id = ? OR title = ?) LIMIT 1'
+    ).get(item.id, item.followup_title);
+    if (pending) {
+      // Adopt an existing unlinked follow-up so reopening can later undo it.
+      db.prepare(
+        'UPDATE routine_items SET recreate_item_id = ? WHERE active = 1 AND title = ? AND recreate_item_id IS NULL'
+      ).run(item.id, item.followup_title);
+    } else {
+      // recreate_item_id is always stamped so reopening can find this follow-up;
+      // the opt-in "Recriar?" prompt is gated separately on followup_recreate.
+      db.prepare(`
+        INSERT INTO routine_items (title, category, icon, sort_order, total_count, recreate_item_id)
+        VALUES (?, ?, ?, ?, 1, ?)
+      `).run(
+        item.followup_title,
+        item.followup_category || item.category,
+        item.followup_icon || '📌',
+        item.sort_order + 0.5,
+        item.id,
+      );
+    }
+    db.prepare('UPDATE routine_items SET active = 0, followup_created = 1 WHERE id = ?').run(item.id);
+  } else if (!reached && item.followup_created) {
+    db.prepare('UPDATE routine_items SET active = 1, followup_created = 0 WHERE id = ?').run(item.id);
+    // Undo the follow-up this cycle spawned: a still-pending one is deleted
+    // (creation walked back); a completed one ("already bought") is archived.
+    const followups = db.prepare('SELECT id FROM routine_items WHERE recreate_item_id = ?').all(item.id);
+    for (const f of followups) archiveOrDeleteItem(f.id);
+  }
+}
+
+// Reconcile count items that reached their total BEFORE followup_created
+// existed: they sit active=0 with no follow-up and can't be reopened. Closing
+// the cycle here spawns the missing follow-up (the "Comprar X" the user
+// expected) and marks the flag, making the state consistent and reversible.
+// Idempotent — once followup_created is set they're skipped.
+function reconcileLegacyCycles() {
+  const items = db.prepare(`
+    SELECT id, total_count, completed_count, followup_title FROM routine_items
+    WHERE active = 0 AND total_count IS NOT NULL
+      AND followup_title IS NOT NULL AND followup_created = 0 AND protocol_id IS NULL
+  `).all();
+  for (const it of items) {
+    if (it.completed_count >= it.total_count) {
+      // Reached the total but predates the flag → close the cycle (adopt/spawn
+      // the follow-up, mark followup_created) so it's consistent and reversible.
+      reconcileItemCycle(it.id);
+    } else {
+      // Below total but inactive: a legacy limbo (closed, then a dose unmarked).
+      // If its follow-up still exists it had completed → reopen and undo it.
+      // Otherwise leave it (could be a deliberately deactivated item).
+      const fu = db.prepare('SELECT id FROM routine_items WHERE active = 1 AND title = ?').get(it.followup_title);
+      if (fu) {
+        db.prepare('UPDATE routine_items SET active = 1 WHERE id = ?').run(it.id);
+        archiveOrDeleteItem(fu.id);
+      }
+    }
+  }
+}
+
 function toggleTask(id) {
   const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(id);
   if (!task) return null;
@@ -695,28 +771,9 @@ function toggleTask(id) {
     db.prepare('UPDATE routine_items SET completed_count = MAX(0, completed_count + ?) WHERE id = ?')
       .run(delta, task.routine_item_id);
 
-    // Check if this completion triggers the follow-up
-    if (newCompleted) {
-      const item = db.prepare('SELECT * FROM routine_items WHERE id = ?').get(task.routine_item_id);
-      if (item.total_count && item.completed_count >= item.total_count && item.followup_title) {
-        // Create follow-up as a new one-time routine item. When the item opted
-        // into recreation, stamp recreate_item_id so completing the follow-up
-        // can offer to restart the original (see recreateFromFollowup).
-        db.prepare(`
-          INSERT INTO routine_items (title, category, icon, sort_order, total_count, recreate_item_id)
-          VALUES (?, ?, ?, ?, 1, ?)
-        `).run(
-          item.followup_title,
-          item.followup_category || item.category,
-          item.followup_icon || '📌',
-          item.sort_order + 0.5,
-          item.followup_recreate ? item.id : null,
-        );
-
-        // Deactivate the completed routine item
-        db.prepare('UPDATE routine_items SET active = 0 WHERE id = ?').run(item.id);
-      }
-    }
+    // Reconcile the follow-up cycle (closes on reaching the total, reopens when
+    // an edit drops below it). Runs on both mark and unmark.
+    reconcileItemCycle(task.routine_item_id);
   });
 
   toggle();
@@ -750,8 +807,10 @@ function toggleTask(id) {
       'SELECT recreate_item_id, recreate_protocol_id FROM routine_items WHERE id = ?'
     ).get(task.routine_item_id);
     if (ri && ri.recreate_item_id) {
-      const orig = db.prepare('SELECT title, icon FROM routine_items WHERE id = ?').get(ri.recreate_item_id);
-      if (orig) result.recreate_prompt = { type: 'item', title: orig.title, icon: orig.icon };
+      // recreate_item_id is always stamped (cycle reversal link); the prompt is
+      // opt-in, so only offer it when the source item enabled followup_recreate.
+      const orig = db.prepare('SELECT title, icon, followup_recreate FROM routine_items WHERE id = ?').get(ri.recreate_item_id);
+      if (orig && orig.followup_recreate) result.recreate_prompt = { type: 'item', title: orig.title, icon: orig.icon };
     } else if (ri && ri.recreate_protocol_id) {
       const proto = db.prepare('SELECT name FROM protocols WHERE id = ?').get(ri.recreate_protocol_id);
       if (proto) result.recreate_prompt = { type: 'protocol', title: proto.name, icon: result.icon };
@@ -789,6 +848,9 @@ function recreateFromFollowup(dailyTaskId, today) {
 
   return { ok: false, error: 'not a recreate follow-up' };
 }
+
+// Boot-time: fix legacy count items that closed before followup_created existed.
+reconcileLegacyCycles();
 
 // ═══ Seed ═══
 
