@@ -140,6 +140,17 @@ if (dailyTasksSql && !dailyTasksSql.sql.includes('ON DELETE CASCADE')) {
   db.pragma('foreign_keys = ON');
 }
 
+// One-time cleanup: remove blank daily_tasks that were backfilled for days
+// before their item existed (retroactive generation, now prevented). Safe —
+// only touches uncompleted rows. Idempotent.
+db.exec(`
+  DELETE FROM daily_tasks WHERE id IN (
+    SELECT dt.id FROM daily_tasks dt
+    JOIN routine_items ri ON ri.id = dt.routine_item_id
+    WHERE dt.completed = 0 AND substr(COALESCE(ri.created_at, ''), 1, 10) > dt.date
+  )
+`);
+
 // ═══ Settings ═══
 
 function getSetting(key, fallback) {
@@ -249,9 +260,23 @@ function deactivateRoutineItem(id) {
   db.prepare('UPDATE routine_items SET active = 0 WHERE id = ?').run(id);
 }
 
+// Remove an item without losing completion history: if it has any completed
+// daily_tasks, keep the row (deactivate) so the JOIN in getTasksForDate can
+// still show those days; otherwise it's safe to hard-delete.
+function archiveOrDeleteItem(id) {
+  const hasHistory = db.prepare(
+    'SELECT 1 FROM daily_tasks WHERE routine_item_id = ? AND completed = 1 LIMIT 1'
+  ).get(id);
+  if (hasHistory) {
+    db.prepare('UPDATE routine_items SET active = 0 WHERE id = ?').run(id);
+  } else {
+    db.prepare('DELETE FROM daily_tasks WHERE routine_item_id = ?').run(id);
+    db.prepare('DELETE FROM routine_items WHERE id = ?').run(id);
+  }
+}
+
 function deleteRoutineItemPermanently(id) {
-  db.prepare('DELETE FROM daily_tasks WHERE routine_item_id = ?').run(id);
-  db.prepare('DELETE FROM routine_items WHERE id = ?').run(id);
+  archiveOrDeleteItem(id);
 }
 
 // ═══ Protocols (sequences of dated phases) ═══
@@ -287,9 +312,9 @@ function computePhaseDates(startDate, phases, repeatIndefinitely) {
 }
 
 function getProtocols() {
-  const protocols = db.prepare('SELECT * FROM protocols ORDER BY active DESC, created_at DESC').all();
+  const protocols = db.prepare('SELECT * FROM protocols WHERE active = 1 ORDER BY active DESC, created_at DESC').all();
   const phaseStmt = db.prepare(
-    'SELECT * FROM routine_items WHERE protocol_id = ? ORDER BY phase_order, id'
+    'SELECT * FROM routine_items WHERE protocol_id = ? AND active = 1 ORDER BY phase_order, id'
   );
   return protocols.map(p => ({ ...p, phases: phaseStmt.all(p.id) }));
 }
@@ -298,7 +323,7 @@ function getProtocol(id) {
   const p = db.prepare('SELECT * FROM protocols WHERE id = ?').get(id);
   if (!p) return null;
   p.phases = db.prepare(
-    'SELECT * FROM routine_items WHERE protocol_id = ? ORDER BY phase_order, id'
+    'SELECT * FROM routine_items WHERE protocol_id = ? AND active = 1 ORDER BY phase_order, id'
   ).all(p.id);
   return p;
 }
@@ -387,7 +412,10 @@ function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, act
       id);
 
     if (Array.isArray(phases)) {
-      db.prepare('DELETE FROM routine_items WHERE protocol_id = ?').run(id);
+      // Archive current phases that have completed days (preserve history),
+      // hard-delete the rest, then create the new phases.
+      const current = db.prepare('SELECT id FROM routine_items WHERE protocol_id = ? AND active = 1').all(id);
+      for (const ph of current) archiveOrDeleteItem(ph.id);
       insertPhasesForProtocol(id, nextStart, phases, !!nextRepeat, nextActive);
       // Phases changed → dates changed → reset followup flag so spawn re-evaluates
       db.prepare('UPDATE protocols SET followup_created = 0 WHERE id = ?').run(id);
@@ -401,7 +429,20 @@ function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, act
 }
 
 function deleteProtocol(id) {
-  db.prepare('DELETE FROM protocols WHERE id = ?').run(id);
+  // Preserve completion history: archive phases that have completed days,
+  // hard-delete the rest. If any phase survived (archived), soft-delete the
+  // protocol so it leaves the list without CASCADE-wiping its history.
+  const phases = db.prepare('SELECT id FROM routine_items WHERE protocol_id = ?').all(id);
+  const tx = db.transaction(() => {
+    for (const ph of phases) archiveOrDeleteItem(ph.id);
+    const remaining = db.prepare('SELECT 1 FROM routine_items WHERE protocol_id = ? LIMIT 1').get(id);
+    if (remaining) {
+      db.prepare('UPDATE protocols SET active = 0 WHERE id = ?').run(id);
+    } else {
+      db.prepare('DELETE FROM protocols WHERE id = ?').run(id);
+    }
+  });
+  tx();
 }
 
 // Restart a finished protocol from `newStartDate`: rebuild every phase with
@@ -413,7 +454,7 @@ function restartProtocol(protocolId, newStartDate) {
   const proto = db.prepare('SELECT * FROM protocols WHERE id = ?').get(protocolId);
   if (!proto) return null;
   const phases = db.prepare(
-    'SELECT * FROM routine_items WHERE protocol_id = ? ORDER BY phase_order, id'
+    'SELECT * FROM routine_items WHERE protocol_id = ? AND active = 1 ORDER BY phase_order, id'
   ).all(protocolId);
   if (!phases.length) return null;
 
@@ -436,7 +477,8 @@ function restartProtocol(protocolId, newStartDate) {
   const tx = db.transaction(() => {
     db.prepare('UPDATE protocols SET start_date = ?, followup_created = 0 WHERE id = ?')
       .run(newStartDate, protocolId);
-    db.prepare('DELETE FROM routine_items WHERE protocol_id = ?').run(protocolId);
+    // Archive the old phases (preserve completed days) instead of deleting.
+    for (const ph of phases) archiveOrDeleteItem(ph.id);
     insertPhasesForProtocol(protocolId, newStartDate, rebuilt, !!proto.repeat_indefinitely, 1);
   });
   tx();
@@ -515,6 +557,11 @@ function generateDailyTasks(date) {
 
   const insertMany = db.transaction((items) => {
     for (const item of items) {
+      // Don't backfill days before the item existed — otherwise navigating to
+      // an old day spawns blank tasks for items created long after it.
+      const createdDay = (item.created_at || '').slice(0, 10);
+      if (createdDay && date < createdDay) continue;
+
       // Check date window (protocol phases set start_date/end_date; standalone
       // items leave both NULL and are always in-window). Lexicographic compare
       // is correct because dates are YYYY-MM-DD.
@@ -589,14 +636,20 @@ function getTasksForDate(date) {
       p.alert_penultimate AS proto_alert_pen,
       p.alert_last AS proto_alert_last,
       (SELECT MAX(ri2.phase_order) FROM routine_items ri2
-         WHERE ri2.protocol_id = ri.protocol_id) AS max_phase_order,
+         WHERE ri2.protocol_id = ri.protocol_id AND ri2.active = 1) AS max_phase_order,
       (SELECT ri3.end_date FROM routine_items ri3
-         WHERE ri3.protocol_id = ri.protocol_id
+         WHERE ri3.protocol_id = ri.protocol_id AND ri3.active = 1
          ORDER BY ri3.phase_order DESC LIMIT 1) AS proto_end_date
     FROM daily_tasks dt
     JOIN routine_items ri ON ri.id = dt.routine_item_id
     LEFT JOIN protocols p ON p.id = ri.protocol_id
-    WHERE dt.date = ? AND ri.active = 1
+    -- Show the real record of each day: the item must have existed on that date
+    -- and either still be active OR have been completed (history of a now-
+    -- deactivated item, e.g. a medication that ran out). Filtering on active
+    -- alone hid every completed task whose item was later deactivated.
+    WHERE dt.date = ?
+      AND substr(COALESCE(ri.created_at, ''), 1, 10) <= dt.date
+      AND (ri.active = 1 OR dt.completed = 1)
     ORDER BY ri.sort_order, ri.id
   `).all(date).map(task => {
     let alert = null;
