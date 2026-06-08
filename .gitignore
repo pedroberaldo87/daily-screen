@@ -8,3 +8,13 @@ node_modules/
 .playwright-mcp/
 *.png
 !docs/screenshots/*.png
+
+# graphify knowledge graph (gerado; rode /graphify pra recriar)
+graphify-out/
+
+# AI pointers — apontam pra .claude/ (gitignored), ficam locais junto com a doc
+AGENTS.md
+GEMINI.md
+.cursorrules
+.windsurfrules
+.github/copilot-instructions.md
