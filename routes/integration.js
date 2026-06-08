@@ -19,6 +19,7 @@ const {
   updateProtocol,
   deleteProtocol,
   convertItemToProtocol,
+  getCompletedSeries,
 } = require('../db');
 const { fetchWeather } = require('../weather');
 const {
@@ -95,6 +96,11 @@ router.post('/tasks/:id/toggle', (req, res) => {
   const task = toggleTask(Number(req.params.id));
   if (!task) return res.status(404).json({ error: 'Task not found' });
   res.json(task);
+});
+
+// Completed series (boxes + protocol phases), newest first.
+router.get('/completed', (req, res) => {
+  res.json(getCompletedSeries());
 });
 
 // ═══ Items ═══

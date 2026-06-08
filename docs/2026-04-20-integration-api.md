@@ -618,6 +618,17 @@ Full API guide: https://github.com/pedroberaldo87/daily-screen/blob/main/docs/20
 
 ## 11. Changelog
 
+### v1.1 — 2026-06-08
+- **Internal data model redesigned** (template → phase → series). External JSON
+  shapes are unchanged: `/items`, `/protocols`, `/tasks` return the same fields.
+- Each task now carries both `series_id` and `routine_item_id` (the latter kept
+  as a back-compat alias = `series_id`). The task `id` is still the daily-task id
+  used by `/toggle`.
+- New endpoint `GET /integration/v1/completed` — completed series (finished
+  medication boxes + completed protocol phases), newest first. Fields:
+  `id, template_id, template_name, kind, title, category, icon, seq,
+  total_count, completed_count, start_date, end_date, completed_at`.
+
 ### v1.0 — 2026-04-20
 - Initial release of `/integration/v1/*` endpoints
 - Bearer token auth with SHA-256 hash storage

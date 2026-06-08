@@ -21,6 +21,11 @@
   "display.recreateYes": "Sim, recriar",
   "display.recreateNo": "Não",
   "display.emptyPeriod": "Nada agendado para este período.",
+  "display.completed": "Concluídos",
+  "display.completedTitle": "Concluídos",
+  "display.completedEmpty": "Nada concluído ainda.",
+  "display.completedProtocol": "Protocolo",
+  "display.close": "Fechar",
 
   "period.all": "Todos",
   "period.morning": "Manhã",

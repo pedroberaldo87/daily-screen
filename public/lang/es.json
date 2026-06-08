@@ -21,6 +21,11 @@
   "display.recreateYes": "Sí, recrear",
   "display.recreateNo": "No",
   "display.emptyPeriod": "Nada programado para este período.",
+  "display.completed": "Completados",
+  "display.completedTitle": "Completados",
+  "display.completedEmpty": "Nada completado todavía.",
+  "display.completedProtocol": "Protocolo",
+  "display.close": "Cerrar",
 
   "period.all": "Todos",
   "period.morning": "Mañana",

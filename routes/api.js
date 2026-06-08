@@ -17,6 +17,7 @@ const {
   updateProtocol,
   deleteProtocol,
   convertItemToProtocol,
+  getCompletedSeries,
 } = require('../db');
 const { fetchWeather } = require('../weather');
 const {
@@ -56,6 +57,12 @@ router.post('/tasks/:id/recreate', (req, res) => {
   const result = recreateFromFollowup(Number(req.params.id), todayDate());
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
+});
+
+// Completed series (boxes + protocol phases) for the "Concluídos" panel — public
+// like /tasks so the wall tablet renders it without a login session.
+router.get('/completed', (req, res) => {
+  res.json(getCompletedSeries());
 });
 
 // ═══ Weather ═══
