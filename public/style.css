@@ -800,6 +800,26 @@ html, body {
   }
 }
 
+/* ═══ LOAD ERROR BANNER ═══ */
+
+.load-error {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  background: var(--accent-med);
+  color: #0b090e;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.load-error[hidden] { display: none; }
+
 /* ═══ RECREATE PROMPT ═══ */
 
 .recreate-prompt {

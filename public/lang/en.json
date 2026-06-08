@@ -16,6 +16,7 @@
   "display.noData": "no data",
   "display.allDone": "All done!",
   "display.goodWork": "Great job today.",
+  "display.loadError": "No connection — couldn't load this day.",
   "display.recreatePrompt": "Recreate \"{title}\"?",
   "display.recreateYes": "Yes, recreate",
   "display.recreateNo": "No",

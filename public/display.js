@@ -56,14 +56,14 @@ function navigateDate(offset) {
   currentDate = d.toISOString().split('T')[0];
   updateDateDisplay();
   updateTodayButton();
-  fetchTasks();
+  fetchTasks(true);
 }
 
 function goToday() {
   currentDate = todayStr();
   updateDateDisplay();
   updateTodayButton();
-  fetchTasks();
+  fetchTasks(true);
 }
 
 function updateTodayButton() {
@@ -224,15 +224,36 @@ async function fetchWeather() {
 
 // ═══ Tasks ═══
 
-async function fetchTasks() {
+// `interactive` = user-triggered load (navigation / first paint). Those must
+// never show another day's tasks under a switched date, so on failure we clear
+// and surface an error. Background polls (interactive=false) keep the last good
+// state silently to avoid flicker.
+async function fetchTasks(interactive = false) {
   try {
-    const res = await fetch(`${API_BASE}/tasks?date=${currentDate}`);
+    const opts = interactive ? { cache: 'no-store' } : {};
+    const res = await fetch(`${API_BASE}/tasks?date=${currentDate}`, opts);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     tasks = await res.json();
+    hideLoadError();
     renderTasks();
   } catch (err) {
     console.error('Failed to fetch tasks:', err);
+    if (interactive) {
+      tasks = [];
+      renderTasks();
+      showLoadError();
+    }
   }
+}
+
+function showLoadError() {
+  const el = document.getElementById('load-error');
+  if (el) el.hidden = false;
+}
+
+function hideLoadError() {
+  const el = document.getElementById('load-error');
+  if (el) el.hidden = true;
 }
 
 function renderTasks() {
@@ -478,7 +499,7 @@ async function loadSettings() {
   updateGreeting();
   updateDateDisplay();
   updateTodayButton();
-  fetchTasks();
+  fetchTasks(true);
   fetchWeather();
 })();
 

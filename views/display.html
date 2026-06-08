@@ -101,6 +101,9 @@
     </div>
   </div>
 
+  <!-- Offline / failed-load banner (shown when a day can't be fetched) -->
+  <div class="load-error" id="load-error" hidden data-i18n="display.loadError">Sem conexão — não foi possível carregar este dia.</div>
+
   <!-- Recreate prompt overlay (asks to restart the original task/protocol) -->
   <div class="recreate-prompt" id="recreate-prompt">
     <div class="recreate-content">
@@ -118,7 +121,19 @@
   <script src="/public/display.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/public/sw.js');
+      // The wall tablet keeps the tab open 24/7, so a new SW never takes over
+      // on its own. Reload once a fresh SW activates so the device picks up the
+      // latest shell, and nudge an update check on load. Only reload when a
+      // controller already existed (a real update) — a first-ever install also
+      // fires controllerchange via clients.claim and needs no reload.
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloadingForSW = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadingForSW || !hadController) return;
+        reloadingForSW = true;
+        location.reload();
+      });
+      navigator.serviceWorker.register('/public/sw.js').then((reg) => reg.update());
     }
   </script>
 </body>

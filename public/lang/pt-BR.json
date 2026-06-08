@@ -16,6 +16,7 @@
   "display.noData": "sem dados",
   "display.allDone": "Tudo feito!",
   "display.goodWork": "Bom trabalho hoje.",
+  "display.loadError": "Sem conexão — não foi possível carregar este dia.",
   "display.recreatePrompt": "Recriar \"{title}\"?",
   "display.recreateYes": "Sim, recriar",
   "display.recreateNo": "Não",

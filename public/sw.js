@@ -1,4 +1,4 @@
-const CACHE_NAME = 'daily-screen-v10';
+const CACHE_NAME = 'daily-screen-v11';
 const SHELL_ASSETS = [
   '/',
   '/public/style.css',
@@ -31,7 +31,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
   if (url.pathname.startsWith('/api/')) {
-    // Network-first for API
+    // Network-first for API. On failure, fall back to the cache entry for the
+    // EXACT same request (query string included → same date), and never resolve
+    // to `undefined` — that makes respondWith fail as a network error and the
+    // page silently keeps stale data. Return a tagged 503 the page can detect.
     e.respondWith(
       fetch(e.request)
         .then((res) => {
@@ -42,7 +45,13 @@ self.addEventListener('fetch', (e) => {
           }
           return res;
         })
-        .catch(() => caches.match(e.request))
+        .catch(async () => {
+          const cached = await caches.match(e.request);
+          return cached || new Response(
+            JSON.stringify({ error: 'offline', offline: true }),
+            { status: 503, headers: { 'Content-Type': 'application/json' } }
+          );
+        })
     );
   } else {
     // Cache-first for shell
