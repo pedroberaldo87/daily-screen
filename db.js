@@ -88,6 +88,7 @@ const migrations = [
   ['routine_items', 'followup_icon', 'TEXT'],
   ['routine_items', 'followup_recreate', 'INTEGER DEFAULT 0'],
   ['routine_items', 'followup_created', 'INTEGER DEFAULT 0'],
+  ['routine_items', 'cycle_start_date', 'TEXT'],
   ['routine_items', 'recreate_item_id', 'INTEGER'],
   ['routine_items', 'recreate_protocol_id', 'INTEGER'],
   ['routine_items', 'periods', "TEXT DEFAULT '[]'"],
@@ -254,6 +255,11 @@ function updateRoutineItem(id, data) {
     normalizeDate(data.end_date, item.end_date),
     id,
   );
+  // completed_count is derived — keep it consistent with history after edits
+  // (e.g. changing total_count) regardless of what the admin sent.
+  if (db.prepare('SELECT total_count FROM routine_items WHERE id = ?').get(id).total_count != null) {
+    recountItem(id);
+  }
   return db.prepare('SELECT * FROM routine_items WHERE id = ?').get(id);
 }
 
@@ -679,6 +685,26 @@ function getTasksForDate(date) {
   });
 }
 
+// completed_count is DERIVED from real history: the count of completed
+// daily_tasks since the current cycle began (cycle_start_date), or all-time if
+// no cycle reset. Stored as a column but always recomputed here, so editing
+// history or recreating can never desync the counter from what was actually
+// marked. Returns the fresh count.
+function recountItem(itemId) {
+  const item = db.prepare('SELECT cycle_start_date FROM routine_items WHERE id = ?').get(itemId);
+  if (!item) return 0;
+  const n = item.cycle_start_date
+    ? db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE routine_item_id = ? AND completed = 1 AND date >= ?').get(itemId, item.cycle_start_date).c
+    : db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE routine_item_id = ? AND completed = 1').get(itemId).c;
+  db.prepare('UPDATE routine_items SET completed_count = ? WHERE id = ?').run(n, itemId);
+  return n;
+}
+
+function recountAllCountItems() {
+  const items = db.prepare('SELECT id FROM routine_items WHERE total_count IS NOT NULL').all();
+  for (const it of items) recountItem(it.id);
+}
+
 // Keep the count-based follow-up cycle consistent after ANY toggle (mark OR
 // unmark), instead of a one-way trigger. Closing: once the total is reached,
 // spawn the one-time follow-up and deactivate the item. Reopening: if a later
@@ -766,13 +792,9 @@ function toggleTask(id) {
     db.prepare('UPDATE daily_tasks SET completed = ?, completed_at = ? WHERE id = ?')
       .run(newCompleted, completedAt, id);
 
-    // Update completed_count on routine item
-    const delta = newCompleted ? 1 : -1;
-    db.prepare('UPDATE routine_items SET completed_count = MAX(0, completed_count + ?) WHERE id = ?')
-      .run(delta, task.routine_item_id);
-
-    // Reconcile the follow-up cycle (closes on reaching the total, reopens when
-    // an edit drops below it). Runs on both mark and unmark.
+    // Recompute completed_count from real history (never drifts), then reconcile
+    // the follow-up cycle (closes on reaching the total, reopens below it).
+    recountItem(task.routine_item_id);
     reconcileItemCycle(task.routine_item_id);
   });
 
@@ -832,8 +854,11 @@ function recreateFromFollowup(dailyTaskId, today) {
 
   if (followup.recreate_item_id) {
     db.transaction(() => {
-      db.prepare('UPDATE routine_items SET active = 1, completed_count = 0 WHERE id = ?')
-        .run(followup.recreate_item_id);
+      // New cycle ("new box"): count only from today on; the previous cycle's
+      // marked days stay in history but no longer feed this counter.
+      db.prepare('UPDATE routine_items SET active = 1, followup_created = 0, cycle_start_date = ? WHERE id = ?')
+        .run(today, followup.recreate_item_id);
+      recountItem(followup.recreate_item_id);
       db.prepare('UPDATE routine_items SET active = 0 WHERE id = ?').run(followup.id);
     })();
     return { ok: true, type: 'item' };
@@ -849,7 +874,9 @@ function recreateFromFollowup(dailyTaskId, today) {
   return { ok: false, error: 'not a recreate follow-up' };
 }
 
-// Boot-time: fix legacy count items that closed before followup_created existed.
+// Boot-time: resync every count item's counter from real history (heals any
+// drift from the old manually-incremented column), then fix legacy cycles.
+recountAllCountItems();
 reconcileLegacyCycles();
 
 // ═══ Seed ═══
