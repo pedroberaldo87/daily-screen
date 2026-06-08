@@ -16,6 +16,9 @@
   "display.noData": "sin datos",
   "display.allDone": "¡Todo listo!",
   "display.goodWork": "Buen trabajo hoy.",
+  "display.recreatePrompt": "¿Recrear \"{title}\"?",
+  "display.recreateYes": "Sí, recrear",
+  "display.recreateNo": "No",
   "display.emptyPeriod": "Nada programado para este período.",
 
   "period.all": "Todos",
@@ -81,6 +84,8 @@
   "admin.followUpName": "Nombre de la tarea",
   "admin.followUpPlaceholder": "Ej: Comprar Vitamina D",
   "admin.followUpSameCategory": "(misma)",
+  "admin.followUpRecreate": "Recrear al completar el seguimiento",
+  "admin.followUpRecreateHelp": "Al completar esta tarea en la tablet, te pregunta si quieres reiniciar la tarea original.",
   "admin.confirmDelete": "¿Eliminar \"{title}\" permanentemente? Esto borra el ítem y todo su historial.",
   "admin.noResults": "Sin resultados",
   "admin.saved": "¡Guardado!",

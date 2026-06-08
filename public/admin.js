@@ -254,13 +254,18 @@ function buildProtocolCard(p) {
     metaParts.push(t('admin.protocolCardEnded'));
   }
 
+  const statusIcons = [];
+  if (p.alert_penultimate) statusIcons.push(`<span class="status-icon" title="${escapeHtml(p.alert_penultimate)}">⚠️ PEN</span>`);
+  if (p.alert_last) statusIcons.push(`<span class="status-icon" title="${escapeHtml(p.alert_last)}">🚨 LAST</span>`);
+  if (p.followup_title) statusIcons.push(`<span class="status-icon" title="${escapeHtml(p.followup_title)}">↻ FOLLOW</span>`);
+
   const card = document.createElement('div');
   card.className = `item-card is-protocol${p.active ? '' : ' inactive'}`;
   card.dataset.protocolId = p.id;
   card.innerHTML = `
     <span class="item-icon">${escapeHtml(cardIcon)}</span>
     <div class="item-info">
-      <div class="item-title">${escapeHtml(p.name)}</div>
+      <div class="item-title">${escapeHtml(p.name)}${statusIcons.length ? ' ' + statusIcons.join('') : ''}</div>
       <div class="item-meta">
         <span class="protocol-badge">📋</span>
         <span>${escapeHtml(metaParts.join(' · '))}</span>
@@ -330,6 +335,12 @@ function openProtocolModal(id) {
       document.getElementById('protocol-name').value = p.name;
       document.getElementById('protocol-start-date').value = p.start_date;
       document.getElementById('protocol-repeat-indefinitely').checked = !!p.repeat_indefinitely;
+      document.getElementById('protocol-alert-penultimate').value = p.alert_penultimate || '';
+      document.getElementById('protocol-alert-last').value = p.alert_last || '';
+      document.getElementById('protocol-followup-icon').value = p.followup_icon || '';
+      document.getElementById('protocol-followup-title').value = p.followup_title || '';
+      document.getElementById('protocol-followup-category').value = p.followup_category || '';
+      document.getElementById('protocol-followup-recreate').checked = !!p.followup_recreate;
       const phases = p.phases || [];
       for (const phase of phases) {
         const dur = phase.end_date
@@ -532,6 +543,12 @@ document.getElementById('protocol-form').addEventListener('submit', async (e) =>
     start_date: document.getElementById('protocol-start-date').value,
     repeat_indefinitely: document.getElementById('protocol-repeat-indefinitely').checked,
     phases: collectPhasesFromForm(),
+    alert_penultimate: document.getElementById('protocol-alert-penultimate').value.trim() || null,
+    alert_last: document.getElementById('protocol-alert-last').value.trim() || null,
+    followup_icon: document.getElementById('protocol-followup-icon').value.trim() || null,
+    followup_title: document.getElementById('protocol-followup-title').value.trim() || null,
+    followup_category: document.getElementById('protocol-followup-category').value || null,
+    followup_recreate: document.getElementById('protocol-followup-recreate').checked ? 1 : 0,
   };
 
   if (!payload.phases.length) {
@@ -665,6 +682,7 @@ async function openEditModal(id) {
   document.getElementById('edit-followup-icon').value = item.followup_icon || '';
   document.getElementById('edit-followup-title').value = item.followup_title || '';
   document.getElementById('edit-followup-category').value = item.followup_category || '';
+  document.getElementById('edit-followup-recreate').checked = !!item.followup_recreate;
 
   // Schedule (date window) — auto-expand if the item already has a window
   document.getElementById('edit-start-date').value = item.start_date || '';
@@ -756,6 +774,7 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     followup_title: document.getElementById('edit-followup-title').value.trim() || null,
     followup_category: document.getElementById('edit-followup-category').value || null,
     followup_icon: document.getElementById('edit-followup-icon').value.trim() || null,
+    followup_recreate: document.getElementById('edit-followup-recreate').checked ? 1 : 0,
     start_date: document.getElementById('edit-start-date').value || null,
     end_date: document.getElementById('edit-end-date').value || null,
   };

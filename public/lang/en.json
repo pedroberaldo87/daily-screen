@@ -16,6 +16,9 @@
   "display.noData": "no data",
   "display.allDone": "All done!",
   "display.goodWork": "Great job today.",
+  "display.recreatePrompt": "Recreate \"{title}\"?",
+  "display.recreateYes": "Yes, recreate",
+  "display.recreateNo": "No",
   "display.emptyPeriod": "Nothing scheduled for this period.",
 
   "period.all": "All",
@@ -81,6 +84,8 @@
   "admin.followUpName": "Task name",
   "admin.followUpPlaceholder": "E.g.: Buy Vitamin D",
   "admin.followUpSameCategory": "(same)",
+  "admin.followUpRecreate": "Recreate when the follow-up is completed",
+  "admin.followUpRecreateHelp": "When you complete this task on the tablet, it asks whether to restart the original task.",
   "admin.confirmDelete": "Delete \"{title}\" permanently? This removes the item and all its history.",
   "admin.noResults": "No results",
   "admin.saved": "Saved!",

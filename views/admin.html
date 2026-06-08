@@ -1310,6 +1310,13 @@
                   <option value="reminder" data-i18n="category.reminder">Lembrete</option>
                 </select>
               </div>
+              <label class="repeat-toggle" style="margin-top:10px">
+                <input type="checkbox" id="edit-followup-recreate">
+                <span>
+                  <span class="repeat-toggle-text" data-i18n="admin.followUpRecreate">Recriar ao concluir o follow-up</span>
+                  <small class="repeat-toggle-hint" data-i18n="admin.followUpRecreateHelp">Ao concluir essa tarefa no tablet, ele pergunta se você quer reiniciar a tarefa original.</small>
+                </span>
+              </label>
             </div>
           </div>
 
@@ -1361,6 +1368,55 @@
         <div class="panel-block">
           <div class="panel-title" data-i18n="admin.timeline">Linha do tempo</div>
           <div id="phases-timeline" class="phase-timeline"></div>
+        </div>
+
+        <!-- End-of-protocol alerts + follow-up -->
+        <div class="ops-row" style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="ops-col" style="flex:1;min-width:200px">
+            <div class="panel-block">
+              <div class="panel-title">Alertas de fim de protocolo</div>
+              <div class="form-group">
+                <label>Alerta no penúltimo dia</label>
+                <input id="protocol-alert-penultimate" placeholder="Ex: Penúltimo dia! Já providenciar continuação" style="width:100%">
+              </div>
+              <div class="form-group">
+                <label>Alerta no último dia</label>
+                <input id="protocol-alert-last" placeholder="Ex: Último dia do protocolo!" style="width:100%">
+              </div>
+            </div>
+          </div>
+          <div class="ops-col" style="flex:1;min-width:200px">
+            <div class="panel-block">
+              <div class="panel-title">Tarefa ao encerrar protocolo</div>
+              <p class="followup-desc">Quando o protocolo encerrar, cria automaticamente esta tarefa:</p>
+              <div class="form-row">
+                <div class="narrow">
+                  <label>Ícone</label>
+                  <input id="protocol-followup-icon" maxlength="4" placeholder="📌" style="width:100%;text-align:center;font-size:1.2rem">
+                </div>
+                <div>
+                  <label>Nome da tarefa</label>
+                  <input id="protocol-followup-title" placeholder="Ex: Agendar retorno médico" style="width:100%">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Categoria</label>
+                <select id="protocol-followup-category" style="width:100%">
+                  <option value="">Lembrete (padrão)</option>
+                  <option value="medication">Medicamento</option>
+                  <option value="supplement">Suplemento</option>
+                  <option value="reminder">Lembrete</option>
+                </select>
+              </div>
+              <label class="repeat-toggle" style="margin-top:10px">
+                <input type="checkbox" id="protocol-followup-recreate">
+                <span>
+                  <span class="repeat-toggle-text">Reiniciar protocolo ao concluir a tarefa</span>
+                  <small class="repeat-toggle-hint">Ao concluir essa tarefa no tablet, ele pergunta se você quer reiniciar o protocolo a partir de hoje.</small>
+                </span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <div class="modal-actions">

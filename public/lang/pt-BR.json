@@ -16,6 +16,9 @@
   "display.noData": "sem dados",
   "display.allDone": "Tudo feito!",
   "display.goodWork": "Bom trabalho hoje.",
+  "display.recreatePrompt": "Recriar \"{title}\"?",
+  "display.recreateYes": "Sim, recriar",
+  "display.recreateNo": "Não",
   "display.emptyPeriod": "Nada agendado para este período.",
 
   "period.all": "Todos",
@@ -81,6 +84,8 @@
   "admin.followUpName": "Nome da tarefa",
   "admin.followUpPlaceholder": "Ex: Comprar Vitamina D",
   "admin.followUpSameCategory": "(mesma)",
+  "admin.followUpRecreate": "Recriar ao concluir o follow-up",
+  "admin.followUpRecreateHelp": "Ao concluir essa tarefa no tablet, ele pergunta se você quer reiniciar a tarefa original.",
   "admin.confirmDelete": "Deletar \"{title}\" permanentemente? Isso remove o item e todo o histórico.",
   "admin.noResults": "Nenhum resultado",
   "admin.saved": "Salvo!",

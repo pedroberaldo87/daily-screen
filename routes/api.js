@@ -2,6 +2,7 @@ const { Router } = require('express');
 const {
   getTasksForDate,
   toggleTask,
+  recreateFromFollowup,
   getAllRoutineItems,
   createRoutineItem,
   updateRoutineItem,
@@ -218,6 +219,14 @@ router.post('/tasks/:id/toggle', (req, res) => {
   const task = toggleTask(Number(req.params.id));
   if (!task) return res.status(404).json({ error: 'Task not found' });
   res.json(task);
+});
+
+// User confirmed "Sim" on the recreate prompt for a completed follow-up.
+// Public like /toggle — the wall tablet acts without a login session.
+router.post('/tasks/:id/recreate', (req, res) => {
+  const result = recreateFromFollowup(Number(req.params.id), todayDate());
+  if (!result.ok) return res.status(400).json(result);
+  res.json(result);
 });
 
 // ═══ Weather ═══

@@ -25,6 +25,9 @@ db.exec(`
     followup_title TEXT,
     followup_category TEXT,
     followup_icon TEXT,
+    followup_recreate INTEGER DEFAULT 0,
+    recreate_item_id INTEGER,
+    recreate_protocol_id INTEGER,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -70,6 +73,9 @@ const migrations = [
   ['routine_items', 'followup_title', 'TEXT'],
   ['routine_items', 'followup_category', 'TEXT'],
   ['routine_items', 'followup_icon', 'TEXT'],
+  ['routine_items', 'followup_recreate', 'INTEGER DEFAULT 0'],
+  ['routine_items', 'recreate_item_id', 'INTEGER'],
+  ['routine_items', 'recreate_protocol_id', 'INTEGER'],
   ['routine_items', 'periods', "TEXT DEFAULT '[]'"],
   ['routine_items', 'protocol_id', 'INTEGER REFERENCES protocols(id) ON DELETE CASCADE'],
   ['routine_items', 'phase_order', 'INTEGER'],
@@ -81,6 +87,44 @@ for (const [table, column, type] of migrations) {
   if (!columnExists(table, column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+}
+
+const protocolMigrations = [
+  ['protocols', 'alert_penultimate', 'TEXT'],
+  ['protocols', 'alert_last', 'TEXT'],
+  ['protocols', 'followup_title', 'TEXT'],
+  ['protocols', 'followup_category', 'TEXT'],
+  ['protocols', 'followup_icon', 'TEXT'],
+  ['protocols', 'followup_created', 'INTEGER DEFAULT 0'],
+  ['protocols', 'followup_recreate', 'INTEGER DEFAULT 0'],
+];
+for (const [table, column, type] of protocolMigrations) {
+  if (!columnExists(table, column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
+// Recreate daily_tasks with ON DELETE CASCADE if missing (schema drift from older deploys)
+const dailyTasksSql = db.prepare("SELECT sql FROM sqlite_schema WHERE type='table' AND name='daily_tasks'").get();
+if (dailyTasksSql && !dailyTasksSql.sql.includes('ON DELETE CASCADE')) {
+  db.pragma('foreign_keys = OFF');
+  db.transaction(() => {
+    db.exec(`
+      CREATE TABLE daily_tasks_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        routine_item_id INTEGER NOT NULL REFERENCES routine_items(id) ON DELETE CASCADE,
+        date TEXT NOT NULL,
+        completed INTEGER DEFAULT 0,
+        completed_at TEXT,
+        UNIQUE(routine_item_id, date)
+      );
+    `);
+    db.exec('INSERT INTO daily_tasks_new SELECT * FROM daily_tasks');
+    db.exec('DROP TABLE daily_tasks');
+    db.exec('ALTER TABLE daily_tasks_new RENAME TO daily_tasks');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_daily_tasks_date ON daily_tasks(date)');
+  })();
+  db.pragma('foreign_keys = ON');
 }
 
 // ═══ Settings ═══
@@ -123,8 +167,8 @@ function getActiveItemsForGeneration() {
 function createRoutineItem(data) {
   const stmt = db.prepare(`
     INSERT INTO routine_items (title, category, icon, sort_order, weekdays, periods, total_count,
-      alert_penultimate, alert_last, followup_title, followup_category, followup_icon)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      alert_penultimate, alert_last, followup_title, followup_category, followup_icon, followup_recreate)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.title,
@@ -139,6 +183,7 @@ function createRoutineItem(data) {
     data.followup_title || null,
     data.followup_category || null,
     data.followup_icon || null,
+    data.followup_recreate ? 1 : 0,
   );
   return result.lastInsertRowid;
 }
@@ -160,6 +205,7 @@ function updateRoutineItem(id, data) {
         weekdays = ?, periods = ?, total_count = ?, completed_count = ?,
         alert_penultimate = ?, alert_last = ?,
         followup_title = ?, followup_category = ?, followup_icon = ?,
+        followup_recreate = ?,
         start_date = ?, end_date = ?
     WHERE id = ?
   `);
@@ -178,6 +224,7 @@ function updateRoutineItem(id, data) {
     data.followup_title !== undefined ? data.followup_title : item.followup_title,
     data.followup_category !== undefined ? data.followup_category : item.followup_category,
     data.followup_icon !== undefined ? data.followup_icon : item.followup_icon,
+    data.followup_recreate !== undefined ? (data.followup_recreate ? 1 : 0) : item.followup_recreate,
     normalizeDate(data.start_date, item.start_date),
     normalizeDate(data.end_date, item.end_date),
     id,
@@ -202,6 +249,13 @@ function addDays(dateStr, days) {
   const date = new Date(Date.UTC(y, m - 1, d));
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+// Whole-day difference (endStr - startStr) between two YYYY-MM-DD dates.
+function dayDiff(startStr, endStr) {
+  const [y1, m1, d1] = startStr.split('-').map(Number);
+  const [y2, m2, d2] = endStr.split('-').map(Number);
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000);
 }
 
 // Given a start date and an ordered list of phases with duration_days,
@@ -269,12 +323,18 @@ function insertPhasesForProtocol(protocolId, startDate, phases, repeatIndefinite
   });
 }
 
-function createProtocol({ name, start_date, repeat_indefinitely, phases }) {
+function createProtocol({ name, start_date, repeat_indefinitely, phases, alert_penultimate, alert_last, followup_title, followup_category, followup_icon, followup_recreate }) {
   const tx = db.transaction(() => {
     const result = db.prepare(`
-      INSERT INTO protocols (name, start_date, repeat_indefinitely, active)
-      VALUES (?, ?, ?, 1)
-    `).run(name, start_date, repeat_indefinitely ? 1 : 0);
+      INSERT INTO protocols (name, start_date, repeat_indefinitely, active,
+        alert_penultimate, alert_last, followup_title, followup_category, followup_icon, followup_recreate)
+      VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+    `).run(
+      name, start_date, repeat_indefinitely ? 1 : 0,
+      alert_penultimate || null, alert_last || null,
+      followup_title || null, followup_category || null, followup_icon || null,
+      followup_recreate ? 1 : 0,
+    );
     const id = result.lastInsertRowid;
     insertPhasesForProtocol(id, start_date, phases, !!repeat_indefinitely, 1);
     return id;
@@ -285,7 +345,7 @@ function createProtocol({ name, start_date, repeat_indefinitely, phases }) {
 // Update strategy: delete-and-recreate all phases when `phases` is provided.
 // Simpler than diffing, and the price (losing past daily_tasks of edited
 // phases via CASCADE) is acceptable for a routine-tracking app.
-function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, active }) {
+function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, active, alert_penultimate, alert_last, followup_title, followup_category, followup_icon, followup_recreate }) {
   const existing = db.prepare('SELECT * FROM protocols WHERE id = ?').get(id);
   if (!existing) return null;
 
@@ -295,16 +355,29 @@ function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, act
     ? (repeat_indefinitely ? 1 : 0)
     : existing.repeat_indefinitely;
   const nextActive = active !== undefined ? (active ? 1 : 0) : existing.active;
+  const nextAlertPen = alert_penultimate !== undefined ? (alert_penultimate || null) : existing.alert_penultimate;
+  const nextAlertLast = alert_last !== undefined ? (alert_last || null) : existing.alert_last;
+  const nextFollowupTitle = followup_title !== undefined ? (followup_title || null) : existing.followup_title;
+  const nextFollowupCat = followup_category !== undefined ? (followup_category || null) : existing.followup_category;
+  const nextFollowupIcon = followup_icon !== undefined ? (followup_icon || null) : existing.followup_icon;
+  const nextFollowupRecreate = followup_recreate !== undefined ? (followup_recreate ? 1 : 0) : existing.followup_recreate;
 
   const tx = db.transaction(() => {
     db.prepare(`
-      UPDATE protocols SET name = ?, start_date = ?, repeat_indefinitely = ?, active = ?
+      UPDATE protocols SET name = ?, start_date = ?, repeat_indefinitely = ?, active = ?,
+        alert_penultimate = ?, alert_last = ?,
+        followup_title = ?, followup_category = ?, followup_icon = ?, followup_recreate = ?
       WHERE id = ?
-    `).run(nextName, nextStart, nextRepeat, nextActive, id);
+    `).run(nextName, nextStart, nextRepeat, nextActive,
+      nextAlertPen, nextAlertLast,
+      nextFollowupTitle, nextFollowupCat, nextFollowupIcon, nextFollowupRecreate,
+      id);
 
     if (Array.isArray(phases)) {
       db.prepare('DELETE FROM routine_items WHERE protocol_id = ?').run(id);
       insertPhasesForProtocol(id, nextStart, phases, !!nextRepeat, nextActive);
+      // Phases changed → dates changed → reset followup flag so spawn re-evaluates
+      db.prepare('UPDATE protocols SET followup_created = 0 WHERE id = ?').run(id);
     } else if (active !== undefined) {
       db.prepare('UPDATE routine_items SET active = ? WHERE protocol_id = ?').run(nextActive, id);
     }
@@ -316,6 +389,46 @@ function updateProtocol(id, { name, start_date, repeat_indefinitely, phases, act
 
 function deleteProtocol(id) {
   db.prepare('DELETE FROM protocols WHERE id = ?').run(id);
+}
+
+// Restart a finished protocol from `newStartDate`: rebuild every phase with
+// dates recomputed from today. Durations are recovered from each phase's stored
+// [start_date, end_date] window (end_date is always present here because the
+// follow-up that triggers a restart only exists for non-repeating protocols).
+// Mirrors updateProtocol's delete-and-recreate strategy.
+function restartProtocol(protocolId, newStartDate) {
+  const proto = db.prepare('SELECT * FROM protocols WHERE id = ?').get(protocolId);
+  if (!proto) return null;
+  const phases = db.prepare(
+    'SELECT * FROM routine_items WHERE protocol_id = ? ORDER BY phase_order, id'
+  ).all(protocolId);
+  if (!phases.length) return null;
+
+  const rebuilt = phases.map(ph => ({
+    title: ph.title,
+    category: ph.category,
+    icon: ph.icon,
+    sort_order: ph.sort_order,
+    weekdays: ph.weekdays,
+    periods: ph.periods,
+    total_count: ph.total_count,
+    alert_penultimate: ph.alert_penultimate,
+    alert_last: ph.alert_last,
+    followup_title: ph.followup_title,
+    followup_category: ph.followup_category,
+    followup_icon: ph.followup_icon,
+    duration_days: ph.end_date ? dayDiff(ph.start_date, ph.end_date) + 1 : 1,
+  }));
+
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE protocols SET start_date = ?, followup_created = 0 WHERE id = ?')
+      .run(newStartDate, protocolId);
+    db.prepare('DELETE FROM routine_items WHERE protocol_id = ?').run(protocolId);
+    insertPhasesForProtocol(protocolId, newStartDate, rebuilt, !!proto.repeat_indefinitely, 1);
+  });
+  tx();
+
+  return getProtocol(protocolId);
 }
 
 // Convert a standalone routine_item into the first phase of a new protocol.
@@ -406,6 +519,37 @@ function generateDailyTasks(date) {
     }
   });
   insertMany(items);
+
+  // Spawn follow-up items for protocols that just ended (idempotent via followup_created flag)
+  const ended = db.prepare(`
+    SELECT p.*, MAX(ri.end_date) AS last_end_date
+    FROM protocols p
+    JOIN routine_items ri ON ri.protocol_id = p.id
+    WHERE p.followup_title IS NOT NULL
+      AND p.followup_created = 0
+      AND p.repeat_indefinitely = 0
+      AND ri.end_date IS NOT NULL
+    GROUP BY p.id
+    HAVING last_end_date < ?
+  `).all(date);
+
+  if (ended.length) {
+    const spawnFollowup = db.prepare(
+      'INSERT INTO routine_items (title, category, icon, sort_order, total_count, recreate_protocol_id) VALUES (?, ?, ?, 0, 1, ?)'
+    );
+    const markCreated = db.prepare('UPDATE protocols SET followup_created = 1 WHERE id = ?');
+    db.transaction(() => {
+      for (const p of ended) {
+        spawnFollowup.run(
+          p.followup_title,
+          p.followup_category || 'reminder',
+          p.followup_icon || '📌',
+          p.followup_recreate ? p.id : null,
+        );
+        markCreated.run(p.id);
+      }
+    })();
+  }
 }
 
 function getTasksForDate(date) {
@@ -426,15 +570,36 @@ function getTasksForDate(date) {
       ri.total_count,
       ri.completed_count,
       ri.alert_penultimate,
-      ri.alert_last
+      ri.alert_last,
+      ri.protocol_id,
+      ri.phase_order,
+      p.alert_penultimate AS proto_alert_pen,
+      p.alert_last AS proto_alert_last,
+      (SELECT MAX(ri2.phase_order) FROM routine_items ri2
+         WHERE ri2.protocol_id = ri.protocol_id) AS max_phase_order,
+      (SELECT ri3.end_date FROM routine_items ri3
+         WHERE ri3.protocol_id = ri.protocol_id
+         ORDER BY ri3.phase_order DESC LIMIT 1) AS proto_end_date
     FROM daily_tasks dt
     JOIN routine_items ri ON ri.id = dt.routine_item_id
+    LEFT JOIN protocols p ON p.id = ri.protocol_id
     WHERE dt.date = ? AND ri.active = 1
     ORDER BY ri.sort_order, ri.id
   `).all(date).map(task => {
-    // Calculate alert status
     let alert = null;
-    if (task.total_count) {
+
+    // Protocol end-date alerts: only for the last phase of a finite protocol
+    if (task.protocol_id !== null && task.phase_order === task.max_phase_order && task.proto_end_date) {
+      const d1 = new Date(date + 'T12:00:00');
+      const d2 = new Date(task.proto_end_date + 'T12:00:00');
+      const daysLeft = Math.round((d2 - d1) / 86400000);
+      if (daysLeft === 0 && task.proto_alert_last) {
+        alert = { type: 'last', message: task.proto_alert_last };
+      } else if (daysLeft === 1 && task.proto_alert_pen) {
+        alert = { type: 'penultimate', message: task.proto_alert_pen };
+      }
+    } else if (task.total_count) {
+      // Regular item alert (count-based)
       const remaining = task.total_count - task.completed_count;
       if (remaining === 1 && task.alert_last) {
         alert = { type: 'last', message: task.alert_last };
@@ -442,6 +607,7 @@ function getTasksForDate(date) {
         alert = { type: 'penultimate', message: task.alert_penultimate };
       }
     }
+
     return { ...task, alert };
   });
 }
@@ -467,15 +633,18 @@ function toggleTask(id) {
     if (newCompleted) {
       const item = db.prepare('SELECT * FROM routine_items WHERE id = ?').get(task.routine_item_id);
       if (item.total_count && item.completed_count >= item.total_count && item.followup_title) {
-        // Create follow-up as a new one-time routine item
+        // Create follow-up as a new one-time routine item. When the item opted
+        // into recreation, stamp recreate_item_id so completing the follow-up
+        // can offer to restart the original (see recreateFromFollowup).
         db.prepare(`
-          INSERT INTO routine_items (title, category, icon, sort_order, total_count)
-          VALUES (?, ?, ?, ?, 1)
+          INSERT INTO routine_items (title, category, icon, sort_order, total_count, recreate_item_id)
+          VALUES (?, ?, ?, ?, 1, ?)
         `).run(
           item.followup_title,
           item.followup_category || item.category,
           item.followup_icon || '📌',
           item.sort_order + 0.5,
+          item.followup_recreate ? item.id : null,
         );
 
         // Deactivate the completed routine item
@@ -486,7 +655,7 @@ function toggleTask(id) {
 
   toggle();
 
-  return db.prepare(`
+  const result = db.prepare(`
     SELECT
       dt.id,
       dt.routine_item_id,
@@ -506,6 +675,53 @@ function toggleTask(id) {
     JOIN routine_items ri ON ri.id = dt.routine_item_id
     WHERE dt.id = ?
   `).get(id);
+
+  // If this completion was a follow-up linked back to an original item/protocol,
+  // signal the display to ask the user whether to recreate it. Nothing is
+  // recreated here — the choice happens on the tablet (POST .../recreate).
+  if (newCompleted) {
+    const ri = db.prepare(
+      'SELECT recreate_item_id, recreate_protocol_id FROM routine_items WHERE id = ?'
+    ).get(task.routine_item_id);
+    if (ri && ri.recreate_item_id) {
+      const orig = db.prepare('SELECT title, icon FROM routine_items WHERE id = ?').get(ri.recreate_item_id);
+      if (orig) result.recreate_prompt = { type: 'item', title: orig.title, icon: orig.icon };
+    } else if (ri && ri.recreate_protocol_id) {
+      const proto = db.prepare('SELECT name FROM protocols WHERE id = ?').get(ri.recreate_protocol_id);
+      if (proto) result.recreate_prompt = { type: 'protocol', title: proto.name, icon: result.icon };
+    }
+  }
+
+  return result;
+}
+
+// Act on the user's "Sim" to the recreate prompt. `dailyTaskId` is the just-
+// completed follow-up. Item case: reactivate the original (reset its counter).
+// Protocol case: restart the sequence from `today`. The follow-up itself is
+// deactivated either way — it stays in history as a completed, inactive item.
+function recreateFromFollowup(dailyTaskId, today) {
+  const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyTaskId);
+  if (!task) return { ok: false, error: 'task not found' };
+  const followup = db.prepare('SELECT * FROM routine_items WHERE id = ?').get(task.routine_item_id);
+  if (!followup) return { ok: false, error: 'item not found' };
+
+  if (followup.recreate_item_id) {
+    db.transaction(() => {
+      db.prepare('UPDATE routine_items SET active = 1, completed_count = 0 WHERE id = ?')
+        .run(followup.recreate_item_id);
+      db.prepare('UPDATE routine_items SET active = 0 WHERE id = ?').run(followup.id);
+    })();
+    return { ok: true, type: 'item' };
+  }
+
+  if (followup.recreate_protocol_id) {
+    const restarted = restartProtocol(followup.recreate_protocol_id, today);
+    if (!restarted) return { ok: false, error: 'protocol restart failed' };
+    db.prepare('UPDATE routine_items SET active = 0 WHERE id = ?').run(followup.id);
+    return { ok: true, type: 'protocol' };
+  }
+
+  return { ok: false, error: 'not a recreate follow-up' };
 }
 
 // ═══ Seed ═══
@@ -538,6 +754,7 @@ module.exports = {
   deleteRoutineItemPermanently,
   getTasksForDate,
   toggleTask,
+  recreateFromFollowup,
   seedIfEmpty,
   getSetting,
   setSetting,

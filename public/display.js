@@ -310,11 +310,42 @@ async function toggleTask(id, el) {
 
     const idx = tasks.findIndex(t => t.id === id);
     if (idx !== -1) tasks[idx] = updated;
+
+    // Completing a recreate-enabled follow-up asks whether to restart the
+    // original task/protocol. Show before updateProgress so the prompt wins
+    // over any "all done" celebration this same toggle might trigger.
+    if (updated.recreate_prompt) showRecreatePrompt(id, updated.recreate_prompt);
+
     updateProgress();
   } catch (err) {
     console.error('Failed to toggle task:', err);
     el.classList.toggle('completed');
   }
+}
+
+function showRecreatePrompt(taskId, prompt) {
+  const overlay = document.getElementById('recreate-prompt');
+  document.getElementById('recreate-icon').textContent = prompt.icon || '🔁';
+  document.getElementById('recreate-text').textContent = t('display.recreatePrompt', { title: prompt.title });
+  overlay.classList.add('active');
+
+  const yes = document.getElementById('recreate-yes');
+  const no = document.getElementById('recreate-no');
+  const close = () => {
+    overlay.classList.remove('active');
+    yes.onclick = null;
+    no.onclick = null;
+  };
+  no.onclick = close;
+  yes.onclick = async () => {
+    close();
+    try {
+      await fetch(`${API_BASE}/tasks/${taskId}/recreate`, { method: 'POST' });
+      await fetchTasks();
+    } catch (err) {
+      console.error('Failed to recreate task:', err);
+    }
+  };
 }
 
 // ═══ Progress ═══
@@ -349,6 +380,8 @@ function updateProgress() {
 }
 
 function showCelebration() {
+  // Don't stack the celebration under the recreate prompt.
+  if (document.getElementById('recreate-prompt').classList.contains('active')) return;
   const el = document.getElementById('celebration');
   spawnConfetti();
   el.classList.add('active');
