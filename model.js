@@ -269,7 +269,11 @@ function createModel(db) {
     const reached = serie.completed_count >= serie.total_count;
 
     if (reached && serie.status === 'active') {
-      // Fecha a cartela e oferece o "Comprar".
+      // Fecha a cartela. Apaga daily_tasks que sobraram DESMARCADAS: ao atingir
+      // o total, elas são excedentes (dia gerado durante uma reabertura, ou dia
+      // pulado) e apareceriam como tarefa "N/N" clicável morta. Sem isso, o
+      // ciclo desmarcar→remarcar deixava órfã na tela.
+      db.prepare('DELETE FROM daily_tasks WHERE series_id = ? AND completed = 0').run(seriesId);
       db.prepare("UPDATE series SET status = 'completed', completed_at = ? WHERE id = ?").run(nowIso(), seriesId);
       spawnFollowup(serie);
     } else if (!reached && serie.status === 'completed') {

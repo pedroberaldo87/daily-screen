@@ -43,10 +43,12 @@ test('jornada do 32/31: remarcar após reabrir conclui no total, NUNCA acima', (
   assert.equal(serie.completed_count, 2);
   assert.equal(serie.status, 'completed');
 
-  // tentar marcar a dose que ficou desmarcada → RECUSADO pelo teto do toggle (o 32/31)
-  m.toggleTask(ids[1]);
-  serie = db.prepare('SELECT * FROM series WHERE total_count = 2').get();
-  assert.equal(serie.completed_count, 2, 'completed_count NUNCA passa do total');
+  // ao fechar, NÃO sobra tarefa órfã desmarcada (a dose de 07 que reabriu).
+  // Era o bug do "31/31 clicável": geração livre deixava lixo ao refechar.
+  const pendentes = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id=? AND completed=0').get(serie.id).c;
+  assert.equal(pendentes, 0, 'cartela completa não deixa daily_task clicável órfã');
+  const totalTasks = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id=?').get(serie.id).c;
+  assert.equal(totalTasks, 2, 'exatamente N tasks, todas marcadas');
 });
 
 test('caixa com dia PULADO ainda completa as N doses (teto não trava a geração)', () => {
@@ -69,6 +71,10 @@ test('caixa com dia PULADO ainda completa as N doses (teto não trava a geraçã
   const serie = db.prepare('SELECT * FROM series WHERE id=?').get(sid);
   assert.equal(serie.completed_count, 3, 'completa as 3 doses mesmo tendo pulado um dia');
   assert.equal(serie.status, 'completed');
+  // ao fechar, o dia pulado (desmarcado) é descartado — cartela = N doses, não calendário
+  const pend = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id=? AND completed=0').get(sid).c;
+  assert.equal(pend, 0, 'dia pulado é limpo ao fechar a cartela');
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id=?').get(sid).c, 3, 'só as 3 doses marcadas restam');
 });
 
 test('toggleTask recusa marcar daily_task excedente (defense in depth p/ legado)', () => {
