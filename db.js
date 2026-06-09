@@ -74,6 +74,9 @@ function toggleTask(id) {
 function recreateFromFollowup(dailyTaskId, today) {
   return model.recreateFromFollowup(dailyTaskId, today || todayDate());
 }
+function deleteTaskItem(dailyTaskId) {
+  return model.deleteByDailyTask(dailyTaskId);
+}
 
 function getAllRoutineItems() {
   return model.getItemsView();
@@ -175,6 +178,7 @@ module.exports = {
   getTasksForDate,
   toggleTask,
   recreateFromFollowup,
+  deleteTaskItem,
   getCompletedSeries,
   seedIfEmpty,
   getSetting,

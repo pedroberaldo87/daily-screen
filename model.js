@@ -712,9 +712,25 @@ function createModel(db) {
     return { ok: true, type: 'item' };
   }
 
+  // ── Delete from the wall screen: remove the whole item/protocol behind a
+  // daily task (resolves daily_task → series → template, then reuses the admin
+  // delete: archives if it has completed history, hard-deletes otherwise). ──
+  function deleteByDailyTask(dailyId) {
+    const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
+    if (!task) return { ok: false, error: 'task not found' };
+    const serie = db.prepare('SELECT * FROM series WHERE id = ?').get(task.series_id);
+    if (!serie) return { ok: false, error: 'series not found' };
+    const tmpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(serie.template_id);
+    if (!tmpl) return { ok: false, error: 'template not found' };
+    if (tmpl.kind === 'protocol') deleteProtocol(tmpl.id);
+    else deleteItemPermanently(tmpl.id);
+    return { ok: true };
+  }
+
   return {
     db,
     createItem,
+    deleteByDailyTask,
     createProtocol,
     generateDailyTasks,
     concludeElapsedPhases,

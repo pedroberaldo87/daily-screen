@@ -3,6 +3,7 @@ const {
   getTasksForDate,
   toggleTask,
   recreateFromFollowup,
+  deleteTaskItem,
   getAllRoutineItems,
   createRoutineItem,
   updateRoutineItem,
@@ -56,6 +57,14 @@ router.post('/tasks/:id/toggle', (req, res) => {
 router.post('/tasks/:id/recreate', (req, res) => {
   const result = recreateFromFollowup(Number(req.params.id), todayDate());
   if (!result.ok) return res.status(400).json(result);
+  res.json(result);
+});
+
+// Remove the whole item/protocol behind a task — from the wall tablet (public,
+// like /toggle). Long-press + confirm on the screen guards against misclicks.
+router.delete('/tasks/:id', (req, res) => {
+  const result = deleteTaskItem(Number(req.params.id));
+  if (!result.ok) return res.status(404).json(result);
   res.json(result);
 });
 

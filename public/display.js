@@ -309,8 +309,52 @@ function createTaskElement(task) {
     </div>
   `;
 
-  el.addEventListener('click', () => toggleTask(task.id, el));
+  // Tap = toggle. Long-press (~600ms) = ask to remove from the routine.
+  // Pointer events cover both touch (wall tablet) and mouse (testing).
+  let pressTimer = null;
+  let longPressed = false;
+  const startPress = () => {
+    longPressed = false;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      showDeletePrompt(task);
+    }, 600);
+  };
+  const cancelPress = () => clearTimeout(pressTimer);
+  el.addEventListener('pointerdown', startPress);
+  el.addEventListener('pointerup', cancelPress);
+  el.addEventListener('pointerleave', cancelPress);
+  el.addEventListener('pointercancel', cancelPress);
+  el.addEventListener('click', () => {
+    if (longPressed) { longPressed = false; return; } // long-press handled it
+    toggleTask(task.id, el);
+  });
   return el;
+}
+
+function showDeletePrompt(task) {
+  const overlay = document.getElementById('delete-prompt');
+  document.getElementById('delete-text').textContent = t('display.deletePrompt', { title: task.title });
+  overlay.classList.add('active');
+  const yes = document.getElementById('delete-yes');
+  const no = document.getElementById('delete-no');
+  const close = () => {
+    overlay.classList.remove('active');
+    yes.onclick = null;
+    no.onclick = null;
+  };
+  no.onclick = close;
+  yes.onclick = async () => {
+    close();
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${task.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await fetchTasks();
+      fetchCompleted();
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+  };
 }
 
 // ═══ Toggle ═══
@@ -329,15 +373,16 @@ async function toggleTask(id, el) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const updated = await res.json();
 
-    const idx = tasks.findIndex(t => t.id === id);
-    if (idx !== -1) tasks[idx] = updated;
-
     // Completing a recreate-enabled follow-up asks whether to restart the
-    // original task/protocol. Show before updateProgress so the prompt wins
-    // over any "all done" celebration this same toggle might trigger.
+    // original task/protocol. Show before re-render so the prompt wins over
+    // any "all done" celebration this same toggle might trigger.
     if (updated.recreate_prompt) showRecreatePrompt(id, updated.recreate_prompt);
 
-    updateProgress();
+    // Re-fetch + redraw the whole list. A toggle changes more than the clicked
+    // row: the counter (X/N), and follow-ups that get spawned (box completed)
+    // or removed (box reopened). Without this the number froze and "Comprar"
+    // lingered as a ghost. The optimistic green above is just instant feedback.
+    await fetchTasks();
     fetchCompleted(); // a series may have just completed (or reopened)
   } catch (err) {
     console.error('Failed to toggle task:', err);

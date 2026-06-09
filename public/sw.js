@@ -1,4 +1,4 @@
-const CACHE_NAME = 'daily-screen-v13';
+const CACHE_NAME = 'daily-screen-v14';
 const SHELL_ASSETS = [
   '/',
   '/public/style.css',

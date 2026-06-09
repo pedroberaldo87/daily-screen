@@ -122,6 +122,18 @@
     </div>
   </div>
 
+  <!-- Delete confirmation overlay (long-press a task to remove it) -->
+  <div class="recreate-prompt" id="delete-prompt">
+    <div class="recreate-content">
+      <span class="recreate-icon">🗑️</span>
+      <p class="recreate-text" id="delete-text"></p>
+      <div class="recreate-actions">
+        <button type="button" class="recreate-btn recreate-no" id="delete-no" data-i18n="display.deleteNo">Cancelar</button>
+        <button type="button" class="recreate-btn recreate-yes" id="delete-yes" data-i18n="display.deleteYes">Remover</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Concluídos panel (completed series + protocols, on demand) -->
   <div class="completed-panel" id="completed-panel">
     <div class="completed-panel-inner">

@@ -260,3 +260,31 @@ test('alerta penúltima e última dose calculados na view', () => {
   v = m.getTasksView('2026-06-08').find((t) => t.title === 'Atentah');
   assert.equal(v.alert?.type, 'last', 'falta 1 → última');
 });
+
+// ── Deletar da tela principal (long-press → remover item inteiro) ──
+
+test('deleteByDailyTask sem histórico: apaga o item do banco e some da tela', () => {
+  const { db, m } = freshModel();
+  m.createItem({ title: 'Lixo', category: 'reminder' });
+  m.generateDailyTasks('2026-06-08');
+  const t = db.prepare("SELECT id FROM daily_tasks WHERE date='2026-06-08'").get();
+  assert.equal(m.deleteByDailyTask(t.id).ok, true);
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM templates').get().c, 0, 'template removido');
+  assert.equal(m.getTasksView('2026-06-08').length, 0, 'some da tela');
+});
+
+test('deleteByDailyTask com histórico: arquiva (preserva), some da tela', () => {
+  const { db, m } = freshModel();
+  m.createItem({ title: 'ComHist', category: 'reminder' });
+  m.generateDailyTasks('2026-06-08');
+  const t = db.prepare("SELECT id FROM daily_tasks WHERE date='2026-06-08'").get();
+  m.toggleTask(t.id); // marca → vira histórico
+  assert.equal(m.deleteByDailyTask(t.id).ok, true);
+  assert.equal(db.prepare('SELECT active FROM templates').get().active, 0, 'arquivado (active=0)');
+  assert.equal(m.getTasksView('2026-06-08').length, 0, 'some da tela');
+});
+
+test('deleteByDailyTask em tarefa inexistente → erro', () => {
+  const { m } = freshModel();
+  assert.equal(m.deleteByDailyTask(999).ok, false);
+});
