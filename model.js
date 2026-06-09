@@ -208,25 +208,43 @@ function createModel(db) {
     }
   }
 
-  // ── Derived counter: completed_count = completed daily_tasks of the series ──
+  // ════════════════════════════════════════════════════════════════════════
+  // CICLO DA CARTELA (count) — máquina de estados
+  //
+  // Uma cartela é uma `series` count. Estados e transições (tudo passa por
+  // reconcileCountCycle, o ÚNICO ponto que muda o status de uma cartela):
+  //
+  //   active ──(doses marcadas atingem total_count)──▶ completed (+ spawn "Comprar")
+  //   completed ──(desmarca abaixo do total)──▶ active (+ desfaz "Comprar" vazio)
+  //
+  // Invariantes garantidos aqui (antes estavam espalhados e se contradiziam):
+  //   • TETO só na MARCAÇÃO: toggleTask recusa marcar além de total_count. A
+  //     geração é livre — contar dias gerados travava a cartela no dia pulado.
+  //   • No máximo 1 cartela ATIVA por template count (ou ela, ou o "Comprar").
+  //   • 1 template de follow-up por origem, reusado entre ciclos (sem duplicar
+  //     "Comprar X"); no máx. 1 follow-up pendente por cartela.
+  // ════════════════════════════════════════════════════════════════════════
+
+  // Contador derivado: completed_count = daily_tasks marcadas da cartela.
   function recountSeries(seriesId) {
     const n = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id = ? AND completed = 1').get(seriesId).c;
     db.prepare('UPDATE series SET completed_count = ? WHERE id = ?').run(n, seriesId);
     return n;
   }
 
-  // ── Spawn the "buy X" follow-up when a count series completes ──
+  // Cria a tarefa "Comprar X" quando a cartela fecha. Idempotente: 1 follow-up
+  // pendente por cartela, 1 template de follow-up por origem (reusado).
   function spawnFollowup(serie) {
     const tmpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(serie.template_id);
     if (!tmpl || !tmpl.followup_title) return;
 
-    // Don't duplicate a pending follow-up for this exact series.
+    // Já existe um follow-up pendente desta cartela? não duplica.
     const existing = db.prepare(
       "SELECT 1 FROM series WHERE source_series_id = ? AND status = 'active' LIMIT 1"
     ).get(serie.id);
     if (existing) return;
 
-    // One follow-up template per source template (reused across cycles).
+    // Reusa o template de follow-up da origem; só cria na primeira vez.
     let fTmpl = db.prepare('SELECT * FROM templates WHERE recreate_template_id = ?').get(tmpl.id);
     if (!fTmpl) {
       const fId = db.prepare(`
@@ -244,18 +262,19 @@ function createModel(db) {
     spawnSeries(fTmpl.id, fPhase, { seq: nextSeq, source_series_id: serie.id });
   }
 
-  // ── Keep a count series' cycle consistent after any toggle (reversible) ──
-  function reconcileSeriesCycle(seriesId) {
+  // A máquina de estados. Chamada após cada recount (toggle/edição). Reversível.
+  function reconcileCountCycle(seriesId) {
     const serie = db.prepare('SELECT * FROM series WHERE id = ?').get(seriesId);
     if (!serie || serie.total_count == null) return;
     const reached = serie.completed_count >= serie.total_count;
 
     if (reached && serie.status === 'active') {
+      // Fecha a cartela e oferece o "Comprar".
       db.prepare("UPDATE series SET status = 'completed', completed_at = ? WHERE id = ?").run(nowIso(), seriesId);
       spawnFollowup(serie);
     } else if (!reached && serie.status === 'completed') {
+      // Reabriu (desmarcou): volta a ativa e desfaz o "Comprar" pendente vazio.
       db.prepare("UPDATE series SET status = 'active', completed_at = NULL WHERE id = ?").run(seriesId);
-      // Undo a still-pending follow-up this series spawned.
       const pending = db.prepare(
         "SELECT id FROM series WHERE source_series_id = ? AND status = 'active' AND completed_count = 0"
       ).all(seriesId);
@@ -274,6 +293,10 @@ function createModel(db) {
         if (s.end_date && date > s.end_date) continue;
         const weekdays = JSON.parse(s.weekdays || '[0,1,2,3,4,5,6]');
         if (!weekdays.includes(dayOfWeek)) continue;
+        // No ceiling here: an active count box still needs daily_tasks until its
+        // doses are all marked, even across skipped days. The ceiling lives in
+        // toggleTask (refuse marking beyond total_count) — counting generated
+        // days here would freeze a box whenever a dose day was skipped.
         insert.run(s.id, date);
       }
     });
@@ -333,13 +356,23 @@ function createModel(db) {
     const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(id);
     if (!task) return null;
     const newCompleted = task.completed ? 0 : 1;
+
+    // Ceiling (defense in depth): refuse to MARK a count series already at its
+    // total. Unmarking is always allowed. Guards against legacy excess tasks.
+    if (newCompleted) {
+      const serie = db.prepare('SELECT * FROM series WHERE id = ?').get(task.series_id);
+      if (serie && serie.total_count != null && serie.completed_count >= serie.total_count) {
+        const row = db.prepare(`${TASK_SELECT} WHERE dt.id = ?`).get(id);
+        return mapTaskRow(row, row.date);
+      }
+    }
     const completedAt = newCompleted ? nowIso() : null;
 
     db.transaction(() => {
       db.prepare('UPDATE daily_tasks SET completed = ?, completed_at = ? WHERE id = ?')
         .run(newCompleted, completedAt, id);
       recountSeries(task.series_id);
-      reconcileSeriesCycle(task.series_id);
+      reconcileCountCycle(task.series_id);
     })();
 
     const row = db.prepare(`${TASK_SELECT} WHERE dt.id = ?`).get(id);
@@ -533,7 +566,7 @@ function createModel(db) {
       if (data.end_date !== undefined) db.prepare("UPDATE series SET end_date=? WHERE template_id=? AND status='active'").run(norm(data.end_date), id);
       for (const s of db.prepare("SELECT id FROM series WHERE template_id=? AND status='active'").all(id)) {
         recountSeries(s.id);
-        reconcileSeriesCycle(s.id);
+        reconcileCountCycle(s.id);
       }
     })();
     return itemShape(db.prepare('SELECT * FROM templates WHERE id = ?').get(id));
@@ -656,10 +689,18 @@ function createModel(db) {
     if (!fTmpl || !fTmpl.recreate_template_id) return { ok: false, error: 'not a recreate follow-up' };
 
     const origId = fTmpl.recreate_template_id;
+    // Invariante "1 cartela ativa": se já há uma ativa do template original
+    // (ex.: clique duplo no "comprei"), não nasce uma segunda — só fecha o
+    // follow-up. A cartela vigente continua valendo.
+    const alreadyActive = db.prepare(
+      "SELECT 1 FROM series WHERE template_id = ? AND status = 'active' LIMIT 1"
+    ).get(origId);
     db.transaction(() => {
-      const phase = db.prepare('SELECT * FROM phases WHERE template_id = ? ORDER BY phase_order LIMIT 1').get(origId);
-      const nextSeq = (db.prepare('SELECT MAX(seq) m FROM series WHERE template_id = ?').get(origId).m || 0) + 1;
-      spawnSeries(origId, phase, { seq: nextSeq, start_date: today, end_date: null });
+      if (!alreadyActive) {
+        const phase = db.prepare('SELECT * FROM phases WHERE template_id = ? ORDER BY phase_order LIMIT 1').get(origId);
+        const nextSeq = (db.prepare('SELECT MAX(seq) m FROM series WHERE template_id = ?').get(origId).m || 0) + 1;
+        spawnSeries(origId, phase, { seq: nextSeq, start_date: today, end_date: null });
+      }
       // The follow-up series stays completed (drops out of generation).
       db.prepare("UPDATE series SET status = 'completed', completed_at = COALESCE(completed_at, ?) WHERE id = ?")
         .run(nowIso(), fu.id);
@@ -786,14 +827,10 @@ function migrate(db, today) {
       if (rest.length > 0) {
         const sid = mkSeries(seq++, rest, 'active', rest[0].date, null);
         repoint(rest.concat(pending), sid);
-      } else if (ri.active) {
-        // box closed exactly → a fresh empty current box (the "bought again" case)
-        const start = ri.cycle_start_date || today;
-        const sid = mkSeries(seq++, [], 'active', start, null);
-        repoint(pending, sid);
-      } else if (pending.length) {
-        // inactive with leftover blank days: attach to a trailing active-less series? drop blanks (no completed lost)
       }
+      // Box closed exactly (rest === 0): do NOT pre-create a fresh empty box.
+      // The user must go through the "Comprar" follow-up; the next box is born
+      // only via recreateFromFollowup. Pre-creating it was the "pula Comprar" bug.
     }
 
     function migrateProtocol(p) {

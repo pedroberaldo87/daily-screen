@@ -24,7 +24,7 @@ test('invariante: nenhum daily_task completado é perdido na migração', () => 
   assert.equal(after, before, 'histórico completo preservado');
 });
 
-test('Atentah: caixa velha vira série concluída com 31 dias + caixa nova zerada e ativa', () => {
+test('Atentah: caixa cheia migra para 1 concluída, SEM caixa nova ativa vazia', () => {
   const { db } = legacyDb();
   migrate(db, TODAY);
 
@@ -41,9 +41,8 @@ test('Atentah: caixa velha vira série concluída com 31 dias + caixa nova zerad
   const oldDays = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id = ? AND completed = 1').get(completed[0].id).c;
   assert.equal(oldDays, 31, 'os 31 dias ficam na caixa velha');
 
-  assert.equal(active.length, 1, 'uma caixa nova ativa');
-  assert.equal(active[0].completed_count, 0, 'caixa nova zerada');
-  assert.ok(active[0].seq > completed[0].seq, 'caixa nova tem seq maior');
+  // o bug era pré-criar uma caixa nova ativa vazia; a compra deve passar pelo "Comprar"
+  assert.equal(active.length, 0, 'nenhuma caixa nova ativa vazia pré-criada');
 });
 
 test('item simples vira template(simple) + série perpétua com seu histórico', () => {
