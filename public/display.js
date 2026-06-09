@@ -350,7 +350,6 @@ function showDeletePrompt(task) {
       const res = await fetch(`${API_BASE}/tasks/${task.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await fetchTasks();
-      fetchCompleted();
     } catch (err) {
       console.error('Failed to delete task:', err);
     }
@@ -383,7 +382,6 @@ async function toggleTask(id, el) {
     // or removed (box reopened). Without this the number froze and "Comprar"
     // lingered as a ghost. The optimistic green above is just instant feedback.
     await fetchTasks();
-    fetchCompleted(); // a series may have just completed (or reopened)
   } catch (err) {
     console.error('Failed to toggle task:', err);
     el.classList.toggle('completed');
@@ -415,69 +413,6 @@ function showRecreatePrompt(taskId, prompt) {
   };
 }
 
-// ═══ Concluídos (completed series + protocols) ═══
-
-let completedSeries = [];
-
-async function fetchCompleted() {
-  try {
-    const res = await fetch(`${API_BASE}/completed`);
-    if (!res.ok) return;
-    completedSeries = await res.json();
-    const btn = document.getElementById('completed-toggle');
-    document.getElementById('completed-count').textContent = completedSeries.length;
-    btn.hidden = completedSeries.length === 0;
-  } catch (err) {
-    // Silent — the panel is non-critical; the tablet must not break over it.
-  }
-}
-
-function fmtDayMonth(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString(getLocale(), { day: '2-digit', month: 'short' });
-}
-
-function renderCompleted() {
-  const list = document.getElementById('completed-list');
-  const empty = document.getElementById('completed-empty');
-  list.innerHTML = '';
-  if (!completedSeries.length) {
-    empty.hidden = false;
-    return;
-  }
-  empty.hidden = true;
-  for (const s of completedSeries) {
-    const item = document.createElement('div');
-    item.className = `completed-item ${escapeHtml(s.category || '')}`;
-    const range = (s.start_date && s.end_date)
-      ? `${fmtDayMonth(s.start_date)} – ${fmtDayMonth(s.end_date)}`
-      : '';
-    const count = (s.kind !== 'protocol' && s.total_count)
-      ? `${s.completed_count}/${s.total_count}`
-      : '';
-    const kindLabel = s.kind === 'protocol' ? t('display.completedProtocol') : '';
-    const parts = [range, count || kindLabel].filter(Boolean);
-    item.innerHTML = `
-      <span class="completed-item-icon">${escapeHtml(s.icon || '✅')}</span>
-      <div class="completed-item-body">
-        <span class="completed-item-title">${escapeHtml(s.title)}</span>
-        <span class="completed-item-sub">${escapeHtml(parts.join(' · '))}</span>
-      </div>
-      <span class="completed-item-check">✓</span>
-    `;
-    list.appendChild(item);
-  }
-}
-
-function openCompletedPanel() {
-  renderCompleted();
-  document.getElementById('completed-panel').classList.add('active');
-}
-
-function closeCompletedPanel() {
-  document.getElementById('completed-panel').classList.remove('active');
-}
 
 // ═══ Progress ═══
 
@@ -611,7 +546,6 @@ async function loadSettings() {
   updateTodayButton();
   fetchTasks(true);
   fetchWeather();
-  fetchCompleted();
 })();
 
 // Date navigation
@@ -624,13 +558,6 @@ document.querySelectorAll('.period-nav-btn').forEach(btn => {
   btn.addEventListener('click', () => setPeriod(btn.dataset.period));
 });
 
-// Concluídos panel
-document.getElementById('completed-toggle').addEventListener('click', openCompletedPanel);
-document.getElementById('completed-close').addEventListener('click', closeCompletedPanel);
-document.getElementById('completed-panel').addEventListener('click', (e) => {
-  if (e.target.id === 'completed-panel') closeCompletedPanel();
-});
-
 // Idle auto-reset
 document.addEventListener('click', resetIdleTimer);
 document.addEventListener('touchstart', resetIdleTimer);
@@ -640,6 +567,5 @@ setInterval(updateClock, 1000);
 setInterval(updateGreeting, 60 * 1000);
 setInterval(updateDate, 60 * 1000);
 setInterval(fetchTasks, POLL_INTERVAL);
-setInterval(fetchCompleted, POLL_INTERVAL);
 setInterval(fetchWeather, WEATHER_INTERVAL);
 setInterval(loadSettings, POLL_INTERVAL); // Sync font & language changes

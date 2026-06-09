@@ -1441,7 +1441,35 @@ setupPeriodButtons();
 setupFontSliders();
 setupPeriodSettingsAutoSave();
 
+// ═══ Concluídos (movido do tablet pra cá) ═══
+async function loadCompleted() {
+  const container = document.getElementById('completed-list-admin');
+  if (!container) return;
+  try {
+    const res = await fetch(`${API}/completed`);
+    if (!res.ok) return;
+    const list = await res.json();
+    if (!list.length) {
+      container.innerHTML = `<p style="opacity:.6">${escapeHtml(t('display.completedEmpty') || 'Nada concluído ainda.')}</p>`;
+      return;
+    }
+    container.innerHTML = list.map((s) => {
+      const range = (s.start_date && s.end_date) ? `${s.start_date} – ${s.end_date}` : '';
+      const count = (s.kind !== 'protocol' && s.total_count) ? `${s.completed_count}/${s.total_count}` : '';
+      const sub = [range, count].filter(Boolean).join(' · ');
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <span style="font-size:1.2rem">${escapeHtml(s.icon || '✅')}</span>
+        <span style="flex:1">${escapeHtml(s.title)}</span>
+        <span style="opacity:.6;font-size:.85rem">${escapeHtml(sub)}</span>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    // silent — non-critical panel
+  }
+}
+
 (async () => {
   await loadSettings();
   loadItems();
+  loadCompleted();
 })();

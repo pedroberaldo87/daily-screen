@@ -288,3 +288,26 @@ test('deleteByDailyTask em tarefa inexistente → erro', () => {
   const { m } = freshModel();
   assert.equal(m.deleteByDailyTask(999).ok, false);
 });
+
+// ── Contador progressivo por dia (não o total global repetido) ──
+
+test('contador mostra doses até o dia, progressivo (não repete o total)', () => {
+  const { db, m } = freshModel();
+  m.createItem({ title: 'Atentah', category: 'medication', total_count: 5 });
+  const days = ['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05'];
+  for (const d of days) {
+    m.generateDailyTasks(d);
+    m.toggleTask(db.prepare('SELECT id FROM daily_tasks WHERE date=?').get(d).id);
+  }
+  const cc = (d) => m.getTasksView(d).find((t) => t.title === 'Atentah').completed_count;
+  assert.equal(cc('2026-06-01'), 1, 'dia 1 → 1/5');
+  assert.equal(cc('2026-06-03'), 3, 'dia 3 → 3/5');
+  assert.equal(cc('2026-06-05'), 5, 'dia 5 → 5/5');
+
+  // desmarca 05 e 04 → cada dia reflete as doses até ali
+  m.toggleTask(db.prepare("SELECT id FROM daily_tasks WHERE date='2026-06-05'").get().id);
+  m.toggleTask(db.prepare("SELECT id FROM daily_tasks WHERE date='2026-06-04'").get().id);
+  assert.equal(cc('2026-06-03'), 3, 'dia 3 segue 3');
+  assert.equal(cc('2026-06-04'), 3, 'dia 4 = doses até ali (1,2,3)');
+  assert.equal(cc('2026-06-05'), 3, 'dia 5 = doses até ali (1,2,3)');
+});

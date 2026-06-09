@@ -46,11 +46,6 @@
         <button class="date-nav-btn" id="date-next" aria-label="Próximo dia" data-i18n-aria="display.nextDay">›</button>
       </div>
 
-      <button class="completed-toggle" id="completed-toggle" hidden>
-        <span class="completed-toggle-icon">🏁</span>
-        <span class="completed-toggle-label" data-i18n="display.completed">Concluídos</span>
-        <span class="completed-toggle-count" id="completed-count">0</span>
-      </button>
     </aside>
 
     <!-- Task columns — THE HERO -->
@@ -134,21 +129,6 @@
     </div>
   </div>
 
-  <!-- Concluídos panel (completed series + protocols, on demand) -->
-  <div class="completed-panel" id="completed-panel">
-    <div class="completed-panel-inner">
-      <header class="completed-panel-head">
-        <h2 class="completed-panel-title">
-          <span class="completed-panel-icon">🏁</span>
-          <span data-i18n="display.completedTitle">Concluídos</span>
-        </h2>
-        <button type="button" class="completed-close" id="completed-close" aria-label="Fechar" data-i18n-aria="display.close">×</button>
-      </header>
-      <div class="completed-list" id="completed-list"></div>
-      <p class="completed-empty" id="completed-empty" data-i18n="display.completedEmpty" hidden>Nada concluído ainda.</p>
-    </div>
-  </div>
-
   <script src="/public/utils.js"></script>
   <script src="/public/i18n.js"></script>
   <script src="/public/display.js"></script>
@@ -166,7 +146,13 @@
         reloadingForSW = true;
         location.reload();
       });
-      navigator.serviceWorker.register('/public/sw.js').then((reg) => reg.update());
+      navigator.serviceWorker.register('/public/sw.js').then((reg) => {
+        reg.update();
+        // The tablet stays open 24/7 and never navigates, so the browser rarely
+        // re-checks the SW on its own. Poll for updates so new versions roll out
+        // automatically (then controllerchange reloads once) — no manual reload.
+        setInterval(() => reg.update(), 30 * 60 * 1000);
+      });
     }
   </script>
 </body>

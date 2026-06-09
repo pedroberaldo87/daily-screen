@@ -307,16 +307,30 @@ function createModel(db) {
     tx();
   }
 
+  // Doses marked up to (and including) a given day — the "dose number" shown on
+  // that date. Counting per-date (not the series' global total) makes the
+  // counter progress day by day (01→1/5, 05→5/5) instead of repeating the
+  // same number on every day.
+  function countUpTo(seriesId, date) {
+    return db.prepare(
+      'SELECT COUNT(*) c FROM daily_tasks WHERE series_id = ? AND completed = 1 AND date <= ?'
+    ).get(seriesId, date).c;
+  }
+
   // ── Map a joined daily_task+series+template row to the frozen task shape ──
   function mapTaskRow(r, date) {
     let alert = null;
     const isProto = r.tkind === 'protocol';
+    // Count series: the displayed counter is cumulative up to this day.
+    const shownCount = (!isProto && r.total_count != null)
+      ? countUpTo(r.series_id, date)
+      : r.completed_count;
     if (isProto && r.end_date) {
       const daysLeft = dayCount(date, r.end_date) - 1;
       if (daysLeft === 0 && r.alert_last) alert = { type: 'last', message: r.alert_last };
       else if (daysLeft === 1 && r.alert_penultimate) alert = { type: 'penultimate', message: r.alert_penultimate };
     } else if (r.total_count) {
-      const remaining = r.total_count - r.completed_count;
+      const remaining = r.total_count - shownCount;
       if (remaining === 1 && r.alert_last) alert = { type: 'last', message: r.alert_last };
       else if (remaining === 2 && r.alert_penultimate) alert = { type: 'penultimate', message: r.alert_penultimate };
     }
@@ -333,7 +347,7 @@ function createModel(db) {
       sort_order: r.sort_order,
       periods: r.periods,
       total_count: r.total_count,
-      completed_count: r.completed_count,
+      completed_count: shownCount,
       alert_penultimate: r.alert_penultimate,
       alert_last: r.alert_last,
       protocol_id: isProto ? r.template_id : null,
