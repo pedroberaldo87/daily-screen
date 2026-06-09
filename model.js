@@ -448,11 +448,21 @@ function createModel(db) {
       end_date: cur ? cur.end_date : null,
       created_at: t.created_at,
       protocol_id: null,
+      // Count items expose their cartelas (series) so the admin can list each
+      // one nested under the template (active first, then completed history).
+      series: t.kind === 'count'
+        ? db.prepare(
+            `SELECT id, seq, total_count, completed_count, status, start_date, end_date
+             FROM series WHERE template_id = ? ORDER BY (status='active') DESC, seq DESC`
+          ).all(t.id)
+        : [],
     };
   }
   function getItemsView() {
+    // Exclude the auto-generated "Comprar X" follow-up templates — they are part
+    // of a count item's cycle, not standalone items the user manages.
     const tmpls = db.prepare(
-      "SELECT * FROM templates WHERE kind IN ('simple','count') ORDER BY active DESC, sort_order, id"
+      "SELECT * FROM templates WHERE kind IN ('simple','count') AND recreate_template_id IS NULL ORDER BY active DESC, sort_order, id"
     ).all();
     return tmpls.map(itemShape);
   }

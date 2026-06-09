@@ -52,7 +52,6 @@ function buildItemCard(item) {
   let periods = [];
   try { periods = JSON.parse(item.periods || '[]'); } catch {}
 
-  const countInfo = item.total_count ? `${item.completed_count}/${item.total_count}` : '';
   const catLabel = t(CATEGORY_KEYS[item.category] || '') || item.category;
 
   // Window pill: shown when the standalone item has a start/end date (antibiotic
@@ -82,8 +81,11 @@ function buildItemCard(item) {
     statusIcons.push(`<span class="status-icon" title="${escapeHtml(t('admin.followUpBadge'))}: ${escapeHtml(item.followup_title)}"><span class="si-emoji">↻</span><span class="si-label">${escapeHtml(t('admin.followUpShort'))}</span></span>`);
   }
 
+  const wrap = document.createElement('div');
+  wrap.className = 'item-group';
+
   const card = document.createElement('div');
-  card.className = `item-card${item.active ? '' : ' inactive'}`;
+  card.className = `item-card${item.active ? '' : ' inactive'}${(item.series && item.series.length) ? ' has-series' : ''}`;
   card.dataset.id = item.id;
   card.innerHTML = `
     <span class="item-icon item-icon-edit" data-action="edit-icon" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(item.icon)}</span>
@@ -94,7 +96,6 @@ function buildItemCard(item) {
         <span class="meta-pill weekdays-pill" data-action="edit-weekdays" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(weekdaysSummary(weekdays))}</span>
         <span class="meta-pill periods-pill" data-action="edit-periods" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(periodsSummary(periods))}</span>
         ${windowPillHtml}
-        ${countInfo ? `<span class="count-badge">${countInfo}</span>` : ''}
         ${statusIcons.join('')}
         ${!item.active ? `<em style="color:var(--accent-danger)">${escapeHtml(t('admin.deactivated'))}</em>` : ''}
       </div>
@@ -108,7 +109,29 @@ function buildItemCard(item) {
       <button class="btn btn-sm btn-danger" data-delete-id="${item.id}" data-delete-title="${escapeHtml(item.title)}">${escapeHtml(t('common.delete'))}</button>
     </div>
   `;
-  return card;
+  wrap.appendChild(card);
+
+  // Cartelas (séries) nested under a count item — active first, then history.
+  if (item.series && item.series.length) {
+    const block = document.createElement('div');
+    block.className = 'item-series';
+    block.innerHTML = '<div class="series-head">Cartelas</div>' + item.series.map((s) => {
+      const active = s.status === 'active';
+      const range = (s.start_date && s.end_date)
+        ? `${formatDate(s.start_date)} – ${formatDate(s.end_date)}`
+        : (s.start_date ? `desde ${formatDate(s.start_date)}` : '');
+      const name = active ? 'Cartela atual' : `Cartela #${s.seq}`;
+      return `<div class="serie-row">
+        <span class="serie-dot ${active ? 'dot-active' : 'dot-done'}"></span>
+        <span class="serie-name">${escapeHtml(name)}</span>
+        <span class="serie-meta">${escapeHtml(range)}</span>
+        <span class="serie-tag ${active ? 'tag-active' : 'tag-done'}">${active ? 'ativa' : 'concluída'}</span>
+        <span class="serie-count ${active ? 'active' : ''}">${s.completed_count}/${s.total_count}</span>
+      </div>`;
+    }).join('');
+    wrap.appendChild(block);
+  }
+  return wrap;
 }
 
 function renderItems(items, protocols = []) {
@@ -1441,35 +1464,7 @@ setupPeriodButtons();
 setupFontSliders();
 setupPeriodSettingsAutoSave();
 
-// ═══ Concluídos (movido do tablet pra cá) ═══
-async function loadCompleted() {
-  const container = document.getElementById('completed-list-admin');
-  if (!container) return;
-  try {
-    const res = await fetch(`${API}/completed`);
-    if (!res.ok) return;
-    const list = await res.json();
-    if (!list.length) {
-      container.innerHTML = `<p style="opacity:.6">${escapeHtml(t('display.completedEmpty') || 'Nada concluído ainda.')}</p>`;
-      return;
-    }
-    container.innerHTML = list.map((s) => {
-      const range = (s.start_date && s.end_date) ? `${s.start_date} – ${s.end_date}` : '';
-      const count = (s.kind !== 'protocol' && s.total_count) ? `${s.completed_count}/${s.total_count}` : '';
-      const sub = [range, count].filter(Boolean).join(' · ');
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid rgba(255,255,255,0.08)">
-        <span style="font-size:1.2rem">${escapeHtml(s.icon || '✅')}</span>
-        <span style="flex:1">${escapeHtml(s.title)}</span>
-        <span style="opacity:.6;font-size:.85rem">${escapeHtml(sub)}</span>
-      </div>`;
-    }).join('');
-  } catch (err) {
-    // silent — non-critical panel
-  }
-}
-
 (async () => {
   await loadSettings();
   loadItems();
-  loadCompleted();
 })();

@@ -289,6 +289,34 @@ test('deleteByDailyTask em tarefa inexistente → erro', () => {
   assert.equal(m.deleteByDailyTask(999).ok, false);
 });
 
+// ── Admin: template expõe suas cartelas (séries) e oculta follow-ups ──
+
+test('getItemsView: template count traz suas cartelas; follow-up não vira item', () => {
+  const { db, m } = freshModel();
+  m.createItem({
+    title: 'Atentah', category: 'medication', total_count: 2,
+    followup_title: 'Comprar Atentah', followup_category: 'reminder', followup_icon: '🛒', followup_recreate: 1,
+  });
+  for (const d of ['2026-06-06', '2026-06-07']) {
+    m.generateDailyTasks(d);
+    m.toggleTask(db.prepare('SELECT id FROM daily_tasks WHERE date=?').get(d).id);
+  }
+  const items = m.getItemsView();
+  assert.equal(items.some((i) => i.title === 'Comprar Atentah'), false, 'follow-up oculto da lista de itens');
+  const atentah = items.find((i) => i.title === 'Atentah');
+  assert.ok(Array.isArray(atentah.series), 'count expõe series');
+  assert.equal(atentah.series.length, 1, 'uma cartela (a concluída)');
+  assert.equal(atentah.series[0].status, 'completed');
+  assert.equal(atentah.series[0].completed_count, 2);
+});
+
+test('getItemsView: item simples não traz cartelas', () => {
+  const { m } = freshModel();
+  m.createItem({ title: 'Ritalina', category: 'medication' });
+  const it = m.getItemsView().find((i) => i.title === 'Ritalina');
+  assert.deepEqual(it.series, [], 'simples sem bloco de cartelas');
+});
+
 // ── Contador progressivo por dia (não o total global repetido) ──
 
 test('contador mostra doses até o dia, progressivo (não repete o total)', () => {

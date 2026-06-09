@@ -212,6 +212,36 @@
     }
     .item-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
+    /* Cartelas (séries) aninhadas sob um item count */
+    .item-group { margin-bottom: 6px; }
+    .item-group .item-card { margin-bottom: 0; }
+    .item-card.has-series { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .item-series {
+      border: 1px solid var(--border); border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+      background: rgba(0,0,0,0.16); padding: 4px 0 6px;
+    }
+    .series-head {
+      color: var(--text-muted); font-size: 0.64rem; text-transform: uppercase;
+      letter-spacing: 0.06em; padding: 6px 16px 2px 26px;
+    }
+    .serie-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 16px 7px 26px; font-size: 0.82rem;
+      border-top: 1px dashed rgba(255,255,255,0.06);
+    }
+    .series-head + .serie-row { border-top: none; }
+    .serie-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-active { background: var(--accent-success, #5ec26a); }
+    .dot-done { background: var(--text-muted); }
+    .serie-name { font-weight: 500; }
+    .serie-meta { color: var(--text-muted); font-size: 0.74rem; flex: 1; }
+    .serie-tag { font-size: 0.64rem; border-radius: 5px; padding: 1px 7px; }
+    .tag-active { background: rgba(94,194,106,0.16); color: var(--accent-success, #5ec26a); }
+    .tag-done { background: rgba(139,143,153,0.16); color: var(--text-muted); }
+    .serie-count { font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+    .serie-count.active { color: var(--accent-success, #5ec26a); font-weight: 600; }
+
     .badge {
       display: inline-block; padding: 2px 7px; border-radius: 4px;
       font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
@@ -1172,12 +1202,6 @@
   <div class="section">
     <div class="section-title" data-i18n="admin.routineItems">Itens da rotina</div>
     <div id="items-list"></div>
-  </div>
-
-  <!-- ═══ Concluídos (movido do tablet pra cá) ═══ -->
-  <div class="section">
-    <div class="section-title" data-i18n="display.completedTitle">Concluídos</div>
-    <div id="completed-list-admin"></div>
   </div>
 
   <div class="display-link">
