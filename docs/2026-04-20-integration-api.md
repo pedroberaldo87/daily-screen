@@ -19,6 +19,7 @@ The **Integration API** is a parallel, token-authenticated surface at `/integrat
 - Read/update **settings** (weather location, fonts, periods, language)
 - Read **weather** (read-only passthrough)
 - Convert a standalone item into the first phase of a new protocol
+- Trigger the follow-up recreate flow ("Comprei") and remove a task's backing item/protocol
 
 ### Mental model
 
@@ -90,6 +91,9 @@ Authorization: Bearer dsk_live_XKxOVTHyu7BJEMN_ytYZ7UfY1YSc8hTqiT7QuXgrRgo
 
 ### Storage
 The server only stores a SHA-256 hash of the token plus the first 12 characters (for display in the admin UI). The plaintext is shown **once on creation and never again**. If lost, revoke and recreate.
+
+### Access model
+Tokens are currently **full-access**: any valid, non-revoked, non-expired token can call any `/integration/v1/*` endpoint. There are no read-only tokens or per-resource scopes yet, so treat the key like an admin password for the integration surface.
 
 ### Auth failures
 | Status | Body | Meaning |
@@ -213,6 +217,7 @@ A per-date instance of an item.
 type DailyTask = {
   id: number;                         // daily_tasks.id
   routine_item_id: number;
+  series_id: number;                  // same entity as routine_item_id in v1 payloads
   date: string;                       // "YYYY-MM-DD" in weather_tz
   completed: 0 | 1;
   completed_at: string | null;        // SQLite datetime
@@ -258,8 +263,6 @@ Returns server info + echoes the token identity.
 }
 ```
 
----
-
 ### Tasks
 
 #### `GET /tasks?date=YYYY-MM-DD`
@@ -295,6 +298,12 @@ curl -H "Authorization: Bearer $DS_TOKEN" \
   "https://daily.aiworks.app.br/integration/v1/tasks?date=2026-04-20"
 ```
 
+#### `GET /tasks/:id`
+Returns one daily task by id.
+
+**Response 200:** the task object.
+**Errors:** `404` if task id doesn't exist.
+
 #### `POST /tasks/:id/toggle`
 Toggles the `completed` flag on a single daily task. Returns the updated task. If the task's item has a `total_count` and it was just reached, the followup mechanism triggers server-side (creates a replacement item with the followup fields).
 
@@ -306,6 +315,39 @@ Toggles the `completed` flag on a single daily task. Returns the updated task. I
 curl -X POST -H "Authorization: Bearer $DS_TOKEN" \
   https://daily.aiworks.app.br/integration/v1/tasks/123/toggle
 ```
+
+#### `PUT /tasks/:id`
+Idempotent completion setter for agents. Use this instead of `toggle` when Hermes already knows the desired state and should avoid accidental double flips.
+
+**Body:**
+```json
+{ "completed": true }
+```
+
+Accepted values for `completed`: `true`, `false`, `1`, `0`.
+
+**Response 200:** the updated task object.
+**Errors:** `400` if `completed` is missing/invalid; `404` if task id doesn't exist.
+
+#### `POST /tasks/:id/recreate`
+Executes the "yes, I bought it / start a new box" flow for a follow-up task created from a count item with `followup_recreate=1`.
+
+**Response 200:**
+```json
+{ "ok": true, "type": "item" }
+```
+
+**Errors:** `400` if the task is not a recreate follow-up; `404` is not used here because the model returns a domain error payload.
+
+#### `DELETE /tasks/:id`
+Deletes the whole item/protocol behind the task, mirroring the wall-tablet long-press delete flow.
+
+**Response 200:**
+```json
+{ "ok": true }
+```
+
+**Errors:** `404` if the task or its backing entities no longer exist.
 
 ---
 

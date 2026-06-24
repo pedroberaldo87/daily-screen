@@ -71,6 +71,12 @@ function getTasksForDate(date) {
 function toggleTask(id) {
   return model.toggleTask(id);
 }
+function getTask(id) {
+  return model.getTaskById(id);
+}
+function setTaskCompleted(id, completed) {
+  return model.setTaskCompleted(id, completed);
+}
 function recreateFromFollowup(dailyTaskId, today) {
   return model.recreateFromFollowup(dailyTaskId, today || todayDate());
 }
@@ -176,7 +182,9 @@ module.exports = {
   deactivateRoutineItem,
   deleteRoutineItemPermanently,
   getTasksForDate,
+  getTask,
   toggleTask,
+  setTaskCompleted,
   recreateFromFollowup,
   deleteTaskItem,
   getCompletedSeries,

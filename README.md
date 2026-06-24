@@ -207,7 +207,7 @@ All endpoints are prefixed with `/api`.
 
 ### Integration API (token-authenticated)
 
-For external agents (scripts, cron jobs, other LLM-driven tools), there's a parallel token-authenticated surface at `/integration/v1/*` with full CRUD coverage of items, protocols, tasks, and settings. Tokens are managed in the admin panel under **Tokens** (top nav).
+For external agents (scripts, cron jobs, other LLM-driven tools), there's a parallel token-authenticated surface at `/integration/v1/*` with full CRUD coverage of items, protocols, tasks, and settings. Tokens are managed in the admin panel under **Tokens** (top nav). A valid token currently has full access to the whole integration surface (no per-token scopes yet).
 
 See [`docs/2026-04-20-integration-api.md`](docs/2026-04-20-integration-api.md) for the complete guide — includes data models, endpoint reference with curl + Node.js examples, gotchas, and a ready-to-copy skill template for Claude Code.
 

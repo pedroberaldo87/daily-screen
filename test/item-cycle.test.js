@@ -143,3 +143,20 @@ test('recreate cria NOVA série seq+1 zerada; a velha continua concluída com hi
   assert.equal(fresh.completed_count, 0, 'caixa nova começa zerada');
   assert.notEqual(old.id, fresh.id, 'são entidades distintas (ids diferentes)');
 });
+
+test('setTaskCompleted é idempotente e não alterna indevidamente o estado', () => {
+  const { db, m } = freshModel();
+  m.createItem({ title: 'Ritalina', category: 'medication', icon: '💊' });
+
+  m.generateDailyTasks('2026-06-08');
+  const taskId = db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-08'").get().id;
+
+  const first = m.setTaskCompleted(taskId, true);
+  assert.equal(first.completed, 1);
+
+  const second = m.setTaskCompleted(taskId, true);
+  assert.equal(second.completed, 1, 'segunda chamada com mesmo estado mantém completed=1');
+
+  const third = m.setTaskCompleted(taskId, false);
+  assert.equal(third.completed, 0);
+});

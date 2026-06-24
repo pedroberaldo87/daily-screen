@@ -4,7 +4,11 @@ const pkg = require('../package.json');
 
 const {
   getTasksForDate,
+  getTask,
   toggleTask,
+  setTaskCompleted,
+  recreateFromFollowup,
+  deleteTaskItem,
   getAllRoutineItems,
   createRoutineItem,
   updateRoutineItem,
@@ -92,10 +96,38 @@ router.get('/tasks', (req, res) => {
   res.json(getTasksForDate(date));
 });
 
+router.get('/tasks/:id', (req, res) => {
+  const task = getTask(Number(req.params.id));
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  res.json(task);
+});
+
 router.post('/tasks/:id/toggle', (req, res) => {
   const task = toggleTask(Number(req.params.id));
   if (!task) return res.status(404).json({ error: 'Task not found' });
   res.json(task);
+});
+
+router.put('/tasks/:id', (req, res) => {
+  const { completed } = req.body || {};
+  if (completed !== true && completed !== false && completed !== 1 && completed !== 0) {
+    return res.status(400).json({ error: 'completed must be boolean' });
+  }
+  const task = setTaskCompleted(Number(req.params.id), completed);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  res.json(task);
+});
+
+router.post('/tasks/:id/recreate', (req, res) => {
+  const result = recreateFromFollowup(Number(req.params.id), todayDate());
+  if (!result.ok) return res.status(400).json(result);
+  res.json(result);
+});
+
+router.delete('/tasks/:id', (req, res) => {
+  const result = deleteTaskItem(Number(req.params.id));
+  if (!result.ok) return res.status(404).json(result);
+  res.json(result);
 });
 
 // Completed series (boxes + protocol phases), newest first.

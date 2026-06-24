@@ -707,6 +707,16 @@ function createModel(db) {
     return row ? mapTaskRow(row, row.date) : null;
   }
 
+  // Idempotent task completion setter for external integrations. Reuses the
+  // toggle path so recount/reconcile/recreate_prompt semantics stay identical.
+  function setTaskCompleted(dailyId, completed) {
+    const current = db.prepare('SELECT completed FROM daily_tasks WHERE id = ?').get(dailyId);
+    if (!current) return null;
+    const wantCompleted = completed === true || completed === 1;
+    if (!!current.completed === wantCompleted) return getTaskById(dailyId);
+    return toggleTask(dailyId);
+  }
+
   // ── "Comprei": start a brand-new series of the original template ──
   function recreateFromFollowup(dailyTaskId, today) {
     const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyTaskId);
@@ -764,6 +774,7 @@ function createModel(db) {
     // views (frozen shapes)
     getTasksView,
     getTaskById,
+    setTaskCompleted,
     getItemsView,
     getProtocolsView,
     getProtocolView,
