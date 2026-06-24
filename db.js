@@ -32,6 +32,19 @@ db.exec(`
     expires_at TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
+
+  CREATE TABLE IF NOT EXISTS api_idempotency_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_id INTEGER NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    status_code INTEGER NOT NULL,
+    response_body TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(token_id, method, path, idempotency_key)
+  );
 `);
 
 // ═══ Settings ═══
@@ -87,6 +100,9 @@ function deleteTaskItem(dailyTaskId) {
 function getAllRoutineItems() {
   return model.getItemsView();
 }
+function getRoutineItem(id) {
+  return model.getItemView(id);
+}
 function getRoutineItems() {
   return model.getItemsView().filter((i) => i.active);
 }
@@ -124,6 +140,15 @@ function deleteProtocol(id) {
 
 function getCompletedSeries() {
   return model.getCompletedView();
+}
+function getHistory(filters) {
+  return model.getHistoryView(filters);
+}
+function getItemAdherence(filters) {
+  return model.getItemAdherence(filters);
+}
+function getAdherenceSummary(filters) {
+  return model.getAdherenceSummary(filters);
 }
 
 // ═══ Seed (default items on a fresh install) ═══
@@ -173,10 +198,27 @@ function deleteApiToken(id) {
   return result.changes > 0;
 }
 
+function getApiIdempotencyKey({ tokenId, method, path, idempotencyKey }) {
+  const row = db.prepare(`
+    SELECT request_hash, status_code, response_body
+    FROM api_idempotency_keys
+    WHERE token_id = ? AND method = ? AND path = ? AND idempotency_key = ?
+  `).get(tokenId, method, path, idempotencyKey);
+  return row ? { ...row, response_body: JSON.parse(row.response_body) } : null;
+}
+function saveApiIdempotencyKey({ tokenId, method, path, idempotencyKey, requestHash, statusCode, responseBody }) {
+  db.prepare(`
+    INSERT INTO api_idempotency_keys
+      (token_id, method, path, idempotency_key, request_hash, status_code, response_body)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(tokenId, method, path, idempotencyKey, requestHash, statusCode, JSON.stringify(responseBody));
+}
+
 module.exports = {
   db,
   getRoutineItems,
   getAllRoutineItems,
+  getRoutineItem,
   createRoutineItem,
   updateRoutineItem,
   deactivateRoutineItem,
@@ -188,6 +230,9 @@ module.exports = {
   recreateFromFollowup,
   deleteTaskItem,
   getCompletedSeries,
+  getHistory,
+  getItemAdherence,
+  getAdherenceSummary,
   seedIfEmpty,
   getSetting,
   setSetting,
@@ -204,4 +249,6 @@ module.exports = {
   touchApiToken,
   revokeApiToken,
   deleteApiToken,
+  getApiIdempotencyKey,
+  saveApiIdempotencyKey,
 };

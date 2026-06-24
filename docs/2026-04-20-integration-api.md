@@ -3,7 +3,7 @@
 **Version:** 1.0
 **Date:** 2026-04-20
 **Base URL:** `https://daily.aiworks.app.br/integration/v1`
-**Audience:** External agents (e.g., Claude Code instances, scripts, cron jobs) that need programmatic CRUD access to items, protocols, daily tasks, and settings.
+**Audience:** External agents (e.g., Claude Code instances, scripts, cron jobs) that need programmatic CRUD access to items, protocols, daily tasks, settings, and adherence/history analytics.
 
 ---
 
@@ -15,30 +15,22 @@ The **Integration API** is a parallel, token-authenticated surface at `/integrat
 
 - List/create/update/delete **items**
 - List/create/update/delete **protocols** (with phases)
-- Read/toggle **daily tasks**
+- Read/toggle/update **daily tasks**
 - Read/update **settings** (weather location, fonts, periods, language)
 - Read **weather** (read-only passthrough)
 - Convert a standalone item into the first phase of a new protocol
 - Trigger the follow-up recreate flow ("Comprei") and remove a task's backing item/protocol
+- Read **history** and **adherence** summaries without inferring them client-side
 
 ### Mental model
 
 ```
-Protocol (e.g. "Ritalina taper")
-  ├─ Phase 1 (routine_item) — 1 tablet/day, days 1–30
-  ├─ Phase 2 (routine_item) — 0.5 tablet/day, days 31–45
-  └─ Phase 3 (routine_item) — 0 tablet/day, days 46+
-
-Standalone Item (routine_item, no protocol)
-  └─ generates one daily_task per active day, until total_count reached
-
-Daily Task (daily_tasks row)
-  ├─ references routine_item_id
-  ├─ has date (YYYY-MM-DD)
-  └─ completed flag + timestamp
+Template (item or protocol)
+  ├─ Phase(s) — definition rows
+  ├─ Series — dated immutable snapshots used at runtime
+  └─ Daily tasks — per-day instances generated lazily from active series
 ```
-
-Phases are stored as `routine_items` rows with a `protocol_id` FK. The public item listing (`GET /items`) excludes them — manage them through protocol endpoints.
+Standalone items are `template.kind in ('simple','count')`; protocols are `template.kind = 'protocol'`. Follow-up helper templates ("Comprar X") are hidden from `GET /items`.
 
 ---
 
@@ -351,6 +343,49 @@ Deletes the whole item/protocol behind the task, mirroring the wall-tablet long-
 
 ---
 
+### History & Adherence
+
+#### `GET /history`
+Returns generated daily task history for a date window. The server materializes missing `daily_tasks` in the requested range first, so callers don't need to "touch" each day in advance.
+
+**Query:**
+- `date_from`, `date_to` — explicit `YYYY-MM-DD` window; or
+- `days` — relative window ending today in `weather_tz`
+- `category` (optional)
+- `item_id` (optional, standalone items only)
+- `protocol_id` (optional)
+
+#### `GET /adherence`
+Returns adherence metrics for one standalone item.
+
+**Query:**
+- `item_id` — required
+- `date_from`, `date_to` OR `days` (default `30`)
+
+**Response 200 (example):**
+```json
+{
+  "item_id": 123,
+  "title": "Tomar Atentah",
+  "category": "medication",
+  "date_from": "2026-06-01",
+  "date_to": "2026-06-07",
+  "window_days": 7,
+  "expected_count": 7,
+  "completed_count": 5,
+  "missed_count": 2,
+  "missed_dates": ["2026-06-02", "2026-06-04"],
+  "streak_completed": 1,
+  "streak_missed": 0,
+  "completion_rate": 0.714
+}
+```
+
+#### `GET /adherence/summary`
+Aggregate adherence over a date window, optionally filtered by category. Returns both the global totals and an `items[]` breakdown by entity (`item` or `protocol`).
+
+---
+
 ### Items
 
 #### `GET /items`
@@ -362,8 +397,14 @@ curl -H "Authorization: Bearer $DS_TOKEN" \
   https://daily.aiworks.app.br/integration/v1/items
 ```
 
+#### `GET /items/:id`
+Returns one standalone item by id.
+**Errors:** `404` not found.
+
 #### `POST /items`
 Creates a new standalone item. Body follows the `Item` type; required fields: `title`, `category`.
+
+**Idempotency:** you may send `Idempotency-Key: <unique-value>` to make retries safe. Reusing the same key with a different payload returns `409`.
 
 **Body (minimum):**
 ```json
@@ -390,7 +431,7 @@ Creates a new standalone item. Body follows the `Item` type; required fields: `t
 }
 ```
 
-**Response 201:** `{ "id": 42 }`
+**Response 201:** the full persisted item object.
 
 **Errors:** `400` if validation fails.
 
@@ -408,7 +449,7 @@ const res = await fetch('https://daily.aiworks.app.br/integration/v1/items', {
     icon: '☀️',
   }),
 });
-const { id } = await res.json();
+const item = await res.json();
 ```
 
 #### `PUT /items/:id`
@@ -423,7 +464,9 @@ Partial update — send only the fields you want to change. Empty string or `nul
 **Response 200:** `{ "ok": true }`
 
 #### `DELETE /items/:id/permanent`
-**Hard delete** — removes the item AND its daily_tasks via CASCADE. Use only if you really want the history gone.
+Permanent delete endpoint. In practice the model is history-preserving:
+- if the item has completed history, it is archived (`active = 0`)
+- if it has no completed history, it is physically deleted
 
 **Response 200:** `{ "ok": true }`
 
@@ -476,6 +519,8 @@ Single protocol with phases.
 #### `POST /protocols`
 Creates a protocol with phases in one call. Phase dates (`start_date`, `end_date`) are auto-calculated from `protocol.start_date` + cumulative `duration_days`.
 
+**Idempotency:** you may send `Idempotency-Key: <unique-value>` to make retries safe. Reusing the same key with a different payload returns `409`.
+
 **Body:**
 ```json
 {
@@ -507,12 +552,12 @@ Creates a protocol with phases in one call. Phase dates (`start_date`, `end_date
 #### `PUT /protocols/:id`
 Update metadata, OR replace phases.
 - If the body contains no `phases` array → only metadata (name, start_date, repeat_indefinitely) is updated.
-- If `phases` is present → **destructive**: all existing phases are DELETEd and new ones INSERTed. Daily_tasks of old phases are CASCADE-deleted. History of completion for those phases is LOST.
+- If `phases` is present → the active, not-yet-completed structure is replaced. Completed history is preserved as immutable series snapshots.
 
 **Prefer** omitting `phases` unless you're restructuring the protocol.
 
 #### `DELETE /protocols/:id`
-Deletes the protocol. CASCADE removes all phase items AND their daily_tasks.
+Deletes the protocol using the same history-preserving rule as items: archive if there is completed history, hard-delete only when there isn't.
 
 **Response 200:** `{ "ok": true }`
 
@@ -579,10 +624,10 @@ An empty periods array matches ALL periods. Same if all three periods are select
 `weekdays: [0,1,2,3,4,5,6]` — 0=Sunday, 6=Saturday. Matches `Date.getDay()` in JS.
 
 ### 9.4. Protocol phases are routine_items rows
-You cannot create a phase directly — you must create/update through `/protocols` endpoints. A phase has `protocol_id` set; a standalone item has `protocol_id = NULL`. `GET /items` filters to standalone only.
+You cannot create a phase directly — you must create/update through `/protocols` endpoints. `GET /items` filters to standalone items only; protocol phases live inside `GET /protocols/:id`.
 
 ### 9.5. `PUT /protocols/:id` with `phases` is destructive
-Sending the `phases` array replaces all phases (DELETE + INSERT). Daily_tasks of old phases are CASCADE-deleted, losing completion history. If you just want to rename the protocol or change its start_date, send **only** `name` / `start_date` / `repeat_indefinitely` without `phases`.
+Sending the `phases` array restructures the active protocol. Completed history is preserved as immutable series snapshots, but the active future-facing phase layout is replaced. If you just want to rename the protocol or change its start date, send **only** `name` / `start_date` / `repeat_indefinitely` without `phases`.
 
 ### 9.6. `convert-to-protocol` preserves task history
 `POST /items/:id/convert-to-protocol` is the one safe way to turn a standalone item into a phase without losing daily_tasks — it reuses the original item id as the first phase.
@@ -595,10 +640,11 @@ You can send just one of the three period times; the validator merges it with st
 
 ### 9.9. `total_count` and followup
 When you set `total_count` on an item and a daily_task toggle brings `completed_count` to that max, the server automatically:
-1. Deactivates the original item
-2. Creates a new item using the `followup_*` fields (if any)
+1. Closes the current series
+2. Creates/reuses a hidden follow-up template using the `followup_*` fields (if any)
+3. Spawns one active follow-up series
 
-That new item has its own id — track it if you need to.
+That follow-up does not appear in `GET /items`; it exists to drive the "Comprar X" flow and recreate the next box/series when appropriate.
 
 ### 9.10. Rate-limit buckets are per-token
 If you have two agents sharing a token, they share a bucket. Create one token per agent for clean isolation and easier revocation.

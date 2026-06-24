@@ -466,6 +466,12 @@ function createModel(db) {
     ).all();
     return tmpls.map(itemShape);
   }
+  function getItemView(id) {
+    const t = db.prepare(
+      "SELECT * FROM templates WHERE id = ? AND kind IN ('simple','count') AND recreate_template_id IS NULL"
+    ).get(id);
+    return t ? itemShape(t) : null;
+  }
 
   // ── Admin "protocol" view: template(protocol) + phases (with current series) ──
   function protocolShape(t) {
@@ -542,6 +548,205 @@ function createModel(db) {
       end_date: s.end_date,
       completed_at: s.completed_at,
     }));
+  }
+
+  function materializeTasksInRange(dateFrom, dateTo) {
+    concludeElapsedPhases(dateTo);
+    const seriesList = db.prepare(`
+      SELECT *
+      FROM series
+      WHERE (start_date IS NULL OR start_date <= ?)
+        AND (end_date IS NULL OR end_date >= ? OR status = 'completed')
+    `).all(dateTo, dateFrom);
+    const insert = db.prepare('INSERT OR IGNORE INTO daily_tasks (series_id, date) VALUES (?, ?)');
+
+    db.transaction(() => {
+      for (const s of seriesList) {
+        let start = s.start_date && s.start_date > dateFrom ? s.start_date : dateFrom;
+        let end = s.end_date && s.end_date < dateTo ? s.end_date : dateTo;
+
+        // Count/follow-up series close by status, not by end_date. For those,
+        // use the last known task date as the effective upper bound so history
+        // queries can backfill missed days inside the real series lifetime
+        // without inventing post-completion tasks.
+        if (!s.end_date && s.total_count != null && s.status === 'completed') {
+          const maxTaskDate = db.prepare('SELECT MAX(date) AS max_date FROM daily_tasks WHERE series_id = ?').get(s.id).max_date;
+          if (maxTaskDate && maxTaskDate < end) end = maxTaskDate;
+        }
+
+        if (start > end) continue;
+        const weekdays = JSON.parse(s.weekdays || '[0,1,2,3,4,5,6]');
+        for (let cur = start; cur <= end; cur = addDays(cur, 1)) {
+          const dayOfWeek = new Date(cur + 'T12:00:00').getDay();
+          if (!weekdays.includes(dayOfWeek)) continue;
+          insert.run(s.id, cur);
+        }
+      }
+    })();
+  }
+
+  const HISTORY_SELECT = `
+    SELECT
+      dt.id,
+      dt.date,
+      dt.completed,
+      dt.completed_at,
+      s.id AS series_id,
+      s.seq,
+      s.status AS series_status,
+      s.start_date,
+      s.end_date,
+      s.total_count,
+      s.completed_count,
+      s.title,
+      s.category,
+      s.icon,
+      s.periods,
+      s.alert_penultimate,
+      s.alert_last,
+      t.id AS template_id,
+      t.kind AS template_kind,
+      t.recreate_template_id,
+      p.phase_order
+    FROM daily_tasks dt
+    JOIN series s ON s.id = dt.series_id
+    JOIN templates t ON t.id = s.template_id
+    JOIN phases p ON p.id = s.phase_id
+  `;
+
+  function getHistoryView({ dateFrom, dateTo, category = null, itemId = null, protocolId = null, includeFollowups = false }) {
+    materializeTasksInRange(dateFrom, dateTo);
+    const clauses = ['dt.date >= ?', 'dt.date <= ?'];
+    const params = [dateFrom, dateTo];
+    if (!includeFollowups) clauses.push('t.recreate_template_id IS NULL');
+    if (category) {
+      clauses.push('s.category = ?');
+      params.push(category);
+    }
+    if (itemId != null) {
+      clauses.push("t.kind IN ('simple','count')");
+      clauses.push('t.id = ?');
+      params.push(itemId);
+    }
+    if (protocolId != null) {
+      clauses.push("t.kind = 'protocol'");
+      clauses.push('t.id = ?');
+      params.push(protocolId);
+    }
+
+    const rows = db.prepare(`
+      ${HISTORY_SELECT}
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY dt.date ASC, s.sort_order ASC, dt.id ASC
+    `).all(...params);
+
+    return rows.map((r) => ({
+      id: r.id,
+      date: r.date,
+      completed: r.completed,
+      completed_at: r.completed_at,
+      series_id: r.series_id,
+      item_id: r.template_kind === 'protocol' ? null : r.template_id,
+      protocol_id: r.template_kind === 'protocol' ? r.template_id : null,
+      kind: r.template_kind,
+      title: r.title,
+      category: r.category,
+      icon: r.icon,
+      periods: r.periods,
+      total_count: r.total_count,
+      completed_count: r.completed_count,
+      seq: r.seq,
+      phase_order: r.template_kind === 'protocol' ? r.phase_order : null,
+      series_status: r.series_status,
+      start_date: r.start_date,
+      end_date: r.end_date,
+      alert_penultimate: r.alert_penultimate,
+      alert_last: r.alert_last,
+    }));
+  }
+
+  function computeStreak(rows, targetCompleted) {
+    let streak = 0;
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      const hit = !!rows[i].completed === targetCompleted;
+      if (!hit) break;
+      streak += 1;
+    }
+    return streak;
+  }
+
+  function summarizeRows(rows) {
+    const expected = rows.length;
+    const completed = rows.filter((r) => r.completed).length;
+    const missedDates = rows.filter((r) => !r.completed).map((r) => r.date);
+    const completionRate = expected === 0 ? null : Number((completed / expected).toFixed(3));
+    return {
+      expected_count: expected,
+      completed_count: completed,
+      missed_count: expected - completed,
+      missed_dates: missedDates,
+      streak_completed: rows.length && rows[rows.length - 1].completed ? computeStreak(rows, true) : 0,
+      streak_missed: rows.length && !rows[rows.length - 1].completed ? computeStreak(rows, false) : 0,
+      completion_rate: completionRate,
+    };
+  }
+
+  function getItemAdherence({ itemId, dateFrom, dateTo }) {
+    const item = getItemView(itemId);
+    if (!item) return null;
+    const rows = getHistoryView({ dateFrom, dateTo, itemId });
+    const stats = summarizeRows(rows);
+    return {
+      item_id: item.id,
+      title: item.title,
+      category: item.category,
+      date_from: dateFrom,
+      date_to: dateTo,
+      window_days: dayCount(dateFrom, dateTo) + 1,
+      ...stats,
+    };
+  }
+
+  function getAdherenceSummary({ dateFrom, dateTo, category = null }) {
+    const rows = getHistoryView({ dateFrom, dateTo, category });
+    const aggregate = summarizeRows(rows);
+    const grouped = new Map();
+
+    for (const row of rows) {
+      const entityType = row.protocol_id ? 'protocol' : 'item';
+      const entityId = row.protocol_id || row.item_id;
+      const key = `${entityType}:${entityId}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          entity_type: entityType,
+          entity_id: entityId,
+          title: row.title,
+          category: row.category,
+          rows: [],
+        });
+      }
+      grouped.get(key).rows.push(row);
+    }
+
+    const items = [...grouped.values()].map((entry) => ({
+      entity_type: entry.entity_type,
+      entity_id: entry.entity_id,
+      title: entry.title,
+      category: entry.category,
+      date_from: dateFrom,
+      date_to: dateTo,
+      window_days: dayCount(dateFrom, dateTo) + 1,
+      ...summarizeRows(entry.rows),
+    }));
+
+    return {
+      category: category || null,
+      date_from: dateFrom,
+      date_to: dateTo,
+      window_days: dayCount(dateFrom, dateTo) + 1,
+      ...aggregate,
+      items,
+    };
   }
 
   // ── Admin write CRUD (operate on templates/phases, reflect on active series) ──
@@ -775,10 +980,14 @@ function createModel(db) {
     getTasksView,
     getTaskById,
     setTaskCompleted,
+    getItemView,
     getItemsView,
     getProtocolsView,
     getProtocolView,
     getCompletedView,
+    getHistoryView,
+    getItemAdherence,
+    getAdherenceSummary,
     itemShape,
     // admin write CRUD
     updateItem,

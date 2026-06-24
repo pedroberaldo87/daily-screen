@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+const crypto = require('crypto');
 const pkg = require('../package.json');
 
 const {
@@ -10,6 +11,7 @@ const {
   recreateFromFollowup,
   deleteTaskItem,
   getAllRoutineItems,
+  getRoutineItem,
   createRoutineItem,
   updateRoutineItem,
   deactivateRoutineItem,
@@ -24,6 +26,11 @@ const {
   deleteProtocol,
   convertItemToProtocol,
   getCompletedSeries,
+  getHistory,
+  getItemAdherence,
+  getAdherenceSummary,
+  getApiIdempotencyKey,
+  saveApiIdempotencyKey,
 } = require('../db');
 const { fetchWeather } = require('../weather');
 const {
@@ -35,6 +42,72 @@ const {
 const { requireBearerToken } = require('../middleware/token-auth');
 
 const router = Router();
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function hashRequestBody(body) {
+  return crypto.createHash('sha256').update(stableStringify(body || null)).digest('hex');
+}
+
+function sendIdempotent(req, res, payload, statusCode) {
+  const key = req.get('Idempotency-Key');
+  if (!key) return res.status(statusCode).json(payload);
+  saveApiIdempotencyKey({
+    tokenId: req.apiToken.id,
+    method: req.method,
+    path: req.route.path,
+    idempotencyKey: key,
+    requestHash: hashRequestBody(req.body),
+    statusCode,
+    responseBody: payload,
+  });
+  return res.status(statusCode).json(payload);
+}
+
+function maybeReplayIdempotent(req, res) {
+  const key = req.get('Idempotency-Key');
+  if (!key) return null;
+  const existing = getApiIdempotencyKey({
+    tokenId: req.apiToken.id,
+    method: req.method,
+    path: req.route.path,
+    idempotencyKey: key,
+  });
+  if (!existing) return null;
+  const requestHash = hashRequestBody(req.body);
+  if (existing.request_hash !== requestHash) {
+    res.status(409).json({ error: 'Idempotency-Key already used with a different payload' });
+    return 'handled';
+  }
+  res.status(existing.status_code).json(existing.response_body);
+  return 'handled';
+}
+
+function resolveDateRange(query, defaultDays = 30) {
+  if (query.date_from || query.date_to) {
+    const dateFrom = query.date_from;
+    const dateTo = query.date_to;
+    if (!DATE_RE.test(String(dateFrom || '')) || !DATE_RE.test(String(dateTo || ''))) {
+      return { error: 'date_from and date_to must be YYYY-MM-DD' };
+    }
+    if (dateFrom > dateTo) return { error: 'date_from must be on or before date_to' };
+    return { dateFrom, dateTo };
+  }
+  const days = Number(query.days || defaultDays);
+  if (!Number.isInteger(days) || days < 1 || days > 3660) {
+    return { error: 'days must be integer 1-3660' };
+  }
+  const dateTo = todayDate();
+  const dateFrom = require('../model').addDays(dateTo, -(days - 1));
+  return { dateFrom, dateTo, days };
+}
 
 // ═══ Rate limiting ═══
 // Per-token limit: 120 req/min. keyGenerator uses token id (populated by
@@ -141,11 +214,19 @@ router.get('/items', (req, res) => {
   res.json(getAllRoutineItems());
 });
 
+router.get('/items/:id', (req, res) => {
+  const item = getRoutineItem(Number(req.params.id));
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  res.json(item);
+});
+
 router.post('/items', (req, res) => {
+  if (maybeReplayIdempotent(req, res)) return;
   const errors = validateItemData(req.body, true);
   if (errors.length) return res.status(400).json({ error: errors.join('; ') });
   const id = createRoutineItem(req.body);
-  res.status(201).json({ id });
+  const item = getRoutineItem(id);
+  sendIdempotent(req, res, item, 201);
 });
 
 router.put('/items/:id', (req, res) => {
@@ -192,10 +273,11 @@ router.get('/protocols/:id', (req, res) => {
 });
 
 router.post('/protocols', (req, res) => {
+  if (maybeReplayIdempotent(req, res)) return;
   const errors = validateProtocolData(req.body, true);
   if (errors.length) return res.status(400).json({ error: errors.join('; ') });
   const id = createProtocol(req.body);
-  res.status(201).json(getProtocol(id));
+  sendIdempotent(req, res, getProtocol(id), 201);
 });
 
 router.put('/protocols/:id', (req, res) => {
@@ -241,6 +323,36 @@ router.get('/weather', async (req, res) => {
     console.error('Weather error:', err.message);
     res.status(503).json({ error: 'Weather unavailable' });
   }
+});
+
+// ═══ Analytics ═══
+
+router.get('/history', (req, res) => {
+  const { dateFrom, dateTo, error } = resolveDateRange(req.query, 30);
+  if (error) return res.status(400).json({ error });
+  const category = req.query.category || null;
+  const itemId = req.query.item_id !== undefined ? Number(req.query.item_id) : null;
+  const protocolId = req.query.protocol_id !== undefined ? Number(req.query.protocol_id) : null;
+  if (itemId !== null && !Number.isInteger(itemId)) return res.status(400).json({ error: 'item_id must be integer' });
+  if (protocolId !== null && !Number.isInteger(protocolId)) return res.status(400).json({ error: 'protocol_id must be integer' });
+  res.json(getHistory({ dateFrom, dateTo, category, itemId, protocolId }));
+});
+
+router.get('/adherence', (req, res) => {
+  const itemId = Number(req.query.item_id);
+  if (!Number.isInteger(itemId)) return res.status(400).json({ error: 'item_id must be integer' });
+  const { dateFrom, dateTo, error } = resolveDateRange(req.query, 30);
+  if (error) return res.status(400).json({ error });
+  const stats = getItemAdherence({ itemId, dateFrom, dateTo });
+  if (!stats) return res.status(404).json({ error: 'Item not found' });
+  res.json(stats);
+});
+
+router.get('/adherence/summary', (req, res) => {
+  const { dateFrom, dateTo, error } = resolveDateRange(req.query, 7);
+  if (error) return res.status(400).json({ error });
+  const category = req.query.category || null;
+  res.json(getAdherenceSummary({ dateFrom, dateTo, category }));
 });
 
 module.exports = router;

@@ -160,3 +160,73 @@ test('setTaskCompleted é idempotente e não alterna indevidamente o estado', ()
   const third = m.setTaskCompleted(taskId, false);
   assert.equal(third.completed, 0);
 });
+
+test('getItemView retorna item standalone por id', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'Vitamina D', category: 'supplement', icon: '☀️' });
+  const item = m.getItemView(id);
+  assert.equal(item.id, id);
+  assert.equal(item.title, 'Vitamina D');
+  assert.equal(m.getItemView(999999), null);
+});
+
+test('getHistoryView materializa faixa e expõe histórico filtrável', () => {
+  const { db, m } = freshModel();
+  const itemId = m.createItem({ title: 'Ritalina', category: 'medication', periods: ['morning'] });
+  const protocolId = m.createProtocol({
+    name: 'Desmame',
+    start_date: '2026-06-01',
+    repeat_indefinitely: 0,
+    phases: [
+      { title: '10mg', category: 'medication', icon: '💊', duration_days: 2 },
+      { title: '5mg', category: 'medication', icon: '💊', duration_days: 2 },
+    ],
+  });
+
+  m.generateDailyTasks('2026-06-01');
+  const standaloneTask = db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-01' ORDER BY id LIMIT 1").get().id;
+  m.toggleTask(standaloneTask);
+
+  const history = m.getHistoryView({ dateFrom: '2026-06-01', dateTo: '2026-06-03' });
+  assert.ok(history.length >= 4, 'deve materializar tarefas do item e do protocolo na faixa');
+  assert.ok(history.some((row) => row.item_id === itemId));
+  assert.ok(history.some((row) => row.protocol_id === protocolId));
+
+  const onlyItem = m.getHistoryView({ dateFrom: '2026-06-01', dateTo: '2026-06-03', itemId });
+  assert.ok(onlyItem.every((row) => row.item_id === itemId));
+});
+
+test('getItemAdherence calcula concluídas, faltas e streaks por item', () => {
+  const { db, m } = freshModel();
+  const itemId = m.createItem({ title: 'Atentah', category: 'medication' });
+
+  for (const date of ['2026-06-01', '2026-06-02', '2026-06-03']) m.generateDailyTasks(date);
+  m.toggleTask(db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-01'").get().id);
+  m.toggleTask(db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-03'").get().id);
+
+  const stats = m.getItemAdherence({ itemId, dateFrom: '2026-06-01', dateTo: '2026-06-03' });
+  assert.equal(stats.expected_count, 3);
+  assert.equal(stats.completed_count, 2);
+  assert.equal(stats.missed_count, 1);
+  assert.deepEqual(stats.missed_dates, ['2026-06-02']);
+  assert.equal(stats.streak_completed, 1);
+  assert.equal(stats.streak_missed, 0);
+  assert.equal(stats.completion_rate, 0.667);
+});
+
+test('getAdherenceSummary agrega por categoria e devolve quebra por entidade', () => {
+  const { db, m } = freshModel();
+  const itemId = m.createItem({ title: 'Atentah', category: 'medication' });
+  m.createItem({ title: 'Creatina', category: 'supplement' });
+
+  for (const date of ['2026-06-01', '2026-06-02']) m.generateDailyTasks(date);
+  m.toggleTask(db.prepare("SELECT dt.id FROM daily_tasks dt JOIN series s ON s.id = dt.series_id WHERE s.title = 'Atentah' AND dt.date = '2026-06-01'").get().id);
+
+  const summary = m.getAdherenceSummary({ dateFrom: '2026-06-01', dateTo: '2026-06-02', category: 'medication' });
+  assert.equal(summary.category, 'medication');
+  assert.equal(summary.expected_count, 2);
+  assert.equal(summary.completed_count, 1);
+  assert.equal(summary.items.length, 1);
+  assert.equal(summary.items[0].entity_type, 'item');
+  assert.equal(summary.items[0].entity_id, itemId);
+});
