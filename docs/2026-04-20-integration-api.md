@@ -71,14 +71,14 @@ curl -H "Authorization: Bearer $DS_TOKEN" \
 Tokens start with a fixed prefix `dsk_live_` followed by 43 base64url characters (256 bits entropy). Example:
 
 ```
-dsk_live_XKxOVTHyu7BJEMN_ytYZ7UfY1YSc8hTqiT7QuXgrRgo
+dsk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
 ### Authorization header
 Send the token in the `Authorization` header with `Bearer` scheme:
 
 ```
-Authorization: Bearer dsk_live_XKxOVTHyu7BJEMN_ytYZ7UfY1YSc8hTqiT7QuXgrRgo
+Authorization: Bearer dsk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
 ### Storage
