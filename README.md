@@ -151,7 +151,7 @@ daily-screen/
   db.js                  # SQLite schema, queries, migrations
   weather.js             # Open-Meteo fetch + 30min cache
   session-store.js       # Custom SQLite session store
-  Dockerfile             # Multi-stage Node 20 Alpine
+  Dockerfile             # Multi-stage Node 22 Alpine
   deploy.sh              # VPS deploy script
   docker/
     docker-compose.yml   # Container orchestration
