@@ -1,7 +1,7 @@
 # Daily Screen
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-green.svg)]()
+[![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-green.svg)]()
 [![Docker](https://img.shields.io/badge/Docker-Alpine-blue.svg)]()
 
 ## What is Daily Screen?
@@ -38,7 +38,7 @@ A wall-mounted daily assistant for tablets (Fire HD 8, 1280×800 landscape). Dis
 
 ### Local Development
 
-Requires Node.js 20+ and npm.
+Requires Node.js 22.23.4+ and npm.
 
 ```bash
 git clone https://github.com/pedroberaldo87/daily-screen.git
