@@ -236,30 +236,30 @@ html, body {
 
 /* ─── Period Filter ─── */
 
+/* Grade 2x2: botoes grandes o bastante para o toque no tablet sem estourar a altura do painel. */
 .period-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
   width: 100%;
   position: relative;
   z-index: 1;
   margin-top: auto;
-  padding: 12px 8px 6px;
+  padding: 12px 0 6px;
 }
 
 .period-nav-btn {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  padding: 6px 12px;
+  min-height: 48px;
+  padding: 8px 4px;
   cursor: pointer;
   transition: background 0.25s, color 0.25s, border-color 0.25s, transform 0.15s;
   -webkit-tap-highlight-color: transparent;
@@ -292,12 +292,13 @@ html, body {
 .period-nav-btn { position: relative; }
 
 /* Display modes for period buttons */
-.period-nav-btn .pn-icon { font-size: 0.95rem; line-height: 1; }
+.period-nav-btn .pn-icon { font-size: 1.05rem; line-height: 1; }
 .period-nav-btn .pn-word { font-size: inherit; }
 .period-nav-btn.with-icon {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  gap: 4px;
 }
 .period-nav-btn.icon-only {
   padding: 6px 9px;
@@ -314,23 +315,23 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 12px;
   width: 100%;
   position: relative;
   z-index: 1;
-  padding: 6px 8px 4px;
+  padding: 10px 8px 4px;
 }
 
 .date-nav-btn {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 1.1rem;
-  font-weight: 300;
-  width: 40px;
-  height: 40px;
+  font-size: 1.6rem;
+  font-weight: 400;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -349,8 +350,8 @@ html, body {
 .date-nav-today {
   border-radius: 20px;
   width: auto;
-  padding: 0 16px;
-  font-size: 0.7rem;
+  padding: 0 20px;
+  font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -967,13 +968,14 @@ html, body {
     margin-top: 0;
     padding: 0;
     width: auto;
+    display: flex;
     flex-wrap: nowrap;
     gap: 4px;
   }
-  .period-nav-btn { padding: 5px 9px; font-size: 0.62rem; }
+  .period-nav-btn { min-height: 0; padding: 5px 9px; font-size: 0.62rem; }
 
   .date-nav { margin-top: 0; gap: 6px; padding: 0; }
-  .date-nav-btn { min-width: 36px; min-height: 36px; padding: 6px 10px; font-size: 0.85rem; }
+  .date-nav-btn { width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 6px 10px; font-size: 0.85rem; }
   .date-nav-today { font-size: 0.7rem; }
 
   /* Columns stack vertically */
