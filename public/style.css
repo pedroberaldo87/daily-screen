@@ -98,8 +98,8 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
-  padding: 28px 22px;
+  gap: 16px;
+  padding: 20px 22px;
   background:
     radial-gradient(ellipse at 50% 20%, rgba(232, 168, 75, 0.04) 0%, transparent 70%),
     rgba(18, 16, 26, 0.65);
@@ -245,7 +245,7 @@ html, body {
   position: relative;
   z-index: 1;
   margin-top: auto;
-  padding: 12px 0 6px;
+  padding: 4px 0 0;
 }
 
 .period-nav-btn {
@@ -319,7 +319,7 @@ html, body {
   width: 100%;
   position: relative;
   z-index: 1;
-  padding: 10px 8px 4px;
+  padding: 4px 8px 0;
 }
 
 .date-nav-btn {
@@ -330,8 +330,8 @@ html, body {
   font-family: var(--font-body);
   font-size: 1.6rem;
   font-weight: 400;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
