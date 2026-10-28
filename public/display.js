@@ -5,6 +5,7 @@ const CELEBRATION_DURATION = 3000;        // 3s
 const IDLE_TIMEOUT = 5 * 60 * 1000;      // 5 min — auto-reset to today
 
 let tasks = [];
+let lastTasksJson = null; // last poll payload — see fetchTasks
 let wasAllDone = false;
 let currentDate = todayStr();
 let currentPeriod = 'all'; // 'all' | 'morning' | 'afternoon' | 'night'
@@ -235,11 +236,19 @@ async function fetchTasks(interactive = false) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     tasks = await res.json();
     hideLoadError();
-    renderTasks();
+    // Rebuild the list only when the data changed. On the Fire tablet's WebView every
+    // rebuild leaks ~0.2 MB of GPU memory that only a process restart returns, and the
+    // 1-min poll used to rebuild identical lists 1,440 times a day.
+    const json = JSON.stringify(tasks);
+    if (interactive || json !== lastTasksJson) {
+      lastTasksJson = json;
+      renderTasks();
+    }
   } catch (err) {
     console.error('Failed to fetch tasks:', err);
     if (interactive) {
       tasks = [];
+      lastTasksJson = null; // the screen is empty now: the next good poll must redraw
       renderTasks();
       showLoadError();
     }
