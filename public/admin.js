@@ -31,6 +31,15 @@ function weekdaysSummary(weekdays) {
   return weekdays.map(d => t(WEEKDAY_KEYS[d])).join(', ');
 }
 
+// Card pill text: frequency + weekdays (weekdays only matter for the weekly unit).
+function repeatSummary(item, weekdays) {
+  const n = Number(item.repeat_every) || 1;
+  if (item.repeat_unit === 'day') return n === 1 ? t('admin.everyWeekday') : t('admin.everyNDays', { n });
+  if (item.repeat_unit === 'month') return n === 1 ? t('admin.everyMonth') : t('admin.everyNMonths', { n });
+  const days = weekdaysSummary(weekdays);
+  return n === 1 ? days : `${t('admin.everyNWeeks', { n })} · ${days}`;
+}
+
 // "Day-long" semantics: an item counts as day-long if it has no periods
 // selected OR if all three are selected. Users intuitively express "runs
 // all day" by ticking every box; we treat that the same as the wildcard.
@@ -93,7 +102,7 @@ function buildItemCard(item) {
       <div class="item-title item-title-edit" data-action="edit-title" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(item.title)}</div>
       <div class="item-meta">
         <span class="badge ${escapeHtml(item.category)}">${escapeHtml(catLabel)}</span>
-        <span class="meta-pill weekdays-pill" data-action="edit-weekdays" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(weekdaysSummary(weekdays))}</span>
+        <span class="meta-pill weekdays-pill"${(item.repeat_unit || 'week') === 'week' ? ` data-action="edit-weekdays" title="${escapeHtml(t('admin.clickToEdit'))}"` : ''}>${escapeHtml(repeatSummary(item, weekdays))}</span>
         <span class="meta-pill periods-pill" data-action="edit-periods" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(periodsSummary(periods))}</span>
         ${windowPillHtml}
         ${statusIcons.join('')}
@@ -395,6 +404,16 @@ document.getElementById('protocol-modal').addEventListener('click', (e) => {
 function buildPhaseCard(phase = {}) {
   const card = document.createElement('div');
   card.className = 'phase-card';
+  // Fields this form doesn't edit (set via the Integration API) ride along so
+  // saving the protocol here doesn't wipe them.
+  card.dataset.keep = JSON.stringify({
+    weekdays: phase.weekdays || '[0,1,2,3,4,5,6]',
+    repeat_every: phase.repeat_every || 1,
+    repeat_unit: phase.repeat_unit || 'week',
+    total_count: phase.total_count ?? null,
+    alert_penultimate: phase.alert_penultimate ?? null,
+    alert_last: phase.alert_last ?? null,
+  });
 
   let periods = [];
   try { periods = JSON.parse(phase.periods || '[]'); } catch {}
@@ -514,12 +533,12 @@ function collectPhasesFromForm() {
       .map(b => b.dataset.period);
     periods.sort((a, b) => PERIOD_ORDER_PROTOCOL.indexOf(a) - PERIOD_ORDER_PROTOCOL.indexOf(b));
     return {
+      ...JSON.parse(card.dataset.keep),
       duration_days: Number(card.querySelector('.phase-duration').value) || 1,
       title: card.querySelector('.phase-title').value.trim(),
       icon: card.querySelector('.phase-icon').value.trim() || '💊',
       category: card.querySelector('.phase-category').value,
       periods: JSON.stringify(periods),
-      weekdays: '[0,1,2,3,4,5,6]',
     };
   });
 }
@@ -648,6 +667,12 @@ function setupWeekdayButtons() {
   });
 }
 
+function syncWeekdaysEnabled() {
+  const weekly = document.getElementById('edit-repeat-unit').value === 'week';
+  document.getElementById('edit-weekdays-block').classList.toggle('is-disabled', !weekly);
+}
+document.getElementById('edit-repeat-unit').addEventListener('change', syncWeekdaysEnabled);
+
 function setupPeriodButtons() {
   document.querySelectorAll('#edit-periods .period-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -683,6 +708,11 @@ async function openEditModal(id) {
     const day = Number(btn.dataset.day);
     btn.classList.toggle('active', currentEditWeekdays.includes(day));
   });
+
+  // Repeat frequency
+  document.getElementById('edit-repeat-every').value = item.repeat_every || 1;
+  document.getElementById('edit-repeat-unit').value = item.repeat_unit || 'week';
+  syncWeekdaysEnabled();
 
   // Periods
   try {
@@ -790,6 +820,8 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     icon: document.getElementById('edit-icon').value.trim(),
     sort_order: Number(document.getElementById('edit-sort').value) || 0,
     weekdays: JSON.stringify(currentEditWeekdays),
+    repeat_every: Number(document.getElementById('edit-repeat-every').value) || 1,
+    repeat_unit: document.getElementById('edit-repeat-unit').value,
     periods: JSON.stringify(currentEditPeriods),
     total_count: totalCount ? Number(totalCount) : null,
     alert_penultimate: document.getElementById('edit-alert-penultimate').value.trim() || null,
@@ -1296,7 +1328,7 @@ function openWeekdaysPopover(card, anchorEl) {
     if (updated) {
       itemsById[id] = updated;
       const pill = card.querySelector('.weekdays-pill');
-      if (pill) pill.textContent = weekdaysSummary(current);
+      if (pill) pill.textContent = repeatSummary(updated, current);
     }
   };
 }

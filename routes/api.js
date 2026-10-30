@@ -192,7 +192,7 @@ router.post('/items/:id/convert-to-protocol', requireApiAuth, (req, res) => {
 // ═══ Protocols (sequences of dated phases) ═══
 
 router.get('/protocols', requireApiAuth, (req, res) => {
-  res.json(getProtocols());
+  res.json(getProtocols({ includeInactive: req.query.include_inactive === '1' }));
 });
 
 router.get('/protocols/:id', requireApiAuth, (req, res) => {

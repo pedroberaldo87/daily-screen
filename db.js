@@ -110,7 +110,7 @@ function createRoutineItem(data) {
   return model.createItem({ ...data, start_date: data.start_date || todayDate() });
 }
 function updateRoutineItem(id, data) {
-  return model.updateItem(id, data);
+  return model.updateItem(id, data, todayDate());
 }
 function deactivateRoutineItem(id) {
   model.deactivateItem(id);
@@ -122,8 +122,8 @@ function convertItemToProtocol(id, opts = {}) {
   return model.convertItemToProtocol(id, { ...opts, today: todayDate() });
 }
 
-function getProtocols() {
-  return model.getProtocolsView();
+function getProtocols(opts) {
+  return model.getProtocolsView(opts);
 }
 function getProtocol(id) {
   return model.getProtocolView(id);

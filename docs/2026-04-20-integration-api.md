@@ -164,7 +164,9 @@ type Item = {
   icon: string;                       // emoji, max 10 chars, default "✅"
   sort_order: number;                 // -1000..1000, default 0
   active: 0 | 1;                      // 1 = visible, 0 = soft-deleted
-  weekdays: string;                   // JSON array [0..6], 0=Sun, e.g. "[1,2,3,4,5]"
+  weekdays: string;                   // JSON array [0..6], 0=Sun, e.g. "[1,2,3,4,5]" (only used when repeat_unit = "week")
+  repeat_every: number;               // 1..365, default 1 — "every N <repeat_unit>"
+  repeat_unit: "day" | "week" | "month"; // default "week"; counted from start_date (see 9.3.1)
   periods: string;                    // JSON array of "morning"|"afternoon"|"night", [] = day-long
   total_count: number | null;         // if set, item becomes a counter
   completed_count: number;            // counter progress, updated by toggleTask
@@ -192,6 +194,12 @@ type Protocol = {
   repeat_indefinitely: 0 | 1;         // if 1, last phase repeats forever
   active: 0 | 1;
   created_at: string;
+  alert_penultimate: string | null;   // shown on the day before the LAST phase ends
+  alert_last: string | null;          // shown on the last phase's final day (overrides the phase's own alerts there)
+  followup_title: string | null;      // follow-up task spawned when the protocol ends
+  followup_category: string | null;
+  followup_icon: string | null;
+  followup_recreate: 0 | 1;
   phases: Phase[];                    // embedded, ordered by phase_order
 };
 
@@ -492,7 +500,7 @@ If omitted, defaults apply (see `db.js#convertItemToProtocol`).
 ### Protocols
 
 #### `GET /protocols`
-Returns all protocols with their phases embedded, sorted by active DESC, id DESC.
+Returns active protocols with their phases embedded, newest first. Pass `?include_inactive=1` to also list archived ones (e.g. to find one and reactivate it with `PUT /protocols/:id {"active": 1}`).
 
 **Example response:**
 ```json
@@ -622,6 +630,13 @@ An empty periods array matches ALL periods. Same if all three periods are select
 
 ### 9.3. Weekdays are 0-indexed, Sunday-first
 `weekdays: [0,1,2,3,4,5,6]` — 0=Sunday, 6=Saturday. Matches `Date.getDay()` in JS.
+
+### 9.3.1. Frequency: `repeat_every` + `repeat_unit`
+Counted from the item's `start_date` (creation day if it has none).
+- `week` — on the chosen `weekdays`, every N weeks (weeks start on Sunday). `1/week` = the old behavior.
+- `day` — every N days; `weekdays` is ignored. E.g. `{"repeat_every":3,"repeat_unit":"day"}` from 2026-11-01 → 01, 04, 07…
+- `month` — every N months on the start date's day; `weekdays` is ignored. Day 31 falls on the last day of shorter months (31/01 → 28/02 → 31/03).
+Protocol phases accept the same two fields (via API only — the admin protocol form preserves them but doesn't edit them).
 
 ### 9.4. Protocol phases are routine_items rows
 You cannot create a phase directly — you must create/update through `/protocols` endpoints. `GET /items` filters to standalone items only; protocol phases live inside `GET /protocols/:id`.

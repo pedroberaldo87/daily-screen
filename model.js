@@ -83,6 +83,41 @@ function initSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_daily_tasks_date ON daily_tasks(date);
     CREATE INDEX IF NOT EXISTS idx_series_template ON series(template_id);
   `);
+
+  // Columns added after the redesign (existing DBs get them via ALTER).
+  // Frequency default 1/'week' = the old behavior (every week, on the chosen
+  // weekdays). Template alerts = protocol-level end alerts (shown on the last phase).
+  const added = [
+    ['phases', 'repeat_every', 'INTEGER DEFAULT 1'], ['phases', 'repeat_unit', "TEXT DEFAULT 'week'"],
+    ['series', 'repeat_every', 'INTEGER DEFAULT 1'], ['series', 'repeat_unit', "TEXT DEFAULT 'week'"],
+    ['templates', 'alert_penultimate', 'TEXT'], ['templates', 'alert_last', 'TEXT'],
+  ];
+  for (const [table, col, type] of added) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+  }
+}
+
+// Does series `s` fall on `date`? 'week' uses the weekdays (every N weeks,
+// counted from the anchor's week); 'day'/'month' count from the anchor and
+// ignore weekdays. Anchor = start_date, else the series' creation day. Monthly
+// on day 31 falls on the last day of shorter months.
+function occursOn(s, date) {
+  const every = s.repeat_every || 1;
+  const anchor = s.start_date || String(s.created_at || date).slice(0, 10);
+  const onCycle = (n) => ((n % every) + every) % every === 0;
+  const dow = (d) => new Date(d + 'T12:00:00').getDay();
+  if (s.repeat_unit === 'day') return onCycle(dayCount(anchor, date) - 1);
+  if (s.repeat_unit === 'month') {
+    const [ay, am, ad] = anchor.split('-').map(Number);
+    const [y, m, d] = date.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return d === Math.min(ad, lastDay) && onCycle((y - ay) * 12 + (m - am));
+  }
+  const weekdays = JSON.parse(s.weekdays || '[0,1,2,3,4,5,6]');
+  if (!weekdays.includes(dow(date))) return false;
+  const weekStart = (d) => addDays(d, -dow(d));
+  return onCycle((dayCount(weekStart(anchor), weekStart(date)) - 1) / 7);
 }
 
 function createModel(db) {
@@ -93,12 +128,13 @@ function createModel(db) {
     const result = db.prepare(`
       INSERT INTO series (
         template_id, phase_id, seq, title, category, icon, sort_order,
-        weekdays, periods, total_count, alert_penultimate, alert_last,
+        weekdays, repeat_every, repeat_unit, periods, total_count, alert_penultimate, alert_last,
         start_date, end_date, status, source_series_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
     `).run(
       templateId, phase.id, seq, phase.title, phase.category, phase.icon || '✅',
-      phase.sort_order ?? phase.phase_order ?? 0, phase.weekdays || '[0,1,2,3,4,5,6]', phase.periods || '[]',
+      phase.sort_order ?? phase.phase_order ?? 0, phase.weekdays || '[0,1,2,3,4,5,6]',
+      phase.repeat_every || 1, phase.repeat_unit || 'week', phase.periods || '[]',
       phase.total_count ?? null, phase.alert_penultimate ?? null, phase.alert_last ?? null,
       start_date, end_date, source_series_id,
     );
@@ -121,17 +157,18 @@ function createModel(db) {
 
       const phaseId = db.prepare(`
         INSERT INTO phases (template_id, phase_order, title, category, icon,
-          weekdays, periods, total_count, alert_penultimate, alert_last)
-        VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+          weekdays, repeat_every, repeat_unit, periods, total_count, alert_penultimate, alert_last)
+        VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         tmplId, data.title, data.category, data.icon || '✅',
-        data.weekdays || '[0,1,2,3,4,5,6]', data.periods || '[]',
+        data.weekdays || '[0,1,2,3,4,5,6]', Number(data.repeat_every) || 1, data.repeat_unit || 'week',
+        data.periods || '[]',
         data.total_count || null, data.alert_penultimate || null, data.alert_last || null,
       ).lastInsertRowid;
 
       const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
       phase.sort_order = data.sort_order || 0;
-      spawnSeries(tmplId, phase, { seq: 1, start_date: data.start_date || null, end_date: null });
+      spawnSeries(tmplId, phase, { seq: 1, start_date: data.start_date || null, end_date: data.end_date || null });
       return tmplId;
     });
     return tx();
@@ -155,23 +192,25 @@ function createModel(db) {
     const tx = db.transaction(() => {
       const tmplId = db.prepare(`
         INSERT INTO templates (name, kind, repeat_indefinitely, sort_order,
-          followup_title, followup_category, followup_icon, followup_recreate)
-        VALUES (?, 'protocol', ?, ?, ?, ?, ?, ?)
+          followup_title, followup_category, followup_icon, followup_recreate, alert_penultimate, alert_last)
+        VALUES (?, 'protocol', ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         data.name, repeat ? 1 : 0, data.sort_order || 0,
         data.followup_title || null, data.followup_category || null,
         data.followup_icon || null, data.followup_recreate ? 1 : 0,
+        data.alert_penultimate || null, data.alert_last || null,
       ).lastInsertRowid;
 
       const withDates = computePhaseDates(data.start_date, data.phases, repeat);
       withDates.forEach((p, i) => {
         const phaseId = db.prepare(`
           INSERT INTO phases (template_id, phase_order, title, category, icon,
-            weekdays, periods, total_count, duration_days, alert_penultimate, alert_last)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            weekdays, repeat_every, repeat_unit, periods, total_count, duration_days, alert_penultimate, alert_last)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           tmplId, i, p.title, p.category, p.icon || '💊',
           typeof p.weekdays === 'string' ? p.weekdays : JSON.stringify(p.weekdays || [0, 1, 2, 3, 4, 5, 6]),
+          Number(p.repeat_every) || 1, p.repeat_unit || 'week',
           typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []),
           p.total_count || null, Number(p.duration_days) || null,
           p.alert_penultimate || null, p.alert_last || null,
@@ -288,15 +327,13 @@ function createModel(db) {
 
   // ── Lazy generation: one daily_task per active series in its window ──
   function generateDailyTasks(date) {
-    const dayOfWeek = new Date(date + 'T12:00:00').getDay();
     const seriesList = db.prepare("SELECT * FROM series WHERE status = 'active'").all();
     const insert = db.prepare('INSERT OR IGNORE INTO daily_tasks (series_id, date) VALUES (?, ?)');
     const tx = db.transaction(() => {
       for (const s of seriesList) {
         if (s.start_date && date < s.start_date) continue;
         if (s.end_date && date > s.end_date) continue;
-        const weekdays = JSON.parse(s.weekdays || '[0,1,2,3,4,5,6]');
-        if (!weekdays.includes(dayOfWeek)) continue;
+        if (!occursOn(s, date)) continue;
         // No ceiling here: an active count box still needs daily_tasks until its
         // doses are all marked, even across skipped days. The ceiling lives in
         // toggleTask (refuse marking beyond total_count) — counting generated
@@ -327,8 +364,11 @@ function createModel(db) {
       : r.completed_count;
     if (isProto && r.end_date) {
       const daysLeft = dayCount(date, r.end_date) - 1;
-      if (daysLeft === 0 && r.alert_last) alert = { type: 'last', message: r.alert_last };
-      else if (daysLeft === 1 && r.alert_penultimate) alert = { type: 'penultimate', message: r.alert_penultimate };
+      // Last phase: the protocol-level alerts (end of the whole protocol) win.
+      const last = (r.is_last_phase && r.t_alert_last) || r.alert_last;
+      const pen = (r.is_last_phase && r.t_alert_penultimate) || r.alert_penultimate;
+      if (daysLeft === 0 && last) alert = { type: 'last', message: last };
+      else if (daysLeft === 1 && pen) alert = { type: 'penultimate', message: pen };
     } else if (r.total_count) {
       const remaining = r.total_count - shownCount;
       if (remaining === 1 && r.alert_last) alert = { type: 'last', message: r.alert_last };
@@ -359,7 +399,10 @@ function createModel(db) {
   const TASK_SELECT = `
     SELECT dt.id, dt.series_id, dt.date, dt.completed, dt.completed_at,
       s.title, s.category, s.icon, s.sort_order, s.periods, s.total_count, s.completed_count,
-      s.alert_penultimate, s.alert_last, s.end_date, s.template_id, t.kind AS tkind
+      s.alert_penultimate, s.alert_last, s.end_date, s.template_id, t.kind AS tkind,
+      t.alert_penultimate AS t_alert_penultimate, t.alert_last AS t_alert_last,
+      s.phase_id = (SELECT id FROM phases WHERE template_id = s.template_id
+                    ORDER BY phase_order DESC, id DESC LIMIT 1) AS is_last_phase
     FROM daily_tasks dt
     JOIN series s ON s.id = dt.series_id
     JOIN templates t ON t.id = s.template_id`;
@@ -435,6 +478,8 @@ function createModel(db) {
       sort_order: t.sort_order,
       active: t.active,
       weekdays: phase.weekdays,
+      repeat_every: phase.repeat_every,
+      repeat_unit: phase.repeat_unit,
       periods: phase.periods,
       total_count: phase.total_count,
       completed_count: cur ? cur.completed_count : 0,
@@ -486,6 +531,8 @@ function createModel(db) {
         sort_order: ph.phase_order,
         active: 1,
         weekdays: ph.weekdays,
+        repeat_every: ph.repeat_every,
+        repeat_unit: ph.repeat_unit,
         periods: ph.periods,
         total_count: ph.total_count,
         completed_count: s ? s.completed_count : 0,
@@ -507,8 +554,8 @@ function createModel(db) {
       repeat_indefinitely: t.repeat_indefinitely,
       active: t.active,
       created_at: t.created_at,
-      alert_penultimate: null,
-      alert_last: null,
+      alert_penultimate: t.alert_penultimate,
+      alert_last: t.alert_last,
       followup_title: t.followup_title,
       followup_category: t.followup_category,
       followup_icon: t.followup_icon,
@@ -516,8 +563,10 @@ function createModel(db) {
       phases: phasesShaped,
     };
   }
-  function getProtocolsView() {
-    const tmpls = db.prepare("SELECT * FROM templates WHERE kind = 'protocol' AND active = 1 ORDER BY created_at DESC").all();
+  function getProtocolsView({ includeInactive = false } = {}) {
+    const tmpls = db.prepare(
+      `SELECT * FROM templates WHERE kind = 'protocol'${includeInactive ? '' : ' AND active = 1'} ORDER BY created_at DESC`
+    ).all();
     return tmpls.map(protocolShape);
   }
   function getProtocolView(id) {
@@ -575,10 +624,8 @@ function createModel(db) {
         }
 
         if (start > end) continue;
-        const weekdays = JSON.parse(s.weekdays || '[0,1,2,3,4,5,6]');
         for (let cur = start; cur <= end; cur = addDays(cur, 1)) {
-          const dayOfWeek = new Date(cur + 'T12:00:00').getDay();
-          if (!weekdays.includes(dayOfWeek)) continue;
+          if (!occursOn(s, cur)) continue;
           insert.run(s.id, cur);
         }
       }
@@ -755,7 +802,7 @@ function createModel(db) {
     db.prepare(`UPDATE series SET ${sets} WHERE template_id = @tid AND status = 'active'`).run({ ...fields, tid: templateId });
   }
 
-  function updateItem(id, data) {
+  function updateItem(id, data, today) {
     const t = db.prepare('SELECT * FROM templates WHERE id = ?').get(id);
     if (!t || t.kind === 'protocol') return null;
     const phase = phase0(id);
@@ -765,6 +812,8 @@ function createModel(db) {
       category: pick(data.category, phase.category),
       icon: pick(data.icon, phase.icon),
       weekdays: pick(data.weekdays, phase.weekdays),
+      repeat_every: data.repeat_every !== undefined ? Number(data.repeat_every) : phase.repeat_every,
+      repeat_unit: pick(data.repeat_unit, phase.repeat_unit),
       periods: pick(data.periods, phase.periods),
       total_count: data.total_count !== undefined ? (data.total_count || null) : phase.total_count,
       alert_penultimate: data.alert_penultimate !== undefined ? (data.alert_penultimate || null) : phase.alert_penultimate,
@@ -783,21 +832,27 @@ function createModel(db) {
         data.followup_recreate !== undefined ? (data.followup_recreate ? 1 : 0) : t.followup_recreate,
         id,
       );
-      db.prepare(`UPDATE phases SET title=?, category=?, icon=?, weekdays=?, periods=?, total_count=?,
-        alert_penultimate=?, alert_last=? WHERE id=?`).run(
-        next.title, next.category, next.icon, next.weekdays, next.periods, next.total_count,
-        next.alert_penultimate, next.alert_last, phase.id,
+      db.prepare(`UPDATE phases SET title=?, category=?, icon=?, weekdays=?, repeat_every=?, repeat_unit=?,
+        periods=?, total_count=?, alert_penultimate=?, alert_last=? WHERE id=?`).run(
+        next.title, next.category, next.icon, next.weekdays, next.repeat_every, next.repeat_unit,
+        next.periods, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
       );
       reflectOnActiveSeries(id, {
         title: next.title, category: next.category, icon: next.icon,
         sort_order: pick(data.sort_order, t.sort_order),
-        weekdays: next.weekdays, periods: next.periods, total_count: next.total_count,
+        weekdays: next.weekdays, repeat_every: next.repeat_every, repeat_unit: next.repeat_unit,
+        periods: next.periods, total_count: next.total_count,
         alert_penultimate: next.alert_penultimate, alert_last: next.alert_last,
       });
       const norm = (v) => (v === '' || v === null ? null : v);
       if (data.start_date !== undefined) db.prepare("UPDATE series SET start_date=? WHERE template_id=? AND status='active'").run(norm(data.start_date), id);
       if (data.end_date !== undefined) db.prepare("UPDATE series SET end_date=? WHERE template_id=? AND status='active'").run(norm(data.end_date), id);
-      for (const s of db.prepare("SELECT id FROM series WHERE template_id=? AND status='active'").all(id)) {
+      const from = today || new Date().toISOString().slice(0, 10);
+      for (const s of db.prepare("SELECT * FROM series WHERE template_id=? AND status='active'").all(id)) {
+        // Rule changed (weekdays/frequency): drop pending tasks from today on
+        // that no longer fit it. Past unmarked days stay as missed history.
+        const pending = db.prepare('SELECT id, date FROM daily_tasks WHERE series_id=? AND completed=0 AND date>=?').all(s.id, from);
+        for (const dt of pending) if (!occursOn(s, dt.date)) db.prepare('DELETE FROM daily_tasks WHERE id=?').run(dt.id);
         recountSeries(s.id);
         reconcileCountCycle(s.id);
       }
@@ -832,7 +887,8 @@ function createModel(db) {
     if (!t) return null;
     db.transaction(() => {
       db.prepare(`UPDATE templates SET name=?, repeat_indefinitely=?, active=?,
-        followup_title=?, followup_category=?, followup_icon=?, followup_recreate=? WHERE id=?`).run(
+        followup_title=?, followup_category=?, followup_icon=?, followup_recreate=?,
+        alert_penultimate=?, alert_last=? WHERE id=?`).run(
         data.name ?? t.name,
         data.repeat_indefinitely !== undefined ? (data.repeat_indefinitely ? 1 : 0) : t.repeat_indefinitely,
         data.active !== undefined ? (data.active ? 1 : 0) : t.active,
@@ -840,6 +896,8 @@ function createModel(db) {
         data.followup_category !== undefined ? (data.followup_category || null) : t.followup_category,
         data.followup_icon !== undefined ? (data.followup_icon || null) : t.followup_icon,
         data.followup_recreate !== undefined ? (data.followup_recreate ? 1 : 0) : t.followup_recreate,
+        data.alert_penultimate !== undefined ? (data.alert_penultimate || null) : t.alert_penultimate,
+        data.alert_last !== undefined ? (data.alert_last || null) : t.alert_last,
         id,
       );
       if (Array.isArray(data.phases)) {
@@ -854,10 +912,11 @@ function createModel(db) {
         const withDates = computePhaseDates(start, data.phases, repeat);
         withDates.forEach((p, i) => {
           const phaseId = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon,
-            weekdays, periods, total_count, duration_days, alert_penultimate, alert_last)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+            weekdays, repeat_every, repeat_unit, periods, total_count, duration_days, alert_penultimate, alert_last)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
             id, i, p.title, p.category, p.icon || '💊',
             typeof p.weekdays === 'string' ? p.weekdays : JSON.stringify(p.weekdays || [0, 1, 2, 3, 4, 5, 6]),
+            Number(p.repeat_every) || 1, p.repeat_unit || 'week',
             typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []),
             p.total_count || null, Number(p.duration_days) || null,
             p.alert_penultimate || null, p.alert_last || null,

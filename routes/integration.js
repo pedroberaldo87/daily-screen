@@ -263,7 +263,7 @@ router.post('/items/:id/convert-to-protocol', (req, res) => {
 // ═══ Protocols ═══
 
 router.get('/protocols', (req, res) => {
-  res.json(getProtocols());
+  res.json(getProtocols({ includeInactive: req.query.include_inactive === '1' }));
 });
 
 router.get('/protocols/:id', (req, res) => {

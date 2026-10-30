@@ -113,6 +113,12 @@
       border-color: var(--accent-sup);
     }
 
+    /* Repeat frequency (weekdays only apply to the weekly unit) */
+    .repeat-row { display: flex; gap: 8px; align-items: center; }
+    .modal--panel .repeat-row input { width: 70px; }
+    .modal--panel .repeat-row select { width: auto; }
+    .panel-block.is-disabled { opacity: 0.35; pointer-events: none; }
+
     /* Period selector */
     .period-selector { display: flex; gap: 6px; flex-wrap: wrap; }
     .period-btn {
@@ -1268,6 +1274,19 @@
           <!-- COL A · QUANDO -->
           <div class="ops-col">
             <div class="panel-block">
+              <div class="panel-title" data-i18n="admin.repeat">Frequência</div>
+              <div class="repeat-row">
+                <span data-i18n="admin.repeatEvery">A cada</span>
+                <input type="number" id="edit-repeat-every" min="1" max="365" value="1">
+                <select id="edit-repeat-unit">
+                  <option value="day" data-i18n="admin.repeatUnitDay">dia(s)</option>
+                  <option value="week" data-i18n="admin.repeatUnitWeek">semana(s)</option>
+                  <option value="month" data-i18n="admin.repeatUnitMonth">mês(es)</option>
+                </select>
+              </div>
+              <small class="period-help" data-i18n="admin.repeatHelp">Conta a partir da data de início. Dias da semana valem só para semanas.</small>
+            </div>
+            <div class="panel-block" id="edit-weekdays-block">
               <div class="panel-title" data-i18n="admin.weekdays">Dias da semana</div>
               <div class="weekday-selector" id="edit-weekdays">
                 <button type="button" class="weekday-btn" data-day="0" data-i18n="weekday.sun">Dom</button>
