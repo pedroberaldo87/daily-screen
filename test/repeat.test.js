@@ -132,3 +132,16 @@ test('fase de protocolo guarda a frequência e item convertido em protocolo mant
   m.updateProtocol(pid, { start_date: '2026-11-01', phases: [{ ...ph, duration_days: 9 }] });
   assert.equal(m.getProtocolView(pid).phases[0].repeat_every, 3);
 });
+
+test('weekdays enviado como lista (formato da doc da API) é normalizado e não derruba as tarefas', () => {
+  const m = fresh();
+  const data = { title: 'X', category: 'reminder', start_date: '2026-11-01', weekdays: [1] };
+  assert.deepEqual(validateItemData(data, true), []);
+  const id = m.createItem(data);
+  assert.equal(m.getItemView(id).weekdays, '[1]');
+  assert.deepEqual(daysWithTask(m, '2026-11-01', '2026-11-07'), ['2026-11-02']);
+  const upd = { weekdays: [1, 3] };
+  validateItemData(upd, false);
+  m.updateItem(id, upd, '2026-11-01');
+  assert.equal(m.getItemView(id).weekdays, '[1,3]');
+});
