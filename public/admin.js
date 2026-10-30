@@ -352,9 +352,10 @@ function phaseStatusForProtocol(protocol, phases, today) {
 
 // ═══ Protocol Modal ═══
 
-function openProtocolModal(id) {
+function openProtocolModal(id, draft) {
   document.getElementById('protocol-form').reset();
   document.getElementById('protocol-id').value = '';
+  document.getElementById('protocol-convert-from').value = draft ? draft.itemId : '';
   document.getElementById('phases-container').innerHTML = '';
   document.getElementById('protocol-modal-title').textContent = id
     ? t('admin.editProtocol')
@@ -383,6 +384,17 @@ function openProtocolModal(id) {
       if (!phases.length) addPhaseToForm();
       renderPhaseTimeline();
     });
+  } else if (draft) {
+    document.getElementById('protocol-modal-title').textContent = `${t('admin.convertToProtocol')}: ${draft.name}`;
+    document.getElementById('protocol-name').value = draft.name;
+    document.getElementById('protocol-start-date').value = todayISO();
+    document.getElementById('protocol-repeat-indefinitely').checked = false;
+    document.getElementById('protocol-followup-icon').value = draft.followup_icon || '';
+    document.getElementById('protocol-followup-title').value = draft.followup_title || '';
+    document.getElementById('protocol-followup-category').value = draft.followup_category || '';
+    document.getElementById('protocol-followup-recreate').checked = !!draft.followup_recreate;
+    for (const phase of draft.phases) addPhaseToForm(phase);
+    renderPhaseTimeline();
   } else {
     document.getElementById('protocol-start-date').value = todayISO();
     document.getElementById('protocol-repeat-indefinitely').checked = false;
@@ -598,8 +610,11 @@ document.getElementById('protocol-form').addEventListener('submit', async (e) =>
     return;
   }
 
-  const url = id ? `${API}/protocols/${id}` : `${API}/protocols`;
-  const method = id ? 'PUT' : 'POST';
+  // Conversion draft: the item becomes a protocol only now, in one request.
+  const convertFrom = document.getElementById('protocol-convert-from').value;
+  const url = convertFrom ? `${API}/items/${convertFrom}/convert-to-protocol`
+    : id ? `${API}/protocols/${id}` : `${API}/protocols`;
+  const method = id && !convertFrom ? 'PUT' : 'POST';
 
   const res = await fetch(url, {
     method,
@@ -791,23 +806,42 @@ function updateScheduleSummary() {
 document.getElementById('edit-start-date')?.addEventListener('input', updateScheduleSummary);
 document.getElementById('edit-end-date')?.addEventListener('input', updateScheduleSummary);
 
-async function convertEditItemToProtocol() {
+// "Virar protocolo" only drafts: it opens the protocol form pre-filled from the
+// item form (unsaved edits included). Nothing changes on the server until the
+// protocol form's Save; Cancel leaves the item untouched.
+function convertEditItemToProtocol() {
   const id = Number(document.getElementById('edit-id').value);
   if (!id) return;
-  const res = await fetch(`${API}/items/${id}/convert-to-protocol`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    showToast(err.error || 'Erro', 'err');
-    return;
-  }
-  const protocol = await res.json();
+  const totalCount = document.getElementById('edit-total-count').value;
+  const base = {
+    title: document.getElementById('edit-title').value.trim(),
+    icon: document.getElementById('edit-icon').value.trim() || '💊',
+    category: document.getElementById('edit-category').value,
+    periods: JSON.stringify(currentEditPeriods),
+    weekdays: JSON.stringify(currentEditWeekdays),
+    repeat_every: Number(document.getElementById('edit-repeat-every').value) || 1,
+    repeat_unit: document.getElementById('edit-repeat-unit').value,
+    duration_days: 7,
+  };
+  const draft = {
+    itemId: id,
+    name: base.title,
+    followup_icon: document.getElementById('edit-followup-icon').value.trim(),
+    followup_title: document.getElementById('edit-followup-title').value.trim(),
+    followup_category: document.getElementById('edit-followup-category').value,
+    followup_recreate: document.getElementById('edit-followup-recreate').checked,
+    phases: [
+      {
+        ...base,
+        total_count: totalCount ? Number(totalCount) : null,
+        alert_penultimate: document.getElementById('edit-alert-penultimate').value.trim() || null,
+        alert_last: document.getElementById('edit-alert-last').value.trim() || null,
+      },
+      { ...base },
+    ],
+  };
   closeModal();
-  openProtocolModal(protocol.id);
-  loadItems();
+  openProtocolModal(null, draft);
 }
 
 document.getElementById('edit-form').addEventListener('submit', async (e) => {

@@ -1263,7 +1263,7 @@
             </div>
           </div>
           <div class="schedule-actions" id="schedule-actions" hidden>
-            <small class="convert-hint" data-i18n="admin.convertToProtocolHint">Cria um protocolo com este item como Fase 1 e uma Fase 2 em branco pra você ajustar.</small>
+            <small class="convert-hint" data-i18n="admin.convertToProtocolHint">Abre o protocolo já preenchido com este item como Fase 1 para você revisar. Nada muda até você salvar.</small>
             <button type="button" class="btn btn-secondary btn-sm" onclick="convertEditItemToProtocol()" data-i18n="admin.convertToProtocol">Virar protocolo</button>
           </div>
         </div>
@@ -1386,6 +1386,7 @@
       <h2 id="protocol-modal-title" data-i18n="admin.newProtocol">Novo protocolo</h2>
       <form id="protocol-form">
         <input type="hidden" id="protocol-id">
+        <input type="hidden" id="protocol-convert-from">
 
         <!-- Identity strip -->
         <div class="protocol-identity-strip">

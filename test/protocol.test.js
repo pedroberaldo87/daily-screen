@@ -95,3 +95,31 @@ test('editar template não reescreve séries passadas (snapshot)', () => {
   const serie = db.prepare('SELECT title FROM series WHERE template_id = ? AND sort_order = 0').get(id);
   assert.equal(serie.title, '25mg', 'série mantém o snapshot original');
 });
+
+test('converter item em protocolo com o formulário inteiro mantém cartela e doses marcadas na fase 1', () => {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  const m = createModel(db);
+  const id = m.createItem({ title: 'Mounjaro', category: 'medication', icon: '💉', start_date: '2026-10-01', total_count: 4, weekdays: '[5]' });
+  for (const d of ['2026-10-02', '2026-10-09']) { m.generateDailyTasks(d); m.toggleTask(m.getTasksView(d)[0].id); }
+  const before = m.getItemView(id);
+  const p = m.convertItemToProtocol(id, {
+    today: '2026-10-30',
+    name: 'Mounjaro escalonado', start_date: '2026-10-30', repeat_indefinitely: false,
+    alert_last: 'Fim do protocolo',
+    phases: [
+      { title: 'Mounjaro 2,5', category: 'medication', icon: '💉', duration_days: 28, weekdays: '[5]', periods: '[]', total_count: 4 },
+      { title: 'Mounjaro 5', category: 'medication', icon: '💉', duration_days: 28, weekdays: '[5]', periods: '[]' },
+    ],
+  });
+  assert.equal(p.name, 'Mounjaro escalonado');
+  assert.equal(p.alert_last, 'Fim do protocolo');
+  assert.equal(p.phases.length, 2);
+  assert.deepEqual([p.phases[0].title, p.phases[0].start_date, p.phases[0].end_date], ['Mounjaro 2,5', '2026-10-30', '2026-11-26']);
+  assert.deepEqual([p.phases[1].title, p.phases[1].start_date, p.phases[1].end_date], ['Mounjaro 5', '2026-11-27', '2026-12-24']);
+  // a cartela é a mesma série, com as 2 doses marcadas
+  const s = db.prepare("SELECT * FROM series WHERE phase_id = ? AND status = 'active'").get(p.phases[0].id);
+  assert.equal(s.completed_count, before.completed_count);
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id = ? AND completed = 1').get(s.id).c, 2);
+  assert.equal(m.getItemView(id), null); // saiu da lista de itens
+});

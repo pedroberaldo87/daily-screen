@@ -162,7 +162,7 @@
   "admin.windowStart": "Data de início (opcional)",
   "admin.windowEnd": "Data de fim (opcional)",
   "admin.convertToProtocol": "Virar protocolo",
-  "admin.convertToProtocolHint": "Cria um protocolo com este item como Fase 1 e uma Fase 2 em branco pra você ajustar.",
+  "admin.convertToProtocolHint": "Abre o protocolo já preenchido com este item como Fase 1 para você revisar. Nada muda até você salvar.",
   "admin.itemWindow": "{start} a {end}",
   "admin.itemWindowOpenStart": "até {end}",
   "admin.itemWindowOpenEnd": "a partir de {start}",

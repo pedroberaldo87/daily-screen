@@ -248,6 +248,11 @@ router.delete('/items/:id/permanent', (req, res) => {
 });
 
 router.post('/items/:id/convert-to-protocol', (req, res) => {
+  // Full form (admin's conversion draft): validate like a protocol create.
+  if (req.body && req.body.phases !== undefined) {
+    const errors = validateProtocolData(req.body, true);
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+  }
   try {
     const protocol = convertItemToProtocol(Number(req.params.id), req.body || {});
     if (!protocol) return res.status(404).json({ error: 'Item not found' });

@@ -162,7 +162,7 @@
   "admin.windowStart": "Start date (optional)",
   "admin.windowEnd": "End date (optional)",
   "admin.convertToProtocol": "Turn into protocol",
-  "admin.convertToProtocolHint": "Creates a protocol with this item as Phase 1 and an empty Phase 2 for you to adjust.",
+  "admin.convertToProtocolHint": "Opens a protocol pre-filled with this item as Phase 1 for you to review. Nothing changes until you save.",
   "admin.itemWindow": "{start} to {end}",
   "admin.itemWindowOpenStart": "until {end}",
   "admin.itemWindowOpenEnd": "from {start}",

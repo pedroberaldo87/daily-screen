@@ -954,6 +954,7 @@ function createModel(db) {
       throw err;
     }
     const today = opts.today || new Date().toISOString().slice(0, 10);
+    if (Array.isArray(opts.phases) && opts.phases.length) return convertWithForm(t, opts, today);
     const firstDur = Math.max(1, Math.min(3650, Number(opts.first_phase_duration) || 7));
     const secondDur = Math.max(1, Math.min(3650, Number(opts.second_phase_duration) || 7));
     const repeat = !!opts.repeat_indefinitely;
@@ -976,6 +977,64 @@ function createModel(db) {
       ).lastInsertRowid;
       const phase2 = db.prepare('SELECT * FROM phases WHERE id = ?').get(p2);
       spawnSeries(id, phase2, { seq: 1, start_date: secondStart, end_date: secondEnd });
+    })();
+    return getProtocolView(id);
+  }
+
+  // Conversion saved from the admin's protocol form (the whole draft in one
+  // call, nothing changes before Save). Phase 1 is the item's own phase: same
+  // phase/series rows, so the cartela, marked doses and count_offset survive;
+  // only its fields and date window change. Phases 2..N are created fresh.
+  function convertWithForm(t, opts, today) {
+    const id = t.id;
+    const repeat = !!opts.repeat_indefinitely;
+    const withDates = computePhaseDates(opts.start_date || today, opts.phases, repeat);
+    const phase = phase0(id);
+    const str = (v, fallback) => (v === undefined ? fallback : typeof v === 'string' ? v : JSON.stringify(v));
+    const opt = (v, fallback) => (v === undefined ? fallback : v || null);
+    db.transaction(() => {
+      db.prepare(`UPDATE templates SET kind = 'protocol', name = ?, repeat_indefinitely = ?,
+        followup_title = ?, followup_category = ?, followup_icon = ?, followup_recreate = ?,
+        alert_penultimate = ?, alert_last = ? WHERE id = ?`).run(
+        opts.name && opts.name.trim() ? opts.name : phase.title, repeat ? 1 : 0,
+        opt(opts.followup_title, t.followup_title), opt(opts.followup_category, t.followup_category),
+        opt(opts.followup_icon, t.followup_icon),
+        opts.followup_recreate !== undefined ? (opts.followup_recreate ? 1 : 0) : t.followup_recreate,
+        opts.alert_penultimate || null, opts.alert_last || null, id,
+      );
+      const f = withDates[0];
+      const next = {
+        title: f.title || phase.title, category: f.category || phase.category, icon: f.icon || phase.icon,
+        weekdays: str(f.weekdays, phase.weekdays), periods: str(f.periods, phase.periods),
+        repeat_every: Number(f.repeat_every) || phase.repeat_every, repeat_unit: f.repeat_unit || phase.repeat_unit,
+        total_count: opt(f.total_count, phase.total_count),
+        alert_penultimate: opt(f.alert_penultimate, phase.alert_penultimate), alert_last: opt(f.alert_last, phase.alert_last),
+      };
+      db.prepare(`UPDATE phases SET phase_order = 0, duration_days = ?, title = ?, category = ?, icon = ?, weekdays = ?,
+        periods = ?, repeat_every = ?, repeat_unit = ?, total_count = ?, alert_penultimate = ?, alert_last = ? WHERE id = ?`).run(
+        Number(f.duration_days) || 1, next.title, next.category, next.icon, next.weekdays, next.periods,
+        next.repeat_every, next.repeat_unit, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
+      );
+      reflectOnActiveSeries(id, { ...next, start_date: f.start_date, end_date: f.end_date });
+      // No active cartela (closed, "Comprar" pending): phase 1 gets a fresh one.
+      if (!db.prepare("SELECT 1 FROM series WHERE template_id = ? AND status = 'active'").get(id)) {
+        const nextSeq = (db.prepare('SELECT MAX(seq) m FROM series WHERE template_id = ?').get(id).m || 0) + 1;
+        spawnSeries(id, db.prepare('SELECT * FROM phases WHERE id = ?').get(phase.id), { seq: nextSeq, start_date: f.start_date, end_date: f.end_date });
+      }
+      withDates.slice(1).forEach((p, i) => {
+        const phaseId = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon,
+          weekdays, repeat_every, repeat_unit, periods, total_count, duration_days, alert_penultimate, alert_last)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+          id, i + 1, p.title, p.category, p.icon || '💊', str(p.weekdays, '[0,1,2,3,4,5,6]'),
+          Number(p.repeat_every) || 1, p.repeat_unit || 'week', str(p.periods, '[]'),
+          p.total_count || null, Number(p.duration_days) || null, p.alert_penultimate || null, p.alert_last || null,
+        ).lastInsertRowid;
+        spawnSeries(id, db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId), { seq: 1, start_date: p.start_date, end_date: p.end_date });
+      });
+      for (const s of db.prepare("SELECT id FROM series WHERE template_id = ? AND status = 'active'").all(id)) {
+        recountSeries(s.id);
+        reconcileCountCycle(s.id);
+      }
     })();
     return getProtocolView(id);
   }
