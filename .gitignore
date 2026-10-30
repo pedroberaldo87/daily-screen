@@ -22,3 +22,4 @@ GEMINI.md
 # impeccable: cache local do detector
 .impeccable/hook.cache.json
 .impeccable/config.local.json
+.claude/secrets/
