@@ -182,3 +182,15 @@ test('"Já completou" corrigido numa cartela já fechada reabre a cartela e tira
   const titles = m.getTasksView('2026-11-03').map((t) => t.title);
   assert.ok(titles.includes('C') && !titles.includes('Comprar C'), titles.join(','));
 });
+
+test('apagar pelo tablet só arquiva (dá para reativar), nunca apaga de vez', () => {
+  const m = fresh();
+  const id = m.createItem({ title: 'X', category: 'reminder', start_date: '2026-11-01' });
+  m.generateDailyTasks('2026-11-01');
+  const dailyId = m.getTasksView('2026-11-01')[0].id;
+  assert.deepEqual(m.deleteByDailyTask(dailyId, { archiveOnly: true }), { ok: true });
+  assert.equal(m.getItemView(id).active, 0); // continua existindo, arquivado
+  assert.equal(m.getTasksView('2026-11-01').length, 0); // some da tela
+  m.updateItem(id, { active: 1 }, '2026-11-01');
+  assert.equal(m.getTasksView('2026-11-01').length, 1); // reativar devolve
+});

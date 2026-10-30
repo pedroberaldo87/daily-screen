@@ -61,8 +61,13 @@ function requireBearerToken(req, res, next) {
 
   if (row.expires_at) {
     const now = new Date();
-    const expires = new Date(row.expires_at.replace(' ', 'T') + 'Z');
-    if (!isNaN(expires.getTime()) && expires <= now) {
+    // The admin stores ISO with a zone ("...Z"); SQLite-style values have none.
+    // Appending a second "Z" made the date invalid and skipped the check.
+    const raw = row.expires_at;
+    const hasZone = /(Z|[+-]\d\d:?\d\d)$/i.test(raw);
+    const expires = new Date(hasZone ? raw : raw.replace(' ', 'T') + 'Z');
+    // Unparseable expiry fails closed.
+    if (isNaN(expires.getTime()) || expires <= now) {
       logFail(`expired token=${row.token_prefix}`, req);
       return res.status(401).json({ error: 'Token expired' });
     }

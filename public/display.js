@@ -190,9 +190,20 @@ function updateCurrentPeriodHighlight() {
   });
 }
 
+let lastToday = todayStr(); // "today" at the previous tick — detects midnight
+
 function updateDate() {
+  const today = todayStr();
+  // Midnight rollover: a screen that was showing today follows it to the new
+  // day (otherwise doses get marked on yesterday until someone touches it).
+  if (today !== lastToday && currentDate === lastToday) {
+    lastToday = today;
+    goToday();
+    return;
+  }
+  lastToday = today;
   // If viewing today, update from system clock; otherwise keep navigated date
-  if (currentDate === todayStr()) {
+  if (currentDate === today) {
     updateDateDisplay();
   }
 }

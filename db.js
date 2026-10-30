@@ -93,8 +93,8 @@ function setTaskCompleted(id, completed) {
 function recreateFromFollowup(dailyTaskId, today) {
   return model.recreateFromFollowup(dailyTaskId, today || todayDate());
 }
-function deleteTaskItem(dailyTaskId) {
-  return model.deleteByDailyTask(dailyTaskId);
+function deleteTaskItem(dailyTaskId, opts) {
+  return model.deleteByDailyTask(dailyTaskId, opts);
 }
 
 function getAllRoutineItems() {

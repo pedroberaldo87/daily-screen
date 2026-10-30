@@ -1027,14 +1027,18 @@ function createModel(db) {
   // ── Delete from the wall screen: remove the whole item/protocol behind a
   // daily task (resolves daily_task → series → template, then reuses the admin
   // delete: archives if it has completed history, hard-deletes otherwise). ──
-  function deleteByDailyTask(dailyId) {
+  // archiveOnly (the public wall-tablet route): only deactivate, never
+  // hard-delete — anyone reaching the tablet URL can call it, so it must be
+  // reversible from the admin ("Reativar").
+  function deleteByDailyTask(dailyId, { archiveOnly = false } = {}) {
     const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
     if (!task) return { ok: false, error: 'task not found' };
     const serie = db.prepare('SELECT * FROM series WHERE id = ?').get(task.series_id);
     if (!serie) return { ok: false, error: 'series not found' };
     const tmpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(serie.template_id);
     if (!tmpl) return { ok: false, error: 'template not found' };
-    if (tmpl.kind === 'protocol') deleteProtocol(tmpl.id);
+    if (archiveOnly) deactivateItem(tmpl.id);
+    else if (tmpl.kind === 'protocol') deleteProtocol(tmpl.id);
     else deleteItemPermanently(tmpl.id);
     return { ok: true };
   }

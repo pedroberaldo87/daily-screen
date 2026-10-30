@@ -60,10 +60,11 @@ router.post('/tasks/:id/recreate', (req, res) => {
   res.json(result);
 });
 
-// Remove the whole item/protocol behind a task — from the wall tablet (public,
-// like /toggle). Long-press + confirm on the screen guards against misclicks.
+// Remove the item/protocol behind a task — from the wall tablet (public, like
+// /toggle). Long-press + confirm on the screen guards against misclicks; being
+// public, it only archives (reversible in the admin), never hard-deletes.
 router.delete('/tasks/:id', (req, res) => {
-  const result = deleteTaskItem(Number(req.params.id));
+  const result = deleteTaskItem(Number(req.params.id), { archiveOnly: true });
   if (!result.ok) return res.status(404).json(result);
   res.json(result);
 });
