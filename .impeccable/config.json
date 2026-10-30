@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "views/admin.html"
+        ],
+        "createdAt": "2026-10-30T22:01:24.204Z",
+        "reason": "Faixa lateral dos cartões de protocolo é intencional (confirmado pelo usuário)"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "views/admin.html"
+        ],
+        "createdAt": "2026-10-30T22:01:24.232Z",
+        "reason": "Brilho do marcador de título do painel é intencional (confirmado pelo usuário)"
+      }
+    ]
+  }
+}
