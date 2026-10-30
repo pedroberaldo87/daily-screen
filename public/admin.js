@@ -727,7 +727,9 @@ async function openEditModal(id) {
 
   // Count & Alerts
   document.getElementById('edit-total-count').value = item.total_count || '';
-  document.getElementById('edit-completed-count').value = item.completed_count || 0;
+  const completedInput = document.getElementById('edit-completed-count');
+  completedInput.value = item.completed_count || 0;
+  completedInput.dataset.initial = completedInput.value;
   document.getElementById('edit-alert-penultimate').value = item.alert_penultimate || '';
   document.getElementById('edit-alert-last').value = item.alert_last || '';
 
@@ -833,6 +835,12 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     start_date: document.getElementById('edit-start-date').value || null,
     end_date: document.getElementById('edit-end-date').value || null,
   };
+  // Manual correction of "Já completou": only sent when edited, so a dose
+  // marked on the tablet while the modal was open isn't overwritten.
+  const completedInput = document.getElementById('edit-completed-count');
+  if (completedInput.value !== completedInput.dataset.initial) {
+    data.completed_count = Number(completedInput.value) || 0;
+  }
 
   await fetch(`${API}/items/${id}`, {
     method: 'PUT',

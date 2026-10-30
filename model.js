@@ -91,6 +91,7 @@ function initSchema(db) {
     ['phases', 'repeat_every', 'INTEGER DEFAULT 1'], ['phases', 'repeat_unit', "TEXT DEFAULT 'week'"],
     ['series', 'repeat_every', 'INTEGER DEFAULT 1'], ['series', 'repeat_unit', "TEXT DEFAULT 'week'"],
     ['templates', 'alert_penultimate', 'TEXT'], ['templates', 'alert_last', 'TEXT'],
+    ['series', 'count_offset', 'INTEGER DEFAULT 0'],
   ];
   for (const [table, col, type] of added) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -264,9 +265,12 @@ function createModel(db) {
   //     "Comprar X"); no máx. 1 follow-up pendente por cartela.
   // ════════════════════════════════════════════════════════════════════════
 
-  // Contador derivado: completed_count = daily_tasks marcadas da cartela.
+  // Contador derivado: completed_count = daily_tasks marcadas da cartela +
+  // count_offset (correção manual do "Já completou" no admin/API).
   function recountSeries(seriesId) {
-    const n = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id = ? AND completed = 1').get(seriesId).c;
+    const n = db.prepare(
+      'SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks WHERE series_id = ? AND completed = 1'
+    ).get(seriesId, seriesId).c;
     db.prepare('UPDATE series SET completed_count = ? WHERE id = ?').run(n, seriesId);
     return n;
   }
@@ -350,8 +354,8 @@ function createModel(db) {
   // same number on every day.
   function countUpTo(seriesId, date) {
     return db.prepare(
-      'SELECT COUNT(*) c FROM daily_tasks WHERE series_id = ? AND completed = 1 AND date <= ?'
-    ).get(seriesId, date).c;
+      'SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks WHERE series_id = ? AND completed = 1 AND date <= ?'
+    ).get(seriesId, seriesId, date).c;
   }
 
   // ── Map a joined daily_task+series+template row to the frozen task shape ──
@@ -848,11 +852,21 @@ function createModel(db) {
       if (data.start_date !== undefined) db.prepare("UPDATE series SET start_date=? WHERE template_id=? AND status='active'").run(norm(data.start_date), id);
       if (data.end_date !== undefined) db.prepare("UPDATE series SET end_date=? WHERE template_id=? AND status='active'").run(norm(data.end_date), id);
       const from = today || new Date().toISOString().slice(0, 10);
-      for (const s of db.prepare("SELECT * FROM series WHERE template_id=? AND status='active'").all(id)) {
+      const targets = db.prepare("SELECT * FROM series WHERE template_id=? AND status='active'").all(id);
+      // Correcting "Já completou" on a closed cartela (Comprar pending) targets
+      // it too — lowering the count reopens it via reconcileCountCycle.
+      if (!targets.length && data.completed_count !== undefined && currentSeries(id)) targets.push(currentSeries(id));
+      for (const s of targets) {
         // Rule changed (weekdays/frequency): drop pending tasks from today on
         // that no longer fit it. Past unmarked days stay as missed history.
         const pending = db.prepare('SELECT id, date FROM daily_tasks WHERE series_id=? AND completed=0 AND date>=?').all(s.id, from);
         for (const dt of pending) if (!occursOn(s, dt.date)) db.prepare('DELETE FROM daily_tasks WHERE id=?').run(dt.id);
+        // Manual "Já completou": keep the marked tasks as they are, store the
+        // difference as an offset on this cartela.
+        if (data.completed_count !== undefined) {
+          const marked = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id=? AND completed=1').get(s.id).c;
+          db.prepare('UPDATE series SET count_offset=? WHERE id=?').run(Number(data.completed_count) - marked, s.id);
+        }
         recountSeries(s.id);
         reconcileCountCycle(s.id);
       }

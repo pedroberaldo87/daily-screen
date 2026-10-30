@@ -145,3 +145,40 @@ test('weekdays enviado como lista (formato da doc da API) é normalizado e não 
   m.updateItem(id, upd, '2026-11-01');
   assert.equal(m.getItemView(id).weekdays, '[1,3]');
 });
+
+test('"Já completou" corrigido à mão vale no contador do tablet e fecha a cartela no total', () => {
+  const m = fresh();
+  const id = m.createItem({ title: 'C', category: 'medication', start_date: '2026-11-01', total_count: 10, followup_title: 'Comprar C' });
+  for (const d of ['2026-11-01', '2026-11-02']) { m.generateDailyTasks(d); m.toggleTask(m.getTasksView(d)[0].id); }
+  assert.equal(m.updateItem(id, { completed_count: 8 }, '2026-11-02').completed_count, 8);
+  // progressivo por dia: o ajuste (6) soma às doses marcadas até o dia
+  assert.equal(m.getTasksView('2026-11-01')[0].completed_count, 7);
+  assert.equal(m.getTasksView('2026-11-02')[0].completed_count, 8);
+  // marcar no tablet continua somando por cima do ajuste
+  m.generateDailyTasks('2026-11-03'); m.toggleTask(m.getTasksView('2026-11-03')[0].id);
+  assert.equal(m.getItemView(id).completed_count, 9);
+  // corrigir para o total fecha a cartela e cria o "Comprar"
+  const item = m.updateItem(id, { completed_count: 10 }, '2026-11-03');
+  assert.equal(item.series[0].status, 'completed');
+  m.generateDailyTasks('2026-11-04');
+  assert.ok(m.getTasksView('2026-11-04').some((t) => t.title === 'Comprar C'));
+});
+
+test('"Já completou" fora do intervalo é recusado', () => {
+  assert.ok(validateItemData({ completed_count: -1 }, false).length);
+  assert.ok(validateItemData({ completed_count: 2.5 }, false).length);
+  assert.deepEqual(validateItemData({ completed_count: 0 }, false), []);
+});
+
+test('"Já completou" corrigido numa cartela já fechada reabre a cartela e tira o "Comprar"', () => {
+  const m = fresh();
+  const id = m.createItem({ title: 'C', category: 'medication', start_date: '2026-11-01', total_count: 2, followup_title: 'Comprar C' });
+  for (const d of ['2026-11-01', '2026-11-02']) { m.generateDailyTasks(d); m.toggleTask(m.getTasksView(d).find((t) => t.title === 'C').id); }
+  assert.equal(m.getItemView(id).series[0].status, 'completed');
+  const item = m.updateItem(id, { completed_count: 1 }, '2026-11-02');
+  assert.equal(item.completed_count, 1);
+  assert.equal(item.series[0].status, 'active');
+  m.generateDailyTasks('2026-11-03');
+  const titles = m.getTasksView('2026-11-03').map((t) => t.title);
+  assert.ok(titles.includes('C') && !titles.includes('Comprar C'), titles.join(','));
+});

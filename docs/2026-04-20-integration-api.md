@@ -169,7 +169,7 @@ type Item = {
   repeat_unit: "day" | "week" | "month"; // default "week"; counted from start_date (see 9.3.1)
   periods: string;                    // JSON array of "morning"|"afternoon"|"night", [] = day-long
   total_count: number | null;         // if set, item becomes a counter
-  completed_count: number;            // counter progress, updated by toggleTask
+  completed_count: number;            // counter progress (marked tasks + manual correction). PUT /items/:id {completed_count} corrects it on the current cartela; marked tasks are kept, and lowering it below total reopens a closed cartela
   alert_penultimate: string | null;   // shown at total_count - 1
   alert_last: string | null;          // shown at total_count (triggers followup)
   followup_title: string | null;      // title of replacement item when counter reaches max
