@@ -932,7 +932,7 @@ document.getElementById('confirm-action').addEventListener('click', async () => 
   closeConfirm();
 });
 
-// ═══ Histórico — every occurrence (day) of a repeated item ═══
+// ═══ Lançamentos (entries) — every occurrence (day) of a repeated item ═══
 // Governance without touching the DB by hand: see when each day was created,
 // whether it was done, mark/unmark, remove/restore (soft), add a day, and
 // bulk-remove unmarked past days that no longer fit the rule. Every removal
@@ -953,7 +953,8 @@ function openHistoryModal(id, opts) {
   historyItemId = id;
   const item = itemsById[id];
   const weekdays = JSON.parse((item && item.weekdays) || '[0,1,2,3,4,5,6]');
-  document.getElementById('history-title').textContent = opts ? opts.title : (item ? item.title : '');
+  document.getElementById('history-title').textContent =
+    t('admin.historyTitle', { name: opts ? opts.title : (item ? item.title : '') });
   document.getElementById('history-icon').textContent = opts ? (opts.icon || '') : (item ? item.icon : '');
   document.getElementById('history-rule').textContent = opts ? opts.rule : (item ? repeatSummary(item, weekdays) : '');
   document.getElementById('history-add-date').value = todayISO();
