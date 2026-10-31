@@ -93,7 +93,7 @@ Tokens are currently **full-access**: any valid, non-revoked, non-expired token 
 | 401 | `{"error":"Token required"}` | Missing or malformed `Authorization` header |
 | 401 | `{"error":"Invalid token"}` | Token doesn't exist |
 | 401 | `{"error":"Token revoked"}` | Admin revoked this token |
-| 401 | `{"error":"Token expired"}` | Token's `expires_at` has passed |
+| 401 | `{"error":"Token expired"}` | Token's `expires_at` has passed (an unparseable `expires_at` also counts as expired — fails closed) |
 
 ---
 
@@ -340,7 +340,7 @@ Executes the "yes, I bought it / start a new box" flow for a follow-up task crea
 **Errors:** `400` if the task is not a recreate follow-up; `404` is not used here because the model returns a domain error payload.
 
 #### `DELETE /tasks/:id`
-Deletes the whole item/protocol behind the task, mirroring the wall-tablet long-press delete flow.
+Removes the whole item/protocol behind the task: it is **archived** (`active = 0`, restorable) if it has any marked dose, otherwise deleted. Note: the public tablet route (`DELETE /api/tasks/:id`, long-press on the wall screen) only ever archives. To hide a single day instead of the whole item, use `DELETE /occurrences/:id` (see **Entries** below).
 
 **Response 200:**
 ```json
@@ -481,7 +481,7 @@ Permanent delete endpoint. In practice the model is history-preserving:
 #### `POST /items/:id/convert-to-protocol`
 Converts a standalone item into the first phase of a brand-new protocol. **Preserves the original item id**, so existing daily_tasks stay linked (no history loss).
 
-**Body (all optional):**
+**Body — short form (all optional):**
 ```json
 {
   "name": "Ritalina taper",
@@ -490,10 +490,56 @@ Converts a standalone item into the first phase of a brand-new protocol. **Prese
   "repeat_indefinitely": false
 }
 ```
-If omitted, defaults apply (see `db.js#convertItemToProtocol`).
+If omitted, defaults apply (see `model.js#convertItemToProtocol`).
+
+**Body — full form** (what the admin panel sends since 2026-10-31): the same body as `POST /protocols` (`name`, `start_date`, `repeat_indefinitely`, `phases[]`, `alert_penultimate`, `alert_last`, `followup_*`). It is validated like a protocol create and converted in **one transaction**: phase 1 reuses the item's own phase/series (box, marked doses and manual count correction survive), phases 2..N are created fresh. The admin panel only calls this when the user presses **Save** — opening the form changes nothing.
 
 **Response 201:** the full protocol object (with phases).
 **Errors:** `404` item not found, `409` item is already a phase.
+
+---
+
+### Entries (per-day governance)
+
+Every day of a repeated item (a `daily_tasks` row, here called an *occurrence*), with the same contract the admin panel's **Entries** window ("Lançamentos") uses. Works for items and protocols (pass the template id).
+
+```typescript
+type Occurrence = {
+  id: number;                         // daily_tasks.id — same id as in /tasks
+  date: string;                       // "YYYY-MM-DD"
+  completed: 0 | 1;
+  completed_at: string | null;
+  created_at: string | null;          // when the day was generated/added (null = before 2026-10-31)
+  origin: "auto" | "manual";          // manual = added by hand
+  removed_at: string | null;          // soft removal — see 9.11
+  series_id: number; seq: number;     // which box/phase it belongs to
+  series_status: "active" | "completed";
+  total_count: number | null;
+  fits_rule: boolean;                 // falls on the series' CURRENT rule and date window
+};
+```
+
+#### `GET /items/:id/occurrences?from=YYYY-MM-DD&to=YYYY-MM-DD`
+Newest first. `from`/`to` optional; must be real calendar days (`2026-02-31` → 400). `404` if the item/protocol doesn't exist.
+
+#### `POST /items/:id/occurrences`
+Add a one-off day: `{ "date": "2026-11-04" }`. Goes into the active series that covers that date, with `origin: "manual"`. **201** with the occurrence. **409** if the day already exists (restore it if it was removed) or no active series covers the date.
+
+#### `PUT /occurrences/:id`
+`{ "completed": true|false }` — mark/unmark (same box ceiling and state machine as `/tasks/:id/toggle`); **409** if nothing changed (removed day, or box already at its total).
+`{ "removed": true|false }` — remove/restore. Restore is **409** when it would push a box past its total, or when it's an unmarked day of a closed box.
+
+#### `DELETE /occurrences/:id`
+Soft-remove one day (same as `PUT {removed:true}`). Reversible.
+
+#### `POST /items/:id/occurrences/prune`
+`{ "dry_run": true }` lists, `{ "dry_run": false }` removes: **past**, **unmarked**, **non-manual** days that don't fit the current rule (typical after changing weekdays/frequency). Marked doses never leave in bulk. Response: `{ "dry_run": bool, "count": n, "occurrences": [{ "id", "date" }] }`.
+
+```bash
+# preview, then clean
+curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"dry_run":true}' https://daily.aiworks.app.br/integration/v1/items/6/occurrences/prune
+```
 
 ---
 
@@ -637,6 +683,12 @@ Counted from the item's `start_date` (creation day if it has none).
 - `day` — every N days; `weekdays` is ignored. E.g. `{"repeat_every":3,"repeat_unit":"day"}` from 2026-11-01 → 01, 04, 07…
 - `month` — every N months on the start date's day; `weekdays` is ignored. Day 31 falls on the last day of shorter months (31/01 → 28/02 → 31/03).
 Protocol phases accept the same two fields (via API only — the admin protocol form preserves them but doesn't edit them).
+
+### 9.11. Removing a day is a tombstone, not a delete
+Days are generated lazily: deleting a `daily_tasks` row that still fits the rule would just bring it back the next time anyone looks at that date. So `DELETE /occurrences/:id` sets `removed_at` instead — the day disappears from the tablet, from the box counter and from `/history`/`/adherence`, and can be restored.
+
+### 9.12. Old boxes don't reopen; one "Buy X" per box
+Unmarking or removing a dose of an **older** box while a newer one is in use only fixes that old box's count — it never reopens it (at most one active box per item). Each box spawns at most one "Buy X" follow-up, so restoring a dose can't ask you to buy again.
 
 ### 9.4. Protocol phases are routine_items rows
 You cannot create a phase directly — you must create/update through `/protocols` endpoints. `GET /items` filters to standalone items only; protocol phases live inside `GET /protocols/:id`.
