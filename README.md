@@ -17,21 +17,27 @@ A wall-mounted daily assistant for tablets (Fire HD 8, 1280×800 landscape). Dis
   <tr>
     <td align="center"><a href="docs/screenshots/admin.png"><img src="docs/screenshots/admin.png" width="280" alt="Admin panel"></a><br><sub>Admin panel</sub></td>
     <td align="center"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" width="280" alt="Settings modal"></a><br><sub>Settings</sub></td>
-    <td align="center"><a href="docs/screenshots/edit-item.png"><img src="docs/screenshots/edit-item.png" width="280" alt="Edit item modal"></a><br><sub>Edit item</sub></td>
+    <td align="center"><a href="docs/screenshots/edit-item.png"><img src="docs/screenshots/edit-item.png" width="280" alt="Edit item modal with repeat frequency"></a><br><sub>Edit item · repeat frequency</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3"><a href="docs/screenshots/history.png"><img src="docs/screenshots/history.png" width="560" alt="History window — every day of a repeated item, with mark, remove/restore and add a one-off day"></a><br><sub>History — see and fix every day of a repeated task</sub></td>
   </tr>
 </table>
 
 ## Features
 
-- **Daily checklist** — medications, supplements, reminders with emoji icons
-- **Progress tracking** — visual completion percentage
+- **Daily checklist** — medications, supplements, reminders with emoji icons, split by period (morning/afternoon/night)
+- **Repeat frequency** — every N days, weeks (on chosen weekdays) or months (day 31 falls on the last day of shorter months)
+- **Boxes with a dose count** — e.g. a 30-pill box counts down as you mark doses; when it runs out a "Buy X" task appears, and "I bought it" starts a fresh box
+- **Protocols** — dated phases in sequence (tapering, titration), each with its own schedule, plus end-of-protocol alerts
+- **History & governance** — per item, see every day: when it was created, whether it was done, whether it still fits the rule; mark/unmark, remove/restore (always reversible), add a one-off day, or clean days that no longer fit the rule
+- **Manual corrections** — fix the "already taken" count of a box by hand; changing the rule cleans pending days from today on
+- **Non-destructive by default** — converting an item into a protocol only happens when you save; deleting from the tablet only archives
+- **Progress tracking** — visual completion percentage; the screen follows midnight on its own
 - **Weather forecast** — Open-Meteo integration (free, no API key)
 - **Date navigation** — browse past/future days, auto-reset to today after 5 min idle
-- **Admin panel** — password-protected item management and settings
-- **Responsive design** — optimized for 1280×800, works on other sizes
-- **Configurable** — font sizes, colors, weekday scheduling per item
-- **Follow-up tasks** — auto-generate follow-up reminders
-- **PWA with offline support** — service worker for network interruptions
+- **Admin panel** — password-protected item management and settings, in Portuguese, English or Spanish
+- **Integration API** — token-authenticated REST surface so external agents can configure everything the panel can
 - **No build step** — vanilla HTML/CSS/JS, runs directly in Node.js
 
 ## Quick Start
@@ -135,20 +141,22 @@ Daily Screen follows a simple server-rendered architecture with no build step.
 **Frontend** — Vanilla HTML/CSS/JavaScript:
 - **display.html** — tablet view (4-panel layout: clock, weather, checklist, progress)
 - **admin.html** — admin panel (CRUD, settings, emoji picker)
-- **sw.js** — service worker for offline support and cache management
+- **sw.js** — service worker (currently inactive: its inline registration is blocked by the CSP, so the tablet picks up a new frontend on reload)
 
-**Database** — SQLite with WAL mode:
-- `routine_items` — template tasks (title, icon, category, weekday schedule, alerts)
-- `daily_tasks` — daily instances (lazy-generated from routine_items)
-- `settings` — key-value store (location, fonts, timezone)
-- `sessions` — admin session tokens
+**Database** — SQLite with WAL mode (schema in **model.js**, upgraded in place on boot):
+- `templates` — what you manage in the panel (item or protocol, follow-up settings, protocol alerts)
+- `phases` — the schedule: weekdays, periods, repeat frequency, dose count, duration
+- `series` — each concrete box / protocol phase, an immutable snapshot with its own counter and status
+- `daily_tasks` — one row per series per day, lazy-generated, with creation time, origin (auto/manual) and reversible removal
+- `settings`, `sessions`, `api_tokens`, `api_idempotency_keys`
 
 ### Directory Structure
 
 ```
 daily-screen/
   server.js              # Express entry point
-  db.js                  # SQLite schema, queries, migrations
+  model.js               # Data model: templates → phases → series → daily_tasks, box cycle, frequency
+  db.js                  # Opens SQLite, runs the one-time migration, keeps the API names stable
   weather.js             # Open-Meteo fetch + 30min cache
   session-store.js       # Custom SQLite session store
   Dockerfile             # Multi-stage Node 22 Alpine
@@ -160,8 +168,14 @@ daily-screen/
     display.js           # GET / → tablet display
     admin.js             # POST /admin/login, GET /admin
     api.js               # REST API endpoints
+    integration.js       # /integration/v1 (bearer token)
+    occurrences.js       # History/governance routes, mounted on both APIs
+  lib/
+    validators.js        # Request validation and normalization
   middleware/
     auth.js              # Session authentication
+    token-auth.js        # Bearer tokens for the Integration API
+  test/                  # node --test suites (in-memory SQLite)
   public/
     style.css            # Design system (Ember Night palette)
     display.js           # Tablet display logic (clock, weather, tasks, date nav)
@@ -178,13 +192,13 @@ daily-screen/
 
 ### Key Patterns
 
-**Lazy task generation** — daily_tasks are created on-demand when you call `GET /api/tasks?date=YYYY-MM-DD`. If tasks exist for that date, they're returned; otherwise, they're generated from `routine_items` matching the date's weekday.
+**Lazy task generation** — daily_tasks are created on-demand when you call `GET /api/tasks?date=YYYY-MM-DD`: one per active series whose rule (weekdays + frequency, inside its date window) falls on that date. Removing a day in History leaves a tombstone, so it is not regenerated.
 
 **CSS custom properties** — Font sizes are stored in the database and applied as CSS variables. Admin can adjust `--fs-clock`, `--fs-greeting`, etc. in real-time.
 
 **Emoji icons** — Tasks use Unicode emoji stored as text in SQLite. The emoji picker provides searchable selection with Portuguese-Brazilian keywords.
 
-**Service worker** — Uses cache-first strategy for shell assets (HTML, CSS, JS) and network-first for API calls. After deploy, bump `CACHE_NAME` in **public/sw.js** to force browser cache refresh.
+**Service worker** — **public/sw.js** implements cache-first for the shell and network-first for the API, but it never registers today (the inline registration script is blocked by the Content-Security-Policy). After a frontend deploy, reload the tablet once.
 
 ## API Endpoints
 
@@ -193,6 +207,7 @@ All endpoints are prefixed with `/api`.
 **Public (no auth required):**
 - `GET /api/tasks?date=YYYY-MM-DD` — Get tasks for date (lazy-generates if needed)
 - `POST /api/tasks/:id/toggle` — Mark/unmark task as complete
+- `DELETE /api/tasks/:id` — From the tablet: archives the item behind the task (reversible in the panel)
 - `GET /api/items` — List all routine items
 - `GET /api/weather` — Weather forecast (cached 30 min)
 - `GET /api/geocoding?q=cidade` — Search cities (Open-Meteo)
@@ -203,11 +218,16 @@ All endpoints are prefixed with `/api`.
 - `PUT /api/items/:id` — Update routine item
 - `DELETE /api/items/:id` — Soft delete (deactivate)
 - `DELETE /api/items/:id/permanent` — Hard delete
+- `POST /api/items/:id/convert-to-protocol` — Turn an item into a protocol (send the full protocol form to convert in one step, keeping the box history)
+- `GET/POST/PUT/DELETE /api/protocols[/:id]` — Protocols (`?include_inactive=1` lists archived ones)
+- `GET /api/items/:id/occurrences` — Every day of an item (History)
+- `POST /api/items/:id/occurrences` — Add a one-off day · `POST /api/items/:id/occurrences/prune` — clean off-rule days (`dry_run` to preview)
+- `PUT /api/occurrences/:id` (`completed` / `removed`) · `DELETE /api/occurrences/:id` — mark, unmark, remove, restore
 - `PUT /api/settings` — Update settings (key-value pairs)
 
 ### Integration API (token-authenticated)
 
-For external agents (scripts, cron jobs, other LLM-driven tools), there's a parallel token-authenticated surface at `/integration/v1/*` with full CRUD coverage of items, protocols, tasks, settings, and adherence/history analytics. Tokens are managed in the admin panel under **Tokens** (top nav). A valid token currently has full access to the whole integration surface (no per-token scopes yet).
+For external agents (scripts, cron jobs, other LLM-driven tools), there's a parallel token-authenticated surface at `/integration/v1/*` with full CRUD coverage of items, protocols, tasks, settings, the day-by-day History of each item (`/integration/v1/items/:id/occurrences`), and adherence/history analytics. Tokens are managed in the admin panel under **Tokens** (top nav). A valid token currently has full access to the whole integration surface (no per-token scopes yet).
 
 See [`docs/2026-04-20-integration-api.md`](docs/2026-04-20-integration-api.md) for the complete guide — includes data models, endpoint reference with curl + Node.js examples, gotchas, and a ready-to-copy skill template for Claude Code.
 
