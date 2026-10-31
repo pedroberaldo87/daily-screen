@@ -349,6 +349,30 @@
     .modal h2 { font-size: 1.1rem; margin-bottom: 20px; }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
 
+    /* Histórico (occurrences of a repeated item) */
+    .modal--history { max-width: 860px; }
+    .history-rule { color: var(--text-secondary, #a09cb0); font-size: 0.85rem; margin: -10px 0 14px; }
+    .history-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .history-toolbar .spacer { flex: 1; }
+    .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow-y: auto; }
+    .hist-row {
+      display: grid; grid-template-columns: 150px 90px 1fr auto; gap: 10px; align-items: center;
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input);
+      font-size: 0.85rem;
+    }
+    .hist-row.removed > :not(.hist-actions) { opacity: 0.45; }
+    .history-toolbar .btn:disabled { opacity: 0.35; cursor: default; }
+    .hist-row.removed .hist-date { text-decoration: line-through; }
+    .hist-date { font-weight: 600; }
+    .hist-seq, .hist-created { color: var(--text-muted); font-size: 0.78rem; }
+    .hist-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .hist-status.st-done { color: #6fcf97; }
+    .hist-status.st-missed { color: var(--accent-danger); }
+    .hist-badge { font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); }
+    .hist-badge.off { color: var(--accent-sup); border-color: var(--accent-sup); }
+    .hist-actions { display: flex; gap: 6px; }
+    .history-empty { color: var(--text-muted); padding: 16px 0; text-align: center; }
+
     /* Collapsible sections in form */
     .form-section {
       border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px;
@@ -1479,6 +1503,27 @@
   </div>
 
   <!-- ═══ Confirm Dialog ═══ -->
+  <div class="modal-overlay" id="history-modal">
+    <div class="modal modal--panel modal--history">
+      <h2 id="history-title" data-i18n="admin.history">Histórico</h2>
+      <p class="history-rule" id="history-rule"></p>
+      <div class="history-toolbar">
+        <select id="history-range" onchange="loadHistory()">
+          <option value="90" data-i18n="admin.historyRange90">Últimos 90 dias</option>
+          <option value="all" data-i18n="admin.historyRangeAll">Tudo</option>
+        </select>
+        <input type="date" id="history-add-date">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addHistoryDay()" data-i18n="admin.historyAdd">Adicionar dia</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-danger btn-sm" id="history-prune-btn" onclick="pruneHistory()"></button>
+      </div>
+      <div class="history-list" id="history-list"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeHistoryModal()" data-i18n="common.close">Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="confirm-overlay" id="confirm-dialog">
     <div class="confirm-box">
       <p id="confirm-message"></p>

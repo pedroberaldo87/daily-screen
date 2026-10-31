@@ -110,6 +110,7 @@ function buildItemCard(item) {
       </div>
     </div>
     <div class="item-actions">
+      <button class="btn btn-sm btn-secondary" data-action="history">${escapeHtml(t('admin.history'))}</button>
       <button class="btn btn-sm btn-secondary" data-action="open-modal">${escapeHtml(t('common.edit'))}</button>
       ${item.active
         ? `<button class="btn btn-sm btn-danger" data-action="deactivate">${escapeHtml(t('common.deactivate'))}</button>`
@@ -930,6 +931,136 @@ document.getElementById('confirm-action').addEventListener('click', async () => 
   closeConfirm();
 });
 
+// ═══ Histórico — every occurrence (day) of a repeated item ═══
+// Governance without touching the DB by hand: see when each day was created,
+// whether it was done, mark/unmark, remove/restore (soft), add a day, and
+// bulk-remove unmarked past days that no longer fit the rule. Every removal
+// goes through the confirm dialog and is reversible.
+
+let historyItemId = null;
+let historyPruneCount = 0;
+
+function openHistoryModal(id) {
+  historyItemId = id;
+  const item = itemsById[id];
+  const weekdays = JSON.parse((item && item.weekdays) || '[0,1,2,3,4,5,6]');
+  document.getElementById('history-title').textContent = t('admin.historyTitle', { name: item ? item.title : '' });
+  document.getElementById('history-rule').textContent = item ? repeatSummary(item, weekdays) : '';
+  document.getElementById('history-add-date').value = todayISO();
+  document.getElementById('history-modal').classList.add('active');
+  loadHistory();
+}
+
+function closeHistoryModal() {
+  document.getElementById('history-modal').classList.remove('active');
+  historyItemId = null;
+}
+
+function fmtStamp(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' }) + ' '
+    + d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
+}
+
+function historyRow(o) {
+  const today = todayISO();
+  const dow = new Date(o.date + 'T12:00:00').getDay();
+  let status;
+  let cls;
+  if (o.removed_at) { status = t('admin.historyRemoved', { when: fmtStamp(o.removed_at) }); cls = ''; }
+  else if (o.completed) { status = t('admin.historyDone', { when: fmtStamp(o.completed_at) }); cls = 'st-done'; }
+  else if (o.date > today) { status = t('admin.historyScheduled'); cls = ''; }
+  else if (o.date === today) { status = t('admin.historyPending'); cls = ''; }
+  else { status = t('admin.historyMissed'); cls = 'st-missed'; }
+  const badges = [
+    !o.fits_rule ? `<span class="hist-badge off">${escapeHtml(t('admin.historyOffRule'))}</span>` : '',
+    o.origin === 'manual' ? `<span class="hist-badge">${escapeHtml(t('admin.historyManual'))}</span>` : '',
+  ].join('');
+  const created = o.created_at ? t('admin.historyCreated', { when: fmtStamp(o.created_at) }) : t('admin.historyCreatedUnknown');
+  const actions = o.removed_at
+    ? `<button type="button" class="btn btn-secondary btn-sm" data-hist="restore" data-id="${o.id}">${escapeHtml(t('admin.historyRestore'))}</button>`
+    : `<button type="button" class="btn btn-secondary btn-sm" data-hist="toggle" data-id="${o.id}" data-completed="${o.completed ? 1 : 0}">${escapeHtml(t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark'))}</button>
+       <button type="button" class="btn btn-danger btn-sm" data-hist="remove" data-id="${o.id}" data-date="${o.date}">${escapeHtml(t('admin.historyRemove'))}</button>`;
+  return `<div class="hist-row${o.removed_at ? ' removed' : ''}">
+    <span class="hist-date">${escapeHtml(t(WEEKDAY_KEYS[dow]))} ${escapeHtml(formatDate(o.date))}</span>
+    <span class="hist-seq">${o.total_count ? escapeHtml(t('admin.historySeq', { n: o.seq })) : ''}</span>
+    <span class="hist-info"><span class="hist-status ${cls}">${escapeHtml(status)}</span>${badges}<span class="hist-created">${escapeHtml(created)}</span></span>
+    <span class="hist-actions">${actions}</span>
+  </div>`;
+}
+
+async function loadHistory() {
+  if (!historyItemId) return;
+  const range = document.getElementById('history-range').value;
+  let qs = '';
+  if (range !== 'all') {
+    const d = new Date();
+    d.setDate(d.getDate() - Number(range));
+    qs = `?from=${d.toISOString().slice(0, 10)}`;
+  }
+  const [listRes, pruneRes] = await Promise.all([
+    fetch(`${API}/items/${historyItemId}/occurrences${qs}`),
+    fetch(`${API}/items/${historyItemId}/occurrences/prune`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dry_run: true }),
+    }),
+  ]);
+  const list = listRes.ok ? await listRes.json() : [];
+  historyPruneCount = pruneRes.ok ? (await pruneRes.json()).count : 0;
+  const pruneBtn = document.getElementById('history-prune-btn');
+  pruneBtn.textContent = t('admin.historyPrune', { n: historyPruneCount });
+  pruneBtn.disabled = historyPruneCount === 0;
+  document.getElementById('history-list').innerHTML = list.length
+    ? list.map(historyRow).join('')
+    : `<div class="history-empty">${escapeHtml(t('admin.historyEmpty'))}</div>`;
+}
+
+async function historyRequest(url, method, body) {
+  const res = await fetch(url, {
+    method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.error || 'Erro', 'err');
+    return false;
+  }
+  await loadHistory();
+  loadItems(); // card counters (cartela) follow the change
+  return true;
+}
+
+function askConfirm(message, action) {
+  document.getElementById('confirm-message').textContent = message;
+  document.getElementById('confirm-dialog').classList.add('active');
+  pendingAction = action;
+}
+
+function addHistoryDay() {
+  const date = document.getElementById('history-add-date').value;
+  if (!date) return;
+  historyRequest(`${API}/items/${historyItemId}/occurrences`, 'POST', { date });
+}
+
+function pruneHistory() {
+  if (!historyPruneCount) return;
+  askConfirm(t('admin.historyConfirmPrune', { n: historyPruneCount }), () =>
+    historyRequest(`${API}/items/${historyItemId}/occurrences/prune`, 'POST', { dry_run: false }));
+}
+
+document.getElementById('history-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-hist]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (btn.dataset.hist === 'toggle') {
+    historyRequest(`${API}/occurrences/${id}`, 'PUT', { completed: btn.dataset.completed !== '1' });
+  } else if (btn.dataset.hist === 'restore') {
+    historyRequest(`${API}/occurrences/${id}`, 'PUT', { removed: false });
+  } else if (btn.dataset.hist === 'remove') {
+    askConfirm(t('admin.historyConfirmRemove', { date: formatDate(btn.dataset.date) }), () =>
+      historyRequest(`${API}/occurrences/${id}`, 'DELETE'));
+  }
+});
+
 // ═══ Location Search ═══
 
 let searchTimeout = null;
@@ -1523,6 +1654,9 @@ document.getElementById('items-list').addEventListener('click', (e) => {
     }
     case 'open-modal':
       openEditModal(id);
+      break;
+    case 'history':
+      openHistoryModal(id);
       break;
     case 'deactivate':
       deactivateItem(id);

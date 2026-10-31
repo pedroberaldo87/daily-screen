@@ -21,6 +21,7 @@ const {
   getCompletedSeries,
 } = require('../db');
 const { fetchWeather } = require('../weather');
+const { mountOccurrences } = require('./occurrences');
 const {
   validateItemData,
   validateSettings,
@@ -194,6 +195,9 @@ router.post('/items/:id/convert-to-protocol', requireApiAuth, (req, res) => {
     res.status(400).json({ error: err.message || 'Conversion failed' });
   }
 });
+
+// ═══ Occurrences (admin "Histórico" of each repeated item) ═══
+mountOccurrences(router, requireApiAuth);
 
 // ═══ Protocols (sequences of dated phases) ═══
 

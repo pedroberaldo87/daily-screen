@@ -90,6 +90,22 @@ function getTask(id) {
 function setTaskCompleted(id, completed) {
   return model.setTaskCompleted(id, completed);
 }
+// Occurrence governance (admin "Histórico" + Integration API).
+function getOccurrences(templateId, range) {
+  return model.getOccurrences(templateId, range);
+}
+function addOccurrence(templateId, date) {
+  return model.addOccurrence(templateId, date);
+}
+function setOccurrenceCompleted(dailyId, completed) {
+  return model.setTaskCompleted(dailyId, completed) ? model.getOccurrence(dailyId) : null;
+}
+function removeOccurrence(dailyId, removed) {
+  return model.removeOccurrence(dailyId, removed);
+}
+function pruneOffRule(templateId, dryRun) {
+  return model.pruneOffRule(templateId, { before: todayDate(), dryRun });
+}
 function recreateFromFollowup(dailyTaskId, today) {
   return model.recreateFromFollowup(dailyTaskId, today || todayDate());
 }
@@ -216,6 +232,11 @@ function saveApiIdempotencyKey({ tokenId, method, path, idempotencyKey, requestH
 
 module.exports = {
   db,
+  getOccurrences,
+  addOccurrence,
+  setOccurrenceCompleted,
+  removeOccurrence,
+  pruneOffRule,
   getRoutineItems,
   getAllRoutineItems,
   getRoutineItem,

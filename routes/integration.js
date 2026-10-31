@@ -33,6 +33,7 @@ const {
   saveApiIdempotencyKey,
 } = require('../db');
 const { fetchWeather } = require('../weather');
+const { mountOccurrences } = require('./occurrences');
 const {
   validateItemData,
   validateSettings,
@@ -264,6 +265,10 @@ router.post('/items/:id/convert-to-protocol', (req, res) => {
     res.status(400).json({ error: err.message || 'Conversion failed' });
   }
 });
+
+// ═══ Occurrences (each day of a repeated item) ═══
+// Auth is already enforced by router.use(requireBearerToken) above.
+mountOccurrences(router, (req, res, next) => next());
 
 // ═══ Protocols ═══
 

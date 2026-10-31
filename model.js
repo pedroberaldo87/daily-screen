@@ -92,6 +92,10 @@ function initSchema(db) {
     ['series', 'repeat_every', 'INTEGER DEFAULT 1'], ['series', 'repeat_unit', "TEXT DEFAULT 'week'"],
     ['templates', 'alert_penultimate', 'TEXT'], ['templates', 'alert_last', 'TEXT'],
     ['series', 'count_offset', 'INTEGER DEFAULT 0'],
+    // Occurrence audit (admin "Histórico"): when each day was created, whether
+    // by generation or by hand, and soft-removal (a tombstone row blocks
+    // generateDailyTasks from recreating a removed day; restore = clear it).
+    ['daily_tasks', 'created_at', 'TEXT'], ['daily_tasks', 'origin', 'TEXT'], ['daily_tasks', 'removed_at', 'TEXT'],
   ];
   for (const [table, col, type] of added) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -269,7 +273,7 @@ function createModel(db) {
   // count_offset (correção manual do "Já completou" no admin/API).
   function recountSeries(seriesId) {
     const n = db.prepare(
-      'SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks WHERE series_id = ? AND completed = 1'
+      'SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks WHERE series_id = ? AND completed = 1 AND removed_at IS NULL'
     ).get(seriesId, seriesId).c;
     db.prepare('UPDATE series SET completed_count = ? WHERE id = ?').run(n, seriesId);
     return n;
@@ -281,9 +285,11 @@ function createModel(db) {
     const tmpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(serie.template_id);
     if (!tmpl || !tmpl.followup_title) return;
 
-    // Já existe um follow-up pendente desta cartela? não duplica.
+    // Esta cartela já gerou um follow-up (pendente OU já marcado)? não duplica.
+    // Restaurar uma dose no Histórico fecha a cartela de novo e não pode pedir
+    // "Comprar" de um remédio já comprado.
     const existing = db.prepare(
-      "SELECT 1 FROM series WHERE source_series_id = ? AND status = 'active' LIMIT 1"
+      'SELECT 1 FROM series WHERE source_series_id = ? LIMIT 1'
     ).get(serie.id);
     if (existing) return;
 
@@ -316,11 +322,14 @@ function createModel(db) {
       // o total, elas são excedentes (dia gerado durante uma reabertura, ou dia
       // pulado) e apareceriam como tarefa "N/N" clicável morta. Sem isso, o
       // ciclo desmarcar→remarcar deixava órfã na tela.
-      db.prepare('DELETE FROM daily_tasks WHERE series_id = ? AND completed = 0').run(seriesId);
+      db.prepare('DELETE FROM daily_tasks WHERE series_id = ? AND completed = 0 AND removed_at IS NULL').run(seriesId);
       db.prepare("UPDATE series SET status = 'completed', completed_at = ? WHERE id = ?").run(nowIso(), seriesId);
       spawnFollowup(serie);
-    } else if (!reached && serie.status === 'completed') {
+    } else if (!reached && serie.status === 'completed'
+      && !db.prepare('SELECT 1 FROM series WHERE template_id = ? AND seq > ? LIMIT 1').get(serie.template_id, serie.seq)) {
       // Reabriu (desmarcou): volta a ativa e desfaz o "Comprar" pendente vazio.
+      // Só a cartela mais recente reabre — mexer numa dose antiga pelo
+      // Histórico, com outra cartela já em uso, só corrige a contagem dela.
       db.prepare("UPDATE series SET status = 'active', completed_at = NULL WHERE id = ?").run(seriesId);
       const pending = db.prepare(
         "SELECT id FROM series WHERE source_series_id = ? AND status = 'active' AND completed_count = 0"
@@ -332,7 +341,7 @@ function createModel(db) {
   // ── Lazy generation: one daily_task per active series in its window ──
   function generateDailyTasks(date) {
     const seriesList = db.prepare("SELECT * FROM series WHERE status = 'active'").all();
-    const insert = db.prepare('INSERT OR IGNORE INTO daily_tasks (series_id, date) VALUES (?, ?)');
+    const insert = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'auto')");
     const tx = db.transaction(() => {
       for (const s of seriesList) {
         if (s.start_date && date < s.start_date) continue;
@@ -342,7 +351,7 @@ function createModel(db) {
         // doses are all marked, even across skipped days. The ceiling lives in
         // toggleTask (refuse marking beyond total_count) — counting generated
         // days here would freeze a box whenever a dose day was skipped.
-        insert.run(s.id, date);
+        insert.run(s.id, date, nowIso());
       }
     });
     tx();
@@ -354,7 +363,7 @@ function createModel(db) {
   // same number on every day.
   function countUpTo(seriesId, date) {
     return db.prepare(
-      'SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks WHERE series_id = ? AND completed = 1 AND date <= ?'
+      'SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks WHERE series_id = ? AND completed = 1 AND removed_at IS NULL AND date <= ?'
     ).get(seriesId, seriesId, date).c;
   }
 
@@ -412,7 +421,7 @@ function createModel(db) {
     JOIN templates t ON t.id = s.template_id`;
 
   function getTasksView(date) {
-    const rows = db.prepare(`${TASK_SELECT} WHERE dt.date = ? AND t.active = 1 ORDER BY s.sort_order, s.id`).all(date);
+    const rows = db.prepare(`${TASK_SELECT} WHERE dt.date = ? AND t.active = 1 AND dt.removed_at IS NULL ORDER BY s.sort_order, s.id`).all(date);
     return rows.map((r) => mapTaskRow(r, date));
   }
 
@@ -420,6 +429,11 @@ function createModel(db) {
   function toggleTask(id) {
     const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(id);
     if (!task) return null;
+    // A removed occurrence (admin "Histórico") can't be marked until restored.
+    if (task.removed_at) {
+      const row = db.prepare(`${TASK_SELECT} WHERE dt.id = ?`).get(id);
+      return mapTaskRow(row, row.date);
+    }
     const newCompleted = task.completed ? 0 : 1;
 
     // Ceiling (defense in depth): refuse to MARK a count series already at its
@@ -611,7 +625,7 @@ function createModel(db) {
       WHERE (start_date IS NULL OR start_date <= ?)
         AND (end_date IS NULL OR end_date >= ? OR status = 'completed')
     `).all(dateTo, dateFrom);
-    const insert = db.prepare('INSERT OR IGNORE INTO daily_tasks (series_id, date) VALUES (?, ?)');
+    const insert = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'auto')");
 
     db.transaction(() => {
       for (const s of seriesList) {
@@ -623,14 +637,14 @@ function createModel(db) {
         // queries can backfill missed days inside the real series lifetime
         // without inventing post-completion tasks.
         if (!s.end_date && s.total_count != null && s.status === 'completed') {
-          const maxTaskDate = db.prepare('SELECT MAX(date) AS max_date FROM daily_tasks WHERE series_id = ?').get(s.id).max_date;
+          const maxTaskDate = db.prepare('SELECT MAX(date) AS max_date FROM daily_tasks WHERE series_id = ? AND removed_at IS NULL').get(s.id).max_date;
           if (maxTaskDate && maxTaskDate < end) end = maxTaskDate;
         }
 
         if (start > end) continue;
         for (let cur = start; cur <= end; cur = addDays(cur, 1)) {
           if (!occursOn(s, cur)) continue;
-          insert.run(s.id, cur);
+          insert.run(s.id, cur, nowIso());
         }
       }
     })();
@@ -667,7 +681,7 @@ function createModel(db) {
 
   function getHistoryView({ dateFrom, dateTo, category = null, itemId = null, protocolId = null, includeFollowups = false }) {
     materializeTasksInRange(dateFrom, dateTo);
-    const clauses = ['dt.date >= ?', 'dt.date <= ?'];
+    const clauses = ['dt.date >= ?', 'dt.date <= ?', 'dt.removed_at IS NULL'];
     const params = [dateFrom, dateTo];
     if (!includeFollowups) clauses.push('t.recreate_template_id IS NULL');
     if (category) {
@@ -859,12 +873,12 @@ function createModel(db) {
       for (const s of targets) {
         // Rule changed (weekdays/frequency): drop pending tasks from today on
         // that no longer fit it. Past unmarked days stay as missed history.
-        const pending = db.prepare('SELECT id, date FROM daily_tasks WHERE series_id=? AND completed=0 AND date>=?').all(s.id, from);
+        const pending = db.prepare('SELECT id, date FROM daily_tasks WHERE series_id=? AND completed=0 AND removed_at IS NULL AND date>=?').all(s.id, from);
         for (const dt of pending) if (!occursOn(s, dt.date)) db.prepare('DELETE FROM daily_tasks WHERE id=?').run(dt.id);
         // Manual "Já completou": keep the marked tasks as they are, store the
         // difference as an offset on this cartela.
         if (data.completed_count !== undefined) {
-          const marked = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id=? AND completed=1').get(s.id).c;
+          const marked = db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE series_id=? AND completed=1 AND removed_at IS NULL').get(s.id).c;
           db.prepare('UPDATE series SET count_offset=? WHERE id=?').run(Number(data.completed_count) - marked, s.id);
         }
         recountSeries(s.id);
@@ -1039,6 +1053,78 @@ function createModel(db) {
     return getProtocolView(id);
   }
 
+  // ── Occurrence governance (admin "Histórico"): every daily_task of a
+  // template, with when it was created, whether it fits the series' current
+  // rule, and soft-removal. Counting always goes through recount/reconcile. ──
+  function occurrenceShape(r, s) {
+    const inWindow = (!s.start_date || r.date >= s.start_date) && (!s.end_date || r.date <= s.end_date);
+    return {
+      id: r.id, date: r.date, completed: r.completed, completed_at: r.completed_at,
+      created_at: r.created_at, origin: r.origin || 'auto', removed_at: r.removed_at,
+      series_id: s.id, seq: s.seq, series_status: s.status, total_count: s.total_count,
+      fits_rule: inWindow && occursOn(s, r.date),
+    };
+  }
+  function getOccurrences(templateId, { from = null, to = null } = {}) {
+    if (!db.prepare('SELECT 1 FROM templates WHERE id = ?').get(templateId)) return null;
+    const series = new Map(db.prepare('SELECT * FROM series WHERE template_id = ?').all(templateId).map((s) => [s.id, s]));
+    const clauses = ['s.template_id = ?'];
+    const params = [templateId];
+    if (from) { clauses.push('dt.date >= ?'); params.push(from); }
+    if (to) { clauses.push('dt.date <= ?'); params.push(to); }
+    return db.prepare(`SELECT dt.* FROM daily_tasks dt JOIN series s ON s.id = dt.series_id
+      WHERE ${clauses.join(' AND ')} ORDER BY dt.date DESC, dt.id DESC`).all(...params)
+      .map((r) => occurrenceShape(r, series.get(r.series_id)));
+  }
+  function getOccurrence(dailyId) {
+    const r = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
+    return r ? occurrenceShape(r, db.prepare('SELECT * FROM series WHERE id = ?').get(r.series_id)) : null;
+  }
+  // Add a day by hand to the active series that covers the date.
+  function addOccurrence(templateId, date) {
+    const s = db.prepare(`SELECT * FROM series WHERE template_id = ? AND status = 'active'
+      AND (start_date IS NULL OR start_date <= ?) AND (end_date IS NULL OR end_date >= ?)
+      ORDER BY seq DESC, id DESC LIMIT 1`).get(templateId, date, date);
+    if (!s) return { ok: false, error: 'no active series covers this date' };
+    const r = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'manual')")
+      .run(s.id, date, nowIso());
+    if (!r.changes) return { ok: false, error: 'occurrence already exists for this date (restore it if removed)' };
+    return { ok: true, occurrence: getOccurrence(r.lastInsertRowid) };
+  }
+  // Soft-remove (or restore) one occurrence; the cartela recounts/reconciles.
+  function removeOccurrence(dailyId, removed) {
+    const r = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
+    if (!r) return null;
+    if (!removed && r.removed_at) {
+      const s = db.prepare('SELECT * FROM series WHERE id = ?').get(r.series_id);
+      // Unmarked day of a closed cartela would come back as a dead task.
+      if (!r.completed && s.status === 'completed') return { error: 'cartela closed: an unmarked day cannot be restored' };
+      // A marked dose can't push the cartela past its total.
+      if (r.completed && s.total_count != null && s.completed_count >= s.total_count) {
+        return { error: 'cartela already at its total: unmark another dose first' };
+      }
+    }
+    db.transaction(() => {
+      db.prepare('UPDATE daily_tasks SET removed_at = ? WHERE id = ?').run(removed ? nowIso() : null, dailyId);
+      recountSeries(r.series_id);
+      reconcileCountCycle(r.series_id);
+    })();
+    return getOccurrence(dailyId);
+  }
+  // Bulk: soft-remove UNMARKED past occurrences that don't fit the current rule.
+  // Marked doses never leave in bulk. dryRun only lists.
+  function pruneOffRule(templateId, { before, dryRun = false }) {
+    const list = (getOccurrences(templateId, {}) || [])
+      .filter((o) => !o.completed && !o.removed_at && !o.fits_rule && o.origin !== 'manual' && o.date < before);
+    if (!dryRun) {
+      const stamp = nowIso();
+      db.transaction(() => {
+        for (const o of list) db.prepare('UPDATE daily_tasks SET removed_at = ? WHERE id = ?').run(stamp, o.id);
+      })();
+    }
+    return list.map((o) => ({ id: o.id, date: o.date }));
+  }
+
   function getTaskById(dailyId) {
     const row = db.prepare(`${TASK_SELECT} WHERE dt.id = ?`).get(dailyId);
     return row ? mapTaskRow(row, row.date) : null;
@@ -1105,6 +1191,11 @@ function createModel(db) {
   return {
     db,
     createItem,
+    getOccurrences,
+    getOccurrence,
+    addOccurrence,
+    removeOccurrence,
+    pruneOffRule,
     deleteByDailyTask,
     createProtocol,
     generateDailyTasks,
