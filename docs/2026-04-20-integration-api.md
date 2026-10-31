@@ -684,12 +684,6 @@ Counted from the item's `start_date` (creation day if it has none).
 - `month` — every N months on the start date's day; `weekdays` is ignored. Day 31 falls on the last day of shorter months (31/01 → 28/02 → 31/03).
 Protocol phases accept the same two fields (via API only — the admin protocol form preserves them but doesn't edit them).
 
-### 9.11. Removing a day is a tombstone, not a delete
-Days are generated lazily: deleting a `daily_tasks` row that still fits the rule would just bring it back the next time anyone looks at that date. So `DELETE /occurrences/:id` sets `removed_at` instead — the day disappears from the tablet, from the box counter and from `/history`/`/adherence`, and can be restored.
-
-### 9.12. Old boxes don't reopen; one "Buy X" per box
-Unmarking or removing a dose of an **older** box while a newer one is in use only fixes that old box's count — it never reopens it (at most one active box per item). Each box spawns at most one "Buy X" follow-up, so restoring a dose can't ask you to buy again.
-
 ### 9.4. Protocol phases are routine_items rows
 You cannot create a phase directly — you must create/update through `/protocols` endpoints. `GET /items` filters to standalone items only; protocol phases live inside `GET /protocols/:id`.
 
@@ -715,6 +709,12 @@ That follow-up does not appear in `GET /items`; it exists to drive the "Comprar 
 
 ### 9.10. Rate-limit buckets are per-token
 If you have two agents sharing a token, they share a bucket. Create one token per agent for clean isolation and easier revocation.
+
+### 9.11. Removing a day is a tombstone, not a delete
+Days are generated lazily: deleting a `daily_tasks` row that still fits the rule would just bring it back the next time anyone looks at that date. So `DELETE /occurrences/:id` sets `removed_at` instead — the day disappears from the tablet, from the box counter and from `/history`/`/adherence`, and can be restored.
+
+### 9.12. Old boxes don't reopen; one "Buy X" per box
+Unmarking or removing a dose of an **older** box while a newer one is in use only fixes that old box's count — it never reopens it (at most one active box per item). Each box spawns at most one "Buy X" follow-up, so restoring a dose can't ask you to buy again.
 
 ---
 
