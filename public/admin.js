@@ -305,6 +305,7 @@ function buildProtocolCard(p) {
       </div>
     </div>
     <div class="item-actions">
+      <button class="btn btn-sm btn-secondary" data-action="history">${escapeHtml(t('admin.history'))}</button>
       <button class="btn btn-sm btn-secondary" data-action="edit-protocol">${escapeHtml(t('common.edit'))}</button>
       <button class="btn btn-sm btn-danger" data-action="delete-protocol">${escapeHtml(t('common.delete'))}</button>
     </div>
@@ -940,12 +941,15 @@ document.getElementById('confirm-action').addEventListener('click', async () => 
 let historyItemId = null;
 let historyPruneCount = 0;
 
-function openHistoryModal(id) {
+// opts (protocol cards): { title, rule } — protocols aren't in itemsById.
+function openHistoryModal(id, opts) {
   historyItemId = id;
   const item = itemsById[id];
   const weekdays = JSON.parse((item && item.weekdays) || '[0,1,2,3,4,5,6]');
-  document.getElementById('history-title').textContent = t('admin.historyTitle', { name: item ? item.title : '' });
-  document.getElementById('history-rule').textContent = item ? repeatSummary(item, weekdays) : '';
+  const title = opts ? opts.title : (item ? item.title : '');
+  const rule = opts ? opts.rule : (item ? repeatSummary(item, weekdays) : '');
+  document.getElementById('history-title').textContent = t('admin.historyTitle', { name: title });
+  document.getElementById('history-rule').textContent = rule;
   document.getElementById('history-add-date').value = todayISO();
   document.getElementById('history-modal').classList.add('active');
   loadHistory();
@@ -1596,7 +1600,9 @@ document.getElementById('items-list').addEventListener('click', (e) => {
   // inline editing of title, icon, weekdays, periods at the protocol level).
   if (card.classList.contains('is-protocol')) {
     const pid = Number(card.dataset.protocolId);
-    if (action === 'edit-protocol') {
+    if (action === 'history') {
+      openHistoryModal(pid, { title: card.querySelector('.item-title')?.textContent || '', rule: '' });
+    } else if (action === 'edit-protocol') {
       openProtocolModal(pid);
     } else if (action === 'delete-protocol') {
       const name = card.querySelector('.item-title')?.textContent || '';
