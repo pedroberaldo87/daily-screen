@@ -940,25 +940,45 @@ document.getElementById('confirm-action').addEventListener('click', async () => 
 
 let historyItemId = null;
 let historyPruneCount = 0;
+let historyRange = '90';
 
-// opts (protocol cards): { title, rule } — protocols aren't in itemsById.
+const HIST_ICON = {
+  check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>',
+  remove: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5"/></svg>',
+  restore: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a5 5 0 1 1 1.5 3.6M3 3.5v4h4"/></svg>',
+};
+
+// opts (protocol cards): { title, rule, icon } — protocols aren't in itemsById.
 function openHistoryModal(id, opts) {
   historyItemId = id;
   const item = itemsById[id];
   const weekdays = JSON.parse((item && item.weekdays) || '[0,1,2,3,4,5,6]');
-  const title = opts ? opts.title : (item ? item.title : '');
-  const rule = opts ? opts.rule : (item ? repeatSummary(item, weekdays) : '');
-  document.getElementById('history-title').textContent = t('admin.historyTitle', { name: title });
-  document.getElementById('history-rule').textContent = rule;
+  document.getElementById('history-title').textContent = opts ? opts.title : (item ? item.title : '');
+  document.getElementById('history-icon').textContent = opts ? (opts.icon || '') : (item ? item.icon : '');
+  document.getElementById('history-rule').textContent = opts ? opts.rule : (item ? repeatSummary(item, weekdays) : '');
   document.getElementById('history-add-date').value = todayISO();
+  setHistoryRange('90');
   document.getElementById('history-modal').classList.add('active');
-  loadHistory();
 }
 
 function closeHistoryModal() {
   document.getElementById('history-modal').classList.remove('active');
   historyItemId = null;
 }
+
+function setHistoryRange(range) {
+  historyRange = range;
+  document.querySelectorAll('#history-range button').forEach((b) => {
+    const on = b.dataset.range === range;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  loadHistory();
+}
+document.getElementById('history-range').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-range]');
+  if (b) setHistoryRange(b.dataset.range);
+});
 
 function fmtStamp(iso) {
   if (!iso) return '';
@@ -967,40 +987,64 @@ function fmtStamp(iso) {
     + d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
+function dayMonth(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit' });
+}
+
+function monthLabel(dateStr) {
+  const [y, m] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' });
+}
+
 function historyRow(o) {
   const today = todayISO();
   const dow = new Date(o.date + 'T12:00:00').getDay();
-  let status;
+  const dm = dayMonth(o.date);
+  let key;
   let cls;
-  if (o.removed_at) { status = t('admin.historyRemoved', { when: fmtStamp(o.removed_at) }); cls = ''; }
-  else if (o.completed) { status = t('admin.historyDone', { when: fmtStamp(o.completed_at) }); cls = 'st-done'; }
-  else if (o.date > today) { status = t('admin.historyScheduled'); cls = ''; }
-  else if (o.date === today) { status = t('admin.historyPending'); cls = ''; }
-  else { status = t('admin.historyMissed'); cls = 'st-missed'; }
-  const badges = [
-    !o.fits_rule ? `<span class="hist-badge off">${escapeHtml(t('admin.historyOffRule'))}</span>` : '',
-    o.origin === 'manual' ? `<span class="hist-badge">${escapeHtml(t('admin.historyManual'))}</span>` : '',
+  if (o.removed_at) { key = 'admin.historyRemoved'; cls = 'st-removed'; }
+  else if (o.completed) { key = 'admin.historyDone'; cls = 'st-done'; }
+  else if (o.date > today) { key = 'admin.historyScheduled'; cls = 'st-scheduled'; }
+  else if (o.date === today) { key = 'admin.historyPending'; cls = 'st-today'; }
+  else { key = 'admin.historyMissed'; cls = 'st-missed'; }
+  const tags = [
+    !o.fits_rule ? `<span class="hist-tag off">${escapeHtml(t('admin.historyOffRule'))}</span>` : '',
+    o.origin === 'manual' ? `<span class="hist-tag">${escapeHtml(t('admin.historyManual'))}</span>` : '',
   ].join('');
-  const created = o.created_at ? t('admin.historyCreated', { when: fmtStamp(o.created_at) }) : t('admin.historyCreatedUnknown');
-  const actions = o.removed_at
-    ? `<button type="button" class="btn btn-secondary btn-sm" data-hist="restore" data-id="${o.id}">${escapeHtml(t('admin.historyRestore'))}</button>`
-    : `<button type="button" class="btn btn-secondary btn-sm" data-hist="toggle" data-id="${o.id}" data-completed="${o.completed ? 1 : 0}">${escapeHtml(t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark'))}</button>
-       <button type="button" class="btn btn-danger btn-sm" data-hist="remove" data-id="${o.id}" data-date="${o.date}">${escapeHtml(t('admin.historyRemove'))}</button>`;
+  const meta = [
+    o.removed_at ? t('admin.historyRemovedAt', { when: fmtStamp(o.removed_at) }) : '',
+    o.completed && o.completed_at ? t('admin.historyDoneAt', { when: fmtStamp(o.completed_at) }) : '',
+    o.total_count ? t('admin.historySeq', { n: o.seq }) : '',
+    o.created_at ? t('admin.historyCreated', { when: fmtStamp(o.created_at) }) : '',
+  ].filter(Boolean).join(' · ');
+  // No check for removed days or days still ahead (a dose that hasn't happened).
+  const check = (o.removed_at || o.date > today)
+    ? '<span class="hist-spacer"></span>'
+    : `<button type="button" class="hist-check${o.completed ? ' on' : ''}" data-hist="toggle" data-id="${o.id}"
+        data-completed="${o.completed ? 1 : 0}" aria-pressed="${o.completed ? 'true' : 'false'}"
+        aria-label="${escapeHtml(`${t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark')} ${dm}`)}"
+        title="${escapeHtml(t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark'))}">${HIST_ICON.check}</button>`;
+  const link = o.removed_at
+    ? `<button type="button" class="hist-link restore" data-hist="restore" data-id="${o.id}">${HIST_ICON.restore}${escapeHtml(t('admin.historyRestore'))}</button>`
+    : `<button type="button" class="hist-link" data-hist="remove" data-id="${o.id}" data-date="${o.date}">${HIST_ICON.remove}${escapeHtml(t('admin.historyRemove'))}</button>`;
   return `<div class="hist-row${o.removed_at ? ' removed' : ''}">
-    <span class="hist-date">${escapeHtml(t(WEEKDAY_KEYS[dow]))} ${escapeHtml(formatDate(o.date))}</span>
-    <span class="hist-seq">${o.total_count ? escapeHtml(t('admin.historySeq', { n: o.seq })) : ''}</span>
-    <span class="hist-info"><span class="hist-status ${cls}">${escapeHtml(status)}</span>${badges}<span class="hist-created">${escapeHtml(created)}</span></span>
-    <span class="hist-actions">${actions}</span>
+    <div class="hist-day"><span class="hist-day-dow">${escapeHtml(t(WEEKDAY_KEYS[dow]))}</span><span class="hist-day-num">${escapeHtml(dm)}</span></div>
+    <div class="hist-body">
+      <div class="hist-line"><span class="hist-status ${cls}">${escapeHtml(t(key))}</span>${tags}</div>
+      <div class="hist-meta">${escapeHtml(meta)}</div>
+    </div>
+    ${check}
+    ${link}
   </div>`;
 }
 
 async function loadHistory() {
   if (!historyItemId) return;
-  const range = document.getElementById('history-range').value;
   let qs = '';
-  if (range !== 'all') {
+  if (historyRange !== 'all') {
     const d = new Date();
-    d.setDate(d.getDate() - Number(range));
+    d.setDate(d.getDate() - Number(historyRange));
     qs = `?from=${d.toISOString().slice(0, 10)}`;
   }
   const [listRes, pruneRes] = await Promise.all([
@@ -1011,12 +1055,30 @@ async function loadHistory() {
   ]);
   const list = listRes.ok ? await listRes.json() : [];
   historyPruneCount = pruneRes.ok ? (await pruneRes.json()).count : 0;
+
   const pruneBtn = document.getElementById('history-prune-btn');
   pruneBtn.textContent = t('admin.historyPrune', { n: historyPruneCount });
   pruneBtn.disabled = historyPruneCount === 0;
-  document.getElementById('history-list').innerHTML = list.length
-    ? list.map(historyRow).join('')
-    : `<div class="history-empty">${escapeHtml(t('admin.historyEmpty'))}</div>`;
+
+  const live = list.filter((o) => !o.removed_at);
+  document.getElementById('history-summary').textContent = t('admin.historySummary', {
+    total: live.length, done: live.filter((o) => o.completed).length,
+  });
+
+  if (!list.length) {
+    document.getElementById('history-list').innerHTML = `<div class="hist-empty">${escapeHtml(t('admin.historyEmpty'))}</div>`;
+    return;
+  }
+  // Grouped by month, newest first (the API already sorts by date DESC).
+  let html = '';
+  let month = null;
+  for (const o of list) {
+    const m = o.date.slice(0, 7);
+    if (m !== month) { month = m; html += `<div class="hist-month">${escapeHtml(monthLabel(o.date))}</div>`; }
+    html += historyRow(o);
+  }
+  if (list.some((o) => !o.created_at)) html += `<div class="hist-note">${escapeHtml(t('admin.historyLegacyNote'))}</div>`;
+  document.getElementById('history-list').innerHTML = html;
 }
 
 async function historyRequest(url, method, body) {
@@ -1039,10 +1101,12 @@ function askConfirm(message, action) {
   pendingAction = action;
 }
 
-function addHistoryDay() {
+async function addHistoryDay() {
   const date = document.getElementById('history-add-date').value;
   if (!date) return;
-  historyRequest(`${API}/items/${historyItemId}/occurrences`, 'POST', { date });
+  if (await historyRequest(`${API}/items/${historyItemId}/occurrences`, 'POST', { date })) {
+    showToast(t('admin.historyAdded', { date: dayMonth(date) }));
+  }
 }
 
 function pruneHistory() {
@@ -1601,7 +1665,12 @@ document.getElementById('items-list').addEventListener('click', (e) => {
   if (card.classList.contains('is-protocol')) {
     const pid = Number(card.dataset.protocolId);
     if (action === 'history') {
-      openHistoryModal(pid, { title: card.querySelector('.item-title')?.textContent || '', rule: '' });
+      openHistoryModal(pid, {
+        // first text node = protocol name (status icons follow as spans)
+        title: (card.querySelector('.item-title')?.firstChild?.textContent || '').trim(),
+        icon: card.querySelector('.item-icon')?.textContent || '',
+        rule: '',
+      });
     } else if (action === 'edit-protocol') {
       openProtocolModal(pid);
     } else if (action === 'delete-protocol') {

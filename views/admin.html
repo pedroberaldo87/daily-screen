@@ -349,29 +349,119 @@
     .modal h2 { font-size: 1.1rem; margin-bottom: 20px; }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
 
-    /* Histórico (occurrences of a repeated item) */
-    .modal--history { max-width: 860px; }
-    .history-rule { color: var(--text-secondary, #a09cb0); font-size: 0.85rem; margin: -10px 0 14px; }
-    .history-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-    .history-toolbar .spacer { flex: 1; }
-    .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow-y: auto; }
-    .hist-row {
-      display: grid; grid-template-columns: 150px 90px 1fr auto; gap: 10px; align-items: center;
-      padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input);
-      font-size: 0.85rem;
+    /* ═══ Histórico — every day of a repeated item (governance) ═══ */
+    #history-modal.modal-overlay { align-items: center; padding: 16px; }
+    .modal--history {
+      max-width: 760px; display: flex; flex-direction: column;
+      max-height: calc(100vh - 32px); padding-bottom: 18px;
     }
-    .hist-row.removed > :not(.hist-actions) { opacity: 0.45; }
-    .history-toolbar .btn:disabled { opacity: 0.35; cursor: default; }
-    .hist-row.removed .hist-date { text-decoration: line-through; }
-    .hist-date { font-weight: 600; }
-    .hist-seq, .hist-created { color: var(--text-muted); font-size: 0.78rem; }
-    .hist-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    .hist-status.st-done { color: #6fcf97; }
-    .hist-status.st-missed { color: var(--accent-danger); }
-    .hist-badge { font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); }
-    .hist-badge.off { color: var(--accent-sup); border-color: var(--accent-sup); }
-    .hist-actions { display: flex; gap: 6px; }
-    .history-empty { color: var(--text-muted); padding: 16px 0; text-align: center; }
+    .hist-head { display: flex; align-items: center; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .hist-head-icon {
+      width: 46px; height: 46px; flex: 0 0 auto; display: grid; place-items: center;
+      border-radius: 14px; background: var(--bg-card); border: 1px solid var(--border); font-size: 1.45rem;
+    }
+    .hist-head-text { min-width: 0; }
+    .modal--panel .hist-head h2 { margin: 0; padding: 0; border: 0; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.01em; }
+    .hist-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary); }
+    .hist-rule-pill {
+      padding: 3px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 600;
+      background: rgba(232,168,75,0.12); color: var(--accent-sup);
+    }
+    .hist-rule-pill:empty { display: none; }
+
+    .hist-add {
+      margin-top: 16px; padding: 14px 16px; border-radius: var(--radius);
+      background: var(--bg-card); border: 1px solid var(--border);
+      display: grid; grid-template-columns: 1fr auto; column-gap: 18px; row-gap: 3px; align-items: center;
+    }
+    .hist-add-title { font-weight: 600; font-size: 0.92rem; }
+    .hist-add-hint { color: var(--text-secondary); font-size: 0.78rem; line-height: 1.4; }
+    .hist-add-form { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 8px; align-items: center; }
+    .hist-add-form input[type="date"] {
+      height: 38px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+      background: var(--bg-input); color: var(--text-primary); font-family: var(--font); font-size: 0.85rem; color-scheme: dark;
+    }
+    .hist-add-form input[type="date"]:focus { outline: none; border-color: var(--border-focus); }
+    .hist-add-form .btn { height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; }
+    .hist-add-form .btn svg { width: 15px; height: 15px; }
+
+    .hist-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 6px; }
+    .hist-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--bg-input); border: 1px solid var(--border); }
+    .hist-seg button {
+      border: 0; background: transparent; color: var(--text-secondary); cursor: pointer;
+      font: 600 0.78rem var(--font); padding: 6px 14px; border-radius: 999px; transition: background 0.15s, color 0.15s;
+    }
+    .hist-seg button.active { background: var(--bg-card); color: var(--text-primary); box-shadow: 0 1px 4px rgba(0,0,0,0.45); }
+    .hist-toolbar-count { font-size: 0.78rem; color: var(--text-secondary); }
+
+    .hist-list { flex: 1; min-height: 140px; overflow-y: auto; margin: 0 -8px; padding: 0 8px; }
+    .hist-month {
+      position: sticky; top: 0; z-index: 1; background: var(--bg-surface);
+      padding: 12px 4px 6px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--text-secondary);
+    }
+    .hist-row {
+      display: grid; grid-template-columns: 52px 1fr auto auto; align-items: center; gap: 14px;
+      padding: 9px 10px; border-radius: 10px; transition: background 0.15s;
+    }
+    .hist-row:hover { background: rgba(255,255,255,0.03); }
+    .hist-day { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+    .hist-day-dow { font-size: 0.64rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); }
+    .hist-day-num { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .hist-body { min-width: 0; }
+    .hist-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+    .hist-status { display: inline-flex; align-items: center; gap: 7px; font-size: 0.84rem; font-weight: 600; }
+    .hist-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .hist-status.st-done { color: var(--accent-success); }
+    .hist-status.st-missed { color: var(--accent-med); }
+    .hist-status.st-today { color: var(--accent-sup); }
+    .hist-status.st-scheduled { color: var(--accent-rem); }
+    .hist-status.st-removed { color: var(--text-secondary); }
+    .hist-tag { padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; background: var(--bg-input); color: var(--text-secondary); }
+    .hist-tag.off { background: rgba(232,168,75,0.12); color: var(--accent-sup); }
+    .hist-meta { margin-top: 2px; font-size: 0.74rem; color: var(--text-secondary); }
+    .hist-meta:empty { display: none; }
+    .hist-check {
+      width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+      border: 2px solid rgba(255,255,255,0.16); background: transparent; color: transparent;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .hist-check svg { width: 16px; height: 16px; }
+    .hist-check:hover { border-color: var(--accent-success); color: rgba(94,194,106,0.55); }
+    .hist-check.on { background: var(--accent-success); border-color: var(--accent-success); color: var(--bg-deep); }
+    .hist-link {
+      display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 0; border-radius: 7px;
+      background: transparent; color: var(--text-secondary); font: 600 0.76rem var(--font); cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .hist-link svg { width: 14px; height: 14px; }
+    .hist-link:hover { color: var(--accent-danger); background: rgba(231,76,60,0.1); }
+    .hist-link.restore:hover { color: var(--text-primary); background: var(--bg-input); }
+    .hist-row.removed .hist-day, .hist-row.removed .hist-body { opacity: 0.5; }
+    .hist-row.removed .hist-day-num { text-decoration: line-through; }
+    .hist-row .hist-spacer { width: 34px; }
+    .hist-empty, .hist-note { color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 18px 0 6px; }
+    .hist-note { font-size: 0.74rem; padding: 10px 0 2px; }
+
+    .hist-foot {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--border);
+    }
+    .hist-maint { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .hist-maint-hint { font-size: 0.74rem; color: var(--text-secondary); line-height: 1.35; }
+    .hist-maint .btn-danger { flex: 0 0 auto; border: 1px solid rgba(231,76,60,0.35); }
+    .hist-maint .btn-danger:disabled { opacity: 0.35; cursor: default; background: transparent; }
+    .hist-check:focus-visible, .hist-link:focus-visible, .hist-seg button:focus-visible,
+    .hist-add-form .btn:focus-visible, .hist-foot .btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+    @media (max-width: 600px) {
+      .hist-add { grid-template-columns: 1fr; }
+      .hist-add-form { grid-column: 1; grid-row: auto; margin-top: 10px; }
+      .hist-add-form input[type="date"] { flex: 1; }
+      .hist-row { grid-template-columns: 46px 1fr auto; row-gap: 4px; }
+      .hist-row .hist-link { grid-column: 2; justify-self: start; margin-left: -9px; }
+      .hist-foot { flex-direction: column; align-items: stretch; }
+      .hist-maint { flex-direction: column; align-items: flex-start; }
+    }
 
     /* Collapsible sections in form */
     .form-section {
@@ -1504,23 +1594,46 @@
 
   <!-- ═══ Confirm Dialog ═══ -->
   <div class="modal-overlay" id="history-modal">
-    <div class="modal modal--panel modal--history">
-      <h2 id="history-title" data-i18n="admin.history">Histórico</h2>
-      <p class="history-rule" id="history-rule"></p>
-      <div class="history-toolbar">
-        <select id="history-range" onchange="loadHistory()">
-          <option value="90" data-i18n="admin.historyRange90">Últimos 90 dias</option>
-          <option value="all" data-i18n="admin.historyRangeAll">Tudo</option>
-        </select>
-        <input type="date" id="history-add-date">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="addHistoryDay()" data-i18n="admin.historyAdd">Adicionar dia</button>
-        <span class="spacer"></span>
-        <button type="button" class="btn btn-danger btn-sm" id="history-prune-btn" onclick="pruneHistory()"></button>
+    <div class="modal modal--panel modal--history" role="dialog" aria-modal="true" aria-labelledby="history-title">
+      <header class="hist-head">
+        <span class="hist-head-icon" id="history-icon" aria-hidden="true"></span>
+        <div class="hist-head-text">
+          <h2 id="history-title" data-i18n="admin.history">Histórico</h2>
+          <div class="hist-head-meta">
+            <span class="hist-rule-pill" id="history-rule"></span>
+            <span id="history-summary"></span>
+          </div>
+        </div>
+      </header>
+
+      <section class="hist-add" aria-labelledby="history-add-title">
+        <div class="hist-add-title" id="history-add-title" data-i18n="admin.historyAddTitle">Adicionar um dia avulso</div>
+        <div class="hist-add-hint" data-i18n="admin.historyAddHint">Cria a tarefa nessa data no tablet, mesmo fora da regra.</div>
+        <div class="hist-add-form">
+          <input type="date" id="history-add-date">
+          <button type="button" class="btn btn-primary" id="history-add-btn" onclick="addHistoryDay()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
+            <span data-i18n="admin.historyAddButton">Adicionar</span>
+          </button>
+        </div>
+      </section>
+
+      <div class="hist-toolbar">
+        <div class="hist-seg" role="group" id="history-range">
+          <button type="button" data-range="90" class="active" aria-pressed="true" data-i18n="admin.historyRange90">Últimos 90 dias</button>
+          <button type="button" data-range="all" aria-pressed="false" data-i18n="admin.historyRangeAll">Tudo</button>
+        </div>
       </div>
-      <div class="history-list" id="history-list"></div>
-      <div class="modal-actions">
+
+      <div class="hist-list" id="history-list"></div>
+
+      <footer class="hist-foot">
+        <div class="hist-maint">
+          <button type="button" class="btn btn-danger" id="history-prune-btn" onclick="pruneHistory()"></button>
+          <span class="hist-maint-hint" data-i18n="admin.historyPruneHint">Remove os dias passados, não marcados, que não cabem na regra atual. Dá para restaurar.</span>
+        </div>
         <button type="button" class="btn btn-secondary" onclick="closeHistoryModal()" data-i18n="common.close">Fechar</button>
-      </div>
+      </footer>
     </div>
   </div>
 
