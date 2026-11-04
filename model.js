@@ -1056,13 +1056,17 @@ function createModel(db) {
   // ── Occurrence governance (admin "Histórico"): every daily_task of a
   // template, with when it was created, whether it fits the series' current
   // rule, and soft-removal. Counting always goes through recount/reconcile. ──
+  function fitsSeries(s, date) {
+    return (!s.start_date || date >= s.start_date) && (!s.end_date || date <= s.end_date) && occursOn(s, date);
+  }
   function occurrenceShape(r, s) {
-    const inWindow = (!s.start_date || r.date >= s.start_date) && (!s.end_date || r.date <= s.end_date);
     return {
       id: r.id, date: r.date, completed: r.completed, completed_at: r.completed_at,
       created_at: r.created_at, origin: r.origin || 'auto', removed_at: r.removed_at,
       series_id: s.id, seq: s.seq, series_status: s.status, total_count: s.total_count,
-      fits_rule: inWindow && occursOn(s, r.date),
+      // A dose the rule generated and the person took was on the rule of its
+      // time: changing the rule later doesn't make that history "off rule".
+      fits_rule: (!!r.completed && r.origin !== 'manual') || fitsSeries(s, r.date),
     };
   }
   function getOccurrences(templateId, { from = null, to = null } = {}) {
@@ -1080,16 +1084,54 @@ function createModel(db) {
     const r = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
     return r ? occurrenceShape(r, db.prepare('SELECT * FROM series WHERE id = ?').get(r.series_id)) : null;
   }
-  // Add a day by hand to the active series that covers the date.
+  // Add a day by hand to the active series that covers the date. A plain item
+  // has a single active series and accepts days outside its window; a protocol's
+  // date must fall in a phase. Adding a removed day again brings it back.
   function addOccurrence(templateId, date) {
-    const s = db.prepare(`SELECT * FROM series WHERE template_id = ? AND status = 'active'
-      AND (start_date IS NULL OR start_date <= ?) AND (end_date IS NULL OR end_date >= ?)
-      ORDER BY seq DESC, id DESC LIMIT 1`).get(templateId, date, date);
-    if (!s) return { ok: false, error: 'no active series covers this date' };
-    const r = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'manual')")
+    const active = "SELECT * FROM series WHERE template_id = ? AND status = 'active'";
+    const latest = 'ORDER BY seq DESC, id DESC LIMIT 1';
+    const t = db.prepare('SELECT kind FROM templates WHERE id = ?').get(templateId);
+    const s = db.prepare(`${active} AND (start_date IS NULL OR start_date <= ?) AND (end_date IS NULL OR end_date >= ?) ${latest}`)
+      .get(templateId, date, date)
+      || (t && t.kind !== 'protocol' ? db.prepare(`${active} ${latest}`).get(templateId) : null);
+    if (!s) return { ok: false, code: 'no_series', error: 'no active series covers this date' };
+    const existing = db.prepare('SELECT * FROM daily_tasks WHERE series_id = ? AND date = ?').get(s.id, date);
+    if (existing && !existing.removed_at) return { ok: false, code: 'exists', error: 'occurrence already exists for this date' };
+    if (existing) {
+      const back = removeOccurrence(existing.id, false);
+      if (back.error) return { ok: false, ...back };
+      db.prepare("UPDATE daily_tasks SET origin = 'manual' WHERE id = ?").run(existing.id);
+      return { ok: true, occurrence: getOccurrence(existing.id) };
+    }
+    const r = db.prepare("INSERT INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'manual')")
       .run(s.id, date, nowIso());
-    if (!r.changes) return { ok: false, error: 'occurrence already exists for this date (restore it if removed)' };
     return { ok: true, occurrence: getOccurrence(r.lastInsertRowid) };
+  }
+  // Move one occurrence to another day. The count is by marked rows, not dates,
+  // so nothing recounts. `today` keeps a taken dose out of the future.
+  function moveOccurrence(dailyId, date, today) {
+    const r = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
+    if (!r) return null;
+    if (r.date === date) return getOccurrence(dailyId);
+    if (r.removed_at) return { code: 'removed', error: 'occurrence is removed: restore it first' };
+    if (r.completed && date > today) return { code: 'future_done', error: 'a marked dose cannot move to the future' };
+    const s = db.prepare('SELECT * FROM series WHERE id = ?').get(r.series_id);
+    const clash = db.prepare(`SELECT 1 FROM daily_tasks dt JOIN series s ON s.id = dt.series_id
+      WHERE s.template_id = ? AND dt.date = ? AND dt.removed_at IS NULL`).get(s.template_id, date);
+    if (clash) return { code: 'exists', error: 'occurrence already exists for this date' };
+    const tombstone = db.prepare('SELECT * FROM daily_tasks WHERE series_id = ? AND date = ?').get(r.series_id, date);
+    if (tombstone && tombstone.completed) return { code: 'removed_dose', error: 'a removed dose is on this date: restore it first' };
+    db.transaction(() => {
+      if (tombstone) db.prepare('DELETE FROM daily_tasks WHERE id = ?').run(tombstone.id);
+      db.prepare("UPDATE daily_tasks SET date = ?, origin = 'manual' WHERE id = ?").run(date, dailyId);
+      // Days are generated lazily: without this tombstone the old rule day comes back.
+      if (fitsSeries(s, r.date)) {
+        const stamp = nowIso();
+        db.prepare("INSERT INTO daily_tasks (series_id, date, created_at, origin, removed_at) VALUES (?, ?, ?, 'auto', ?)")
+          .run(r.series_id, r.date, stamp, stamp);
+      }
+    })();
+    return getOccurrence(dailyId);
   }
   // Soft-remove (or restore) one occurrence; the cartela recounts/reconciles.
   function removeOccurrence(dailyId, removed) {
@@ -1098,10 +1140,10 @@ function createModel(db) {
     if (!removed && r.removed_at) {
       const s = db.prepare('SELECT * FROM series WHERE id = ?').get(r.series_id);
       // Unmarked day of a closed cartela would come back as a dead task.
-      if (!r.completed && s.status === 'completed') return { error: 'cartela closed: an unmarked day cannot be restored' };
+      if (!r.completed && s.status === 'completed') return { code: 'closed', error: 'cartela closed: an unmarked day cannot be restored' };
       // A marked dose can't push the cartela past its total.
       if (r.completed && s.total_count != null && s.completed_count >= s.total_count) {
-        return { error: 'cartela already at its total: unmark another dose first' };
+        return { code: 'at_total', error: 'cartela already at its total: unmark another dose first' };
       }
     }
     db.transaction(() => {
@@ -1194,6 +1236,7 @@ function createModel(db) {
     getOccurrences,
     getOccurrence,
     addOccurrence,
+    moveOccurrence,
     removeOccurrence,
     pruneOffRule,
     deleteByDailyTask,

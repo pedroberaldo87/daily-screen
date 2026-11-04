@@ -97,6 +97,9 @@ function getOccurrences(templateId, range) {
 function addOccurrence(templateId, date) {
   return model.addOccurrence(templateId, date);
 }
+function moveOccurrence(dailyId, date) {
+  return model.moveOccurrence(dailyId, date, todayDate());
+}
 function setOccurrenceCompleted(dailyId, completed) {
   return model.setTaskCompleted(dailyId, completed) ? model.getOccurrence(dailyId) : null;
 }
@@ -234,6 +237,7 @@ module.exports = {
   db,
   getOccurrences,
   addOccurrence,
+  moveOccurrence,
   setOccurrenceCompleted,
   removeOccurrence,
   pruneOffRule,

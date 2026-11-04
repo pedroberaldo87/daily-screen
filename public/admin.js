@@ -946,6 +946,7 @@ const HIST_ICON = {
   check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>',
   remove: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5"/></svg>',
   restore: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a5 5 0 1 1 1.5 3.6M3 3.5v4h4"/></svg>',
+  edit: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13l.7-2.8L10.8 3a1.2 1.2 0 0 1 1.7 0l.5.5a1.2 1.2 0 0 1 0 1.7L5.8 12.3 3 13z"/></svg>',
 };
 
 // opts (protocol cards): { title, rule, icon } — protocols aren't in itemsById.
@@ -1028,7 +1029,8 @@ function historyRow(o) {
         title="${escapeHtml(t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark'))}">${HIST_ICON.check}</button>`;
   const link = o.removed_at
     ? `<button type="button" class="hist-link restore" data-hist="restore" data-id="${o.id}">${HIST_ICON.restore}${escapeHtml(t('admin.historyRestore'))}</button>`
-    : `<button type="button" class="hist-link" data-hist="remove" data-id="${o.id}" data-date="${o.date}">${HIST_ICON.remove}${escapeHtml(t('admin.historyRemove'))}</button>`;
+    : `<button type="button" class="hist-link edit" data-hist="edit" data-id="${o.id}" data-date="${o.date}" data-completed="${o.completed ? 1 : 0}">${HIST_ICON.edit}${escapeHtml(t('admin.historyEdit'))}</button>
+       <button type="button" class="hist-link" data-hist="remove" data-id="${o.id}" data-date="${o.date}">${HIST_ICON.remove}${escapeHtml(t('admin.historyRemove'))}</button>`;
   return `<div class="hist-row${o.removed_at ? ' removed' : ''}">
     <div class="hist-day"><span class="hist-day-dow">${escapeHtml(t(WEEKDAY_KEYS[dow]))}</span><span class="hist-day-num">${escapeHtml(dm)}</span></div>
     <div class="hist-body">
@@ -1036,7 +1038,7 @@ function historyRow(o) {
       <div class="hist-meta">${escapeHtml(meta)}</div>
     </div>
     ${check}
-    ${link}
+    <div class="hist-actions">${link}</div>
   </div>`;
 }
 
@@ -1088,7 +1090,7 @@ async function historyRequest(url, method, body) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    showToast(err.error || 'Erro', 'err');
+    showToast(err.code ? t(`admin.historyErr.${err.code}`) : (err.error || 'Erro'), 'err');
     return false;
   }
   await loadHistory();
@@ -1110,6 +1112,29 @@ async function addHistoryDay() {
   }
 }
 
+// Inline editor: the row's body becomes a date picker. A taken dose can't go
+// to a future day (the server refuses it too).
+function startHistoryEdit(btn) {
+  const row = btn.closest('.hist-row');
+  const max = btn.dataset.completed === '1' ? ` max="${todayISO()}"` : '';
+  row.querySelector('.hist-body').innerHTML = `<div class="hist-edit-form">
+    <input type="date" value="${btn.dataset.date}"${max} aria-label="${escapeHtml(t('admin.historyEditDate'))}">
+    <button type="button" class="btn btn-primary" data-hist="edit-save" data-id="${btn.dataset.id}" data-date="${btn.dataset.date}">${escapeHtml(t('admin.historySave'))}</button>
+    <button type="button" class="btn btn-secondary" data-hist="edit-cancel">${escapeHtml(t('admin.historyCancel'))}</button>
+  </div>`;
+  row.querySelector('.hist-actions').innerHTML = '';
+  row.querySelector('.hist-edit-form input').focus();
+}
+
+async function saveHistoryEdit(btn) {
+  const date = btn.closest('.hist-edit-form').querySelector('input').value;
+  if (!date) return;
+  if (date === btn.dataset.date) return loadHistory();
+  if (await historyRequest(`${API}/occurrences/${btn.dataset.id}`, 'PUT', { date })) {
+    showToast(t('admin.historyMoved', { date: dayMonth(date) }));
+  }
+}
+
 function pruneHistory() {
   if (!historyPruneCount) return;
   askConfirm(t('admin.historyConfirmPrune', { n: historyPruneCount }), () =>
@@ -1120,7 +1145,13 @@ document.getElementById('history-list').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-hist]');
   if (!btn) return;
   const id = btn.dataset.id;
-  if (btn.dataset.hist === 'toggle') {
+  if (btn.dataset.hist === 'edit') {
+    startHistoryEdit(btn);
+  } else if (btn.dataset.hist === 'edit-cancel') {
+    loadHistory();
+  } else if (btn.dataset.hist === 'edit-save') {
+    saveHistoryEdit(btn);
+  } else if (btn.dataset.hist === 'toggle') {
     historyRequest(`${API}/occurrences/${id}`, 'PUT', { completed: btn.dataset.completed !== '1' });
   } else if (btn.dataset.hist === 'restore') {
     historyRequest(`${API}/occurrences/${id}`, 'PUT', { removed: false });
@@ -1128,6 +1159,11 @@ document.getElementById('history-list').addEventListener('click', (e) => {
     askConfirm(t('admin.historyConfirmRemove', { date: formatDate(btn.dataset.date) }), () =>
       historyRequest(`${API}/occurrences/${id}`, 'DELETE'));
   }
+});
+
+// Clicking anywhere in a date field opens the calendar, not just on its small icon.
+document.addEventListener('click', (e) => {
+  if (e.target.matches('input[type="date"]') && e.target.showPicker) e.target.showPicker();
 });
 
 // ═══ Location Search ═══

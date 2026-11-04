@@ -515,7 +515,7 @@ type Occurrence = {
   series_id: number; seq: number;     // which box/phase it belongs to
   series_status: "active" | "completed";
   total_count: number | null;
-  fits_rule: boolean;                 // falls on the series' CURRENT rule and date window
+  fits_rule: boolean;                 // falls on the series' CURRENT rule and window; a dose the rule generated and that was taken stays true after the rule changes
 };
 ```
 
@@ -523,10 +523,11 @@ type Occurrence = {
 Newest first. `from`/`to` optional; must be real calendar days (`2026-02-31` → 400). `404` if the item/protocol doesn't exist.
 
 #### `POST /items/:id/occurrences`
-Add a one-off day: `{ "date": "2026-11-04" }`. Goes into the active series that covers that date, with `origin: "manual"`. **201** with the occurrence. **409** if the day already exists (restore it if it was removed) or no active series covers the date.
+Add a one-off day: `{ "date": "2026-11-04" }`. Goes into the active series that covers that date, with `origin: "manual"`; a plain item also accepts days outside its window. Adding a removed day restores it. **201** with the occurrence. **409** with a `code`: `exists` (day already active), `no_series` (no active series, or a protocol date outside its phases), `closed` / `at_total` (restore refused).
 
 #### `PUT /occurrences/:id`
 `{ "completed": true|false }` — mark/unmark (same box ceiling and state machine as `/tasks/:id/toggle`); **409** if nothing changed (removed day, or box already at its total).
+`{ "date": "YYYY-MM-DD" }` — move the entry to another day (keeps its mark; becomes `origin: "manual"`). If the old day fits the rule it stays as a removed day, so it isn't generated again. **409** with a `code`: `exists` (date taken), `removed` (restore it first), `future_done` (a marked dose can't go to the future), `removed_dose` (a removed dose is on the target date).
 `{ "removed": true|false }` — remove/restore. Restore is **409** when it would push a box past its total, or when it's an unmarked day of a closed box.
 
 #### `DELETE /occurrences/:id`

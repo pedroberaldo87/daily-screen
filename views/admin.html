@@ -377,11 +377,12 @@
     .hist-add-title { font-weight: 600; font-size: 0.92rem; }
     .hist-add-hint { color: var(--text-secondary); font-size: 0.78rem; line-height: 1.4; }
     .hist-add-form { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 8px; align-items: center; }
-    .hist-add-form input[type="date"] {
+    .hist-add-form input[type="date"], .hist-edit-form input[type="date"] {
       height: 38px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);
       background: var(--bg-input); color: var(--text-primary); font-family: var(--font); font-size: 0.85rem; color-scheme: dark;
     }
-    .hist-add-form input[type="date"]:focus { outline: none; border-color: var(--border-focus); }
+    input[type="date"] { color-scheme: dark; cursor: pointer; }
+    .hist-add-form input[type="date"]:focus, .hist-edit-form input[type="date"]:focus { outline: none; border-color: var(--border-focus); }
     .hist-add-form .btn { height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; }
     .hist-add-form .btn svg { width: 15px; height: 15px; }
 
@@ -436,7 +437,10 @@
     }
     .hist-link svg { width: 14px; height: 14px; }
     .hist-link:hover { color: var(--accent-danger); background: rgba(231,76,60,0.1); }
-    .hist-link.restore:hover { color: var(--text-primary); background: var(--bg-input); }
+    .hist-link.restore:hover, .hist-link.edit:hover { color: var(--text-primary); background: var(--bg-input); }
+    .hist-actions { display: flex; align-items: center; gap: 2px; }
+    .hist-edit-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .hist-edit-form .btn { height: 38px; padding: 0 14px; }
     .hist-row.removed .hist-day, .hist-row.removed .hist-body { opacity: 0.5; }
     .hist-row.removed .hist-day-num { text-decoration: line-through; }
     .hist-row .hist-spacer { width: 34px; }
@@ -458,7 +462,7 @@
       .hist-add-form { grid-column: 1; grid-row: auto; margin-top: 10px; }
       .hist-add-form input[type="date"] { flex: 1; }
       .hist-row { grid-template-columns: 46px 1fr auto; row-gap: 4px; }
-      .hist-row .hist-link { grid-column: 2; justify-self: start; margin-left: -9px; }
+      .hist-row .hist-actions { grid-column: 2; justify-self: start; margin-left: -9px; }
       .hist-foot { flex-direction: column; align-items: stretch; }
       .hist-maint { flex-direction: column; align-items: flex-start; }
     }

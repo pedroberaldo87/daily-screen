@@ -1,10 +1,11 @@
 // Occurrence governance routes (each daily_task of a repeated item): list,
-// add a day by hand, mark/unmark, soft-remove/restore, bulk-remove unmarked
+// add a day by hand, move to another day, mark/unmark, soft-remove/restore, bulk-remove unmarked
 // past days that no longer fit the rule. Mounted by /api (session) and by
 // /integration/v1 (bearer token) so both expose the same contract.
 const {
   getOccurrences,
   addOccurrence,
+  moveOccurrence,
   setOccurrenceCompleted,
   removeOccurrence,
   pruneOffRule,
@@ -45,20 +46,25 @@ function mountOccurrences(router, guard) {
   });
 
   router.put('/occurrences/:id', guard, (req, res) => {
-    const { completed, removed } = req.body || {};
+    const { completed, removed, date } = req.body || {};
     const isBool = (v) => v === true || v === false || v === 1 || v === 0;
-    if (completed === undefined && removed === undefined) return res.status(400).json({ error: 'send completed or removed (boolean)' });
+    if (completed === undefined && removed === undefined && date === undefined) return res.status(400).json({ error: 'send completed, removed (boolean) or date' });
+    if (date !== undefined && !isDate(date)) return res.status(400).json({ error: 'date must be a valid YYYY-MM-DD day' });
     if ((completed !== undefined && !isBool(completed)) || (removed !== undefined && !isBool(removed))) {
       return res.status(400).json({ error: 'completed/removed must be boolean' });
     }
     const id = Number(req.params.id);
-    let occ = removed !== undefined ? removeOccurrence(id, !!removed) : null;
+    let occ = date !== undefined ? moveOccurrence(id, date) : null;
+    if (occ && occ.error) return res.status(409).json(occ);
+    if (removed !== undefined) occ = removeOccurrence(id, !!removed);
     if (occ && occ.error) return res.status(409).json(occ);
     if (completed !== undefined) {
       occ = setOccurrenceCompleted(id, completed);
       // Refused silently by the model (removed day, cartela at its total): say so.
       if (occ && !!occ.completed !== !!completed) {
-        return res.status(409).json({ error: occ.removed_at ? 'occurrence is removed: restore it first' : 'cartela already at its total' });
+        return res.status(409).json(occ.removed_at
+          ? { code: 'removed', error: 'occurrence is removed: restore it first' }
+          : { code: 'at_total', error: 'cartela already at its total' });
       }
     }
     if (!occ) return res.status(404).json({ error: 'Occurrence not found' });
