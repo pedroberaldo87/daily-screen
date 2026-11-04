@@ -229,7 +229,7 @@ test('item aceita dia avulso antes do início; protocolo fora das fases é recus
   assert.equal(r.ok, true);
   assert.equal(r.occurrence.fits_rule, false);
   const p = m.createProtocol({ name: 'P', start_date: '2026-10-01', phases: [{ title: 'F1', category: 'medication', duration_days: 5 }] });
-  assert.equal(m.addOccurrence(p.id, '2026-12-25').code, 'no_series');
+  assert.equal(m.addOccurrence(p, '2026-12-25').code, 'no_series');
 });
 
 // ── Editar a data ──
