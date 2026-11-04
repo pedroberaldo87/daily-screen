@@ -30,7 +30,7 @@ A wall-mounted daily assistant for tablets (Fire HD 8, 1280×800 landscape). Dis
 - **Repeat frequency** — every N days, weeks (on chosen weekdays) or months (day 31 falls on the last day of shorter months)
 - **Boxes with a dose count** — e.g. a 30-pill box counts down as you mark doses; when it runs out a "Buy X" task appears, and "I bought it" starts a fresh box
 - **Protocols** — dated phases in sequence (tapering, titration), each with its own schedule, plus end-of-protocol alerts
-- **Entries (history & governance)** — per item, see every day: when it was created, whether it was done, whether it still fits the rule; mark/unmark, remove/restore (always reversible), add a one-off day, or clean days that no longer fit the rule
+- **Entries (history & governance)** — per item, see every day: when it was created, whether it was done, whether it still fits the rule; mark/unmark, change the date, remove/restore (always reversible), add a one-off day, or clean days that no longer fit the rule
 - **Manual corrections** — fix the "already taken" count of a box by hand; changing the rule cleans pending days from today on
 - **Non-destructive by default** — converting an item into a protocol only happens when you save; deleting from the tablet only archives
 - **Progress tracking** — visual completion percentage; the screen follows midnight on its own
