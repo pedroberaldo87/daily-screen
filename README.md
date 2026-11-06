@@ -56,7 +56,7 @@ npm install
 # Create .env from template
 cp .env.example .env
 
-# Edit .env with your values (at minimum, change ADMIN_PASSWORD)
+# Edit .env with your values (at minimum, the Google OAuth client and ADMIN_EMAILS)
 nano .env
 
 # Run development server
@@ -120,7 +120,8 @@ If `.env` doesn't exist on first deploy, create it manually on the VPS at the de
 ## Environment Variables
 
 - **PORT** — Express server port (default: `3000`)
-- **ADMIN_PASSWORD** — Password for admin panel login. Change this to a strong value in production.
+- **GOOGLE_CLIENT_ID** / **GOOGLE_CLIENT_SECRET** — OAuth client (type "Web application") from Google Cloud Console. Authorized redirect URI: `https://<your-domain>/admin/auth/google/callback` (and `http://localhost:3000/admin/auth/google/callback` for dev). Required: the server won't start without them.
+- **ADMIN_EMAILS** — Comma-separated Google accounts allowed into the admin panel. Required.
 - **SESSION_SECRET** — Secret key for session cookies. Use a random string.
 - **DATABASE_PATH** — Path to SQLite database (default: `./daily-screen.db` for dev, `/data/daily-screen.db` for Docker)
 - **WEATHER_LAT** — Default latitude for weather forecast (default: `-23.55`)

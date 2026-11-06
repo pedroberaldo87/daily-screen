@@ -44,7 +44,7 @@ This runs Node.js in watch mode — the server restarts automatically when you e
 
 Visit `http://localhost:3000` to see the display view, and `http://localhost:3000/admin` to access the admin panel.
 
-The default login password is specified in your `.env` file (set via `ADMIN_PASSWORD`).
+Admin login is Google sign-in: set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `ADMIN_EMAILS` in your `.env` (see README).
 
 ## Project Structure
 

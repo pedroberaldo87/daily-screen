@@ -4,80 +4,172 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Daily Screen — Login</title>
+  <meta name="theme-color" content="#0b090e">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-deep: #0b090e;
+      --text-primary: #f0ece4;
+      --text-secondary: #8a8494;
+      --text-muted: #504b5e;
+      --accent-sup: #e8a84b;
+      --accent-med: #f2736a;
+      --accent-success: #5ec26a;
+    }
     body {
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #0a0a0a;
-      color: #e8e8e8;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      gap: 28px;
+      padding: 24px;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 35%, rgba(232, 168, 75, 0.07) 0%, transparent 70%),
+        var(--bg-deep);
+      color: var(--text-primary);
+      font-family: 'Outfit', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    .login-box {
-      background: #151515;
-      padding: 40px;
-      border-radius: 16px;
+    .card {
+      position: relative;
       width: 100%;
-      max-width: 360px;
+      max-width: 380px;
+      padding: 44px 36px 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      background: rgba(18, 16, 26, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+      animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: -90px; left: 50%;
+      width: 260px; height: 260px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      border: 1px solid rgba(232, 168, 75, 0.08);
+      pointer-events: none;
+    }
+    .mark {
+      width: 60px; height: 60px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      color: var(--accent-sup);
+      background: rgba(232, 168, 75, 0.08);
+      border: 1px solid rgba(232, 168, 75, 0.2);
+      margin-bottom: 20px;
     }
     h1 {
-      font-size: 1.3rem;
-      margin-bottom: 24px;
-      text-align: center;
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 400;
+      font-size: 2rem;
+      letter-spacing: -0.01em;
     }
-    label {
-      display: block;
-      font-size: 0.85rem;
-      color: #888;
-      margin-bottom: 6px;
+    .subtitle {
+      margin-top: 6px;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
     }
-    input[type="password"] {
+    .notice {
       width: 100%;
-      padding: 12px 16px;
-      background: #222;
-      border: 1px solid #333;
-      border-radius: 8px;
-      color: #e8e8e8;
-      font-size: 1rem;
-      margin-bottom: 20px;
-      outline: none;
-    }
-    input[type="password"]:focus {
-      border-color: #3498db;
-    }
-    button {
-      width: 100%;
-      padding: 14px;
-      background: #3498db;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button:hover { background: #2980b9; }
-    .error {
-      background: #e74c3c22;
-      color: #e74c3c;
-      padding: 10px;
-      border-radius: 8px;
+      margin-top: 24px;
+      padding: 12px 14px;
+      border-radius: 12px;
       font-size: 0.9rem;
-      margin-bottom: 16px;
-      text-align: center;
+      line-height: 1.45;
+      text-align: left;
     }
+    .notice[hidden] { display: none; }
+    .notice.is-error {
+      color: #f6a39c;
+      background: rgba(242, 115, 106, 0.08);
+      border: 1px solid rgba(242, 115, 106, 0.22);
+    }
+    .notice.is-info {
+      color: #9bd8a3;
+      background: rgba(94, 194, 106, 0.08);
+      border: 1px solid rgba(94, 194, 106, 0.22);
+    }
+    .google-btn {
+      margin-top: 28px;
+      width: 100%;
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 0 20px;
+      border-radius: 26px;
+      background: #131314;
+      border: 1px solid #8e918f;
+      color: #e3e3e3;
+      font-size: 1rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    }
+    .google-btn:hover { background: #1c1b1f; border-color: #c4c7c5; }
+    .google-btn:active { transform: scale(0.97); }
+    .google-btn:focus-visible { outline: 2px solid var(--accent-sup); outline-offset: 3px; }
+    .google-btn svg { flex-shrink: 0; }
+    .hint {
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .back {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 10px;
+      transition: color 0.2s;
+    }
+    .back:hover, .back:focus-visible { color: var(--text-primary); }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
   </style>
 </head>
 <body>
-  <form class="login-box" method="POST" action="/admin/login">
+  <main class="card">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </div>
     <h1 data-i18n="login.title">Daily Screen</h1>
-    <div id="error" class="error" style="display:none"></div>
-    <label for="password" data-i18n="login.password">Senha</label>
-    <input type="password" id="password" name="password" autofocus required>
-    <button type="submit" data-i18n="login.submit">Entrar</button>
-  </form>
+    <p class="subtitle" data-i18n="login.subtitle">Painel de configuração</p>
+
+    <p class="notice" id="notice" role="status" hidden></p>
+
+    <a class="google-btn" href="/admin/auth/google">
+      <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      <span data-i18n="login.google">Entrar com Google</span>
+    </a>
+    <p class="hint" data-i18n="login.hint">Só a conta autorizada abre o painel.</p>
+  </main>
+
+  <a class="back" href="/" data-i18n="login.back">← Voltar para o dia</a>
+
   <script src="/public/i18n.js"></script>
   <script src="/public/login.js"></script>
 </body>
