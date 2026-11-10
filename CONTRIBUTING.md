@@ -6,10 +6,10 @@ Thank you for your interest in contributing to Daily Screen! This document descr
 
 ### Prerequisites
 
-- Node.js 20 or later
+- Node.js 22.23.4 or later (see `engines` in `package.json`)
 - npm 10 or later
 - A text editor or IDE of your choice
-- A browser that supports modern JavaScript and Service Workers
+- A modern browser
 
 ### Local Setup
 
@@ -44,19 +44,22 @@ This runs Node.js in watch mode — the server restarts automatically when you e
 
 Visit `http://localhost:3000` to see the display view, and `http://localhost:3000/admin` to access the admin panel.
 
-Admin login is Google sign-in: set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `ADMIN_EMAILS` in your `.env` (see README).
+Admin login is Google sign-in: set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_EMAILS` and `SESSION_SECRET` in your `.env` (see the README). The server will not start without them, but the display at `/` works with placeholder Google values.
 
 ## Project Structure
 
 Daily Screen follows a simple directory layout designed for quick understanding and modification:
 
 - **server.js** — Express entry point and route mounting
-- **db.js** — SQLite schema, database initialization, and query helpers
+- **model.js** — Data model and schema (templates, phases, series, daily tasks), box cycle and repeat rules
+- **db.js** — Opens SQLite, runs the one-time migration, and exposes the helpers the routes use
+- **lib/** — Request validation and Google OAuth helpers
+- **test/** — `node:test` suites that run against in-memory SQLite
 - **weather.js** — Weather API client (Open-Meteo) and caching logic
 - **session-store.js** — Custom SQLite-backed session store for admin authentication
 - **routes/** — Express route handlers (display, admin, API)
 - **middleware/** — Authentication and other request middleware
-- **public/** — Client-side assets (CSS, vanilla JavaScript, Service Worker)
+- **public/** — Client-side assets (CSS, vanilla JavaScript, translations in `public/lang/`, service worker)
 - **views/** — HTML templates (display, admin panel, login)
 - **Dockerfile** — Multi-stage build for production deployment
 - **docker/** — Docker Compose configuration and environment templates
@@ -74,7 +77,7 @@ Daily Screen intentionally avoids TypeScript, bundlers, and transpilers. This me
 - Fast feedback loop during development
 - Simpler codebase to navigate and understand
 
-The trade-off is that you won't catch type errors before runtime. This is acceptable for a small project, and pull requests that add a test suite are very welcome!
+The trade-off is that you won't catch type errors before runtime. Run the tests (`npm test`) to catch regressions.
 
 ### CommonJS Module System
 
@@ -115,21 +118,9 @@ CSS theming uses custom properties (CSS variables). These are defined in `public
 }
 ```
 
-### Service Worker Cache Management
+### Service Worker
 
-The app includes a Service Worker in `public/sw.js` that caches static assets (shell) and API responses. When you modify static assets:
-
-1. Increment `CACHE_NAME` at the top of `public/sw.js`
-2. Push your changes
-3. Tablets will update on their next check (usually within 1 minute)
-
-Example:
-
-```javascript
-const CACHE_NAME = 'daily-screen-v3'; // was v2
-```
-
-If users don't see your changes after deploying, they may need to clear the Service Worker cache manually in their browser or tablet settings.
+`public/sw.js` implements a cache for the app shell, but it never runs today: `views/display.html` registers it from an inline script, and the Content-Security-Policy (`script-src 'self'`) blocks inline scripts. A tablet picks up new front-end code when you reload the page. If you make the worker run, increment `CACHE_NAME` at the top of `public/sw.js` whenever you change cached assets.
 
 ### Express 5 and Async Error Handling
 
@@ -149,15 +140,15 @@ Errors thrown in async handlers are automatically caught and passed to error-han
 The project uses SQLite with the `better-sqlite3` driver, which provides a synchronous API. All database queries are executed synchronously:
 
 ```javascript
-const row = db.prepare('SELECT * FROM routine_items WHERE id = ?').get(itemId);
-const rows = db.prepare('SELECT * FROM routine_items').all();
+const row = db.prepare('SELECT * FROM templates WHERE id = ?').get(templateId);
+const rows = db.prepare('SELECT * FROM templates').all();
 ```
 
 If you're adding new database functionality:
 
-1. Add schema changes to the `initializeDatabase()` function in `db.js`
-2. Use the `columnExists()` helper to make migrations safe (idempotent)
-3. Keep queries in `db.js` — export helper functions for use in routes
+1. Add new tables in `model.js` (`CREATE TABLE IF NOT EXISTS`) and new columns to the `added` list there (it checks `PRAGMA table_info` before each `ALTER TABLE`), so upgrades are idempotent
+2. Keep the business rules in `model.js` and export thin helpers from `db.js` for the routes
+3. Add a test in `test/` that uses an in-memory database (see `test/model.test.js`)
 
 ### Icons: Unicode Emoji
 
@@ -195,23 +186,19 @@ There is no automated linting or formatting enforced yet. Follow these conventio
 
 ### Testing
 
-Currently, Daily Screen has no automated test suite. This is a significant gap, and contributions that add tests are especially valuable. If you're adding new functionality, consider:
+Run the suites with:
 
-- Writing tests for API endpoints (especially for database queries)
-- Testing your changes manually on the target viewport
-- Documenting edge cases in your PR
+```bash
+npm test
+```
+
+They use the built-in `node:test` runner and in-memory SQLite, so nothing touches your real database. New behavior should come with a test, and bug fixes with a test that fails without the fix. For UI changes, also check the 1280×800 viewport by hand.
 
 ## Areas Where Help Is Needed
 
-### Test Suite
+### Test Coverage
 
-Daily Screen has no automated tests. This is a major opportunity to contribute! Consider adding:
-
-- Unit tests for database queries (`db.js`)
-- Integration tests for API endpoints
-- A test database fixture for consistent test data
-
-The project is open to adding a test framework (Jest, Vitest, etc.) if you'd like to pioneer this effort.
+The model and the Integration API have tests, but the Express routes and the front-end scripts have little coverage. Route-level tests and browser tests for the display are welcome.
 
 ### Accessibility Improvements
 
@@ -224,12 +211,11 @@ The display view and admin panel should be usable by people with disabilities. C
 
 ### Internationalization (i18n)
 
-Daily Screen currently has a Portuguese user interface. Help expanding language support is greatly appreciated:
+The interface is available in Portuguese (Brazil), English and Spanish; the strings are in `public/lang/`. Help is welcome with:
 
-- Extract UI strings into language files
-- Add support for multiple languages in settings
-- Consider locale-aware date and time formatting
-- Translate to new languages (Spanish, French, etc.)
+- Translating to more languages (add a file in `public/lang/` and the code to the allowed list in `lib/validators.js`)
+- Translating the weather descriptions and hints, which `weather.js` currently returns in Portuguese
+- Locale-aware date and time formatting
 
 ### Documentation Improvements
 
