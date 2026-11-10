@@ -340,7 +340,7 @@ Executes the "yes, I bought it / start a new box" flow for a follow-up task crea
 **Errors:** `400` if the task is not a recreate follow-up; `404` is not used here because the model returns a domain error payload.
 
 #### `DELETE /tasks/:id`
-Removes the whole item/protocol behind the task: it is **archived** (`active = 0`, restorable) if it has any marked dose, otherwise deleted. Note: the public tablet route (`DELETE /api/tasks/:id`, long-press on the wall screen) only ever archives. To hide a single day instead of the whole item, use `DELETE /occurrences/:id` (see **Entries** below).
+Removes the whole item/protocol behind the task: it is **archived** (`active = 0`, restorable) if it has any marked dose, otherwise deleted. Note: the `/api` variant (`DELETE /api/tasks/:id`, admin session or Bearer token only) only ever archives. To hide a single day instead of the whole item, use `DELETE /occurrences/:id` (see **Entries** below).
 
 **Response 200:**
 ```json

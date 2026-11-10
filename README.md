@@ -123,6 +123,7 @@ If `.env` doesn't exist on first deploy, create it manually on the VPS at the de
 - **GOOGLE_CLIENT_ID** / **GOOGLE_CLIENT_SECRET** — OAuth client (type "Web application") from Google Cloud Console. Authorized redirect URI: `https://<your-domain>/admin/auth/google/callback` (and `http://localhost:3000/admin/auth/google/callback` for dev). Required: the server won't start without them.
 - **ADMIN_EMAILS** — Comma-separated Google accounts allowed into the admin panel. Required.
 - **SESSION_SECRET** — Secret key for session cookies. Use a random string.
+- **DISPLAY_KEY** — Pairing key for the wall display (at least 32 random characters; see [Pairing the wall display](#pairing-the-wall-display)). Without it no display can be paired; the admin panel and Bearer tokens still work.
 - **DATABASE_PATH** — Path to SQLite database (default: `./daily-screen.db` for dev, `/data/daily-screen.db` for Docker)
 - **WEATHER_LAT** — Default latitude for weather forecast (default: `-23.55`)
 - **WEATHER_LON** — Default longitude for weather forecast (default: `-46.63`)
@@ -203,18 +204,26 @@ daily-screen/
 
 ## API Endpoints
 
-All endpoints are prefixed with `/api`.
+All endpoints are prefixed with `/api` and **require authentication**. A request is accepted from one of:
 
-**Public (no auth required):**
+- **Admin session** — the logged-in admin panel. Full access.
+- **Bearer token** — `Authorization: Bearer dsk_live_...`, the same tokens as the Integration API. Full access to these routes, except that `GET /api/settings` leaves out the weather latitude/longitude.
+- **Paired display** — the wall tablet. Limited to what the display page uses (listed below); everything else returns `403`.
+
+Without any of these, every `/api/*` route returns `401`.
+
+**Admin session, Bearer token or paired display:**
 - `GET /api/tasks?date=YYYY-MM-DD` — Get tasks for date (lazy-generates if needed)
 - `POST /api/tasks/:id/toggle` — Mark/unmark task as complete
-- `DELETE /api/tasks/:id` — From the tablet: archives the item behind the task (reversible in the panel)
-- `GET /api/items` — List all routine items
+- `POST /api/tasks/:id/recreate` — Answer "yes" to the follow-up recreate prompt
+- `GET /api/completed` — Completed series
 - `GET /api/weather` — Weather forecast (cached 30 min)
-- `GET /api/geocoding?q=cidade` — Search cities (Open-Meteo)
-- `GET /api/settings` — Get all settings
+- `GET /api/settings` — Get settings (latitude/longitude only for the admin session)
 
-**Auth required (admin session):**
+**Admin session or Bearer token only:**
+- `DELETE /api/tasks/:id` — Archives the item behind the task (reversible in the panel)
+- `GET /api/items` — List all routine items
+- `GET /api/geocoding?q=cidade` — Search cities (Open-Meteo)
 - `POST /api/items` — Create routine item
 - `PUT /api/items/:id` — Update routine item
 - `DELETE /api/items/:id` — Soft delete (deactivate)
@@ -225,6 +234,15 @@ All endpoints are prefixed with `/api`.
 - `POST /api/items/:id/occurrences` — Add a one-off day · `POST /api/items/:id/occurrences/prune` — clean off-rule days (`dry_run` to preview)
 - `PUT /api/occurrences/:id` (`completed` / `removed`) · `DELETE /api/occurrences/:id` — mark, unmark, remove, restore
 - `PUT /api/settings` — Update settings (key-value pairs)
+
+### Pairing the wall display
+
+The display page (`/`) shows "This display is not paired" until the device is paired once:
+
+1. Set `DISPLAY_KEY` in the server's `.env` (at least 32 random characters, e.g. `openssl rand -hex 32`) and restart.
+2. On the tablet, open `https://<your-domain>/?key=<DISPLAY_KEY>` once. The server sets a long-lived, `HttpOnly`, `SameSite=Strict` cookie and redirects to the clean URL.
+
+To unpair every display, change or remove `DISPLAY_KEY`. The key travels in the URL once, so it can show up in proxy access logs and browser history: treat it as a password and rotate it if it leaks.
 
 ### Integration API (token-authenticated)
 

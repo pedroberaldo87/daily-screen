@@ -59,6 +59,11 @@ app.use('/integration/v1', require('./routes/integration'));
 // Seed development data
 seedIfEmpty();
 
-app.listen(PORT, () => {
-  console.log(`Daily Screen running on http://localhost:${PORT}`);
-});
+// Importable by tests without opening a port.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Daily Screen running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
