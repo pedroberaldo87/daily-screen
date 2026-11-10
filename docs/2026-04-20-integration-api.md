@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** 2026-04-20
-**Base URL:** `https://daily.aiworks.app.br/integration/v1`
+**Base URL:** `https://your-domain.example/integration/v1`
 **Audience:** External agents (e.g., Claude Code instances, scripts, cron jobs) that need programmatic CRUD access to items, protocols, daily tasks, settings, and adherence/history analytics.
 
 ---
@@ -37,13 +37,13 @@ Standalone items are `template.kind in ('simple','count')`; protocols are `templ
 ## 2. Quickstart
 
 ### Step 1 — Create a token
-Log into the admin panel and navigate to **Tokens** (top nav). Click **Novo token**, give it a descriptive name (e.g. `claude-code-laptop`), and copy the plaintext value that appears **once**. Store it somewhere safe — if you lose it, create a new one.
+Log into the admin panel and navigate to **Tokens** (top nav). Click **New token**, give it a descriptive name (e.g. `claude-code-laptop`), and copy the plaintext value that appears **once**. Store it somewhere safe — if you lose it, create a new one.
 
 ### Step 2 — Hello, world
 ```bash
 export DS_TOKEN="dsk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 curl -H "Authorization: Bearer $DS_TOKEN" \
-  https://daily.aiworks.app.br/integration/v1/health
+  https://your-domain.example/integration/v1/health
 ```
 Expected:
 ```json
@@ -60,7 +60,7 @@ Expected:
 ### Step 3 — Fetch today's items
 ```bash
 curl -H "Authorization: Bearer $DS_TOKEN" \
-  https://daily.aiworks.app.br/integration/v1/items
+  https://your-domain.example/integration/v1/items
 ```
 
 ---
@@ -99,7 +99,7 @@ Tokens are currently **full-access**: any valid, non-revoked, non-expired token 
 
 ## 4. Base URL & Versioning
 
-**Production:** `https://daily.aiworks.app.br/integration/v1`
+**Your deployment:** `https://your-domain.example/integration/v1`
 **Dev (localhost):** `http://localhost:3000/integration/v1`
 
 The path contains `v1`. Breaking changes will go to `v2` under a new prefix; `v1` will keep working until officially deprecated.
@@ -280,9 +280,9 @@ Returns all daily tasks for the given date (default: today in `weather_tz`). Laz
     "date": "2026-04-20",
     "completed": 0,
     "completed_at": null,
-    "title": "Tomar Ritalina",
-    "category": "medication",
-    "icon": "💊",
+    "title": "Vitamin D",
+    "category": "supplement",
+    "icon": "☀️",
     "periods": "[\"morning\"]",
     "weekdays": "[0,1,2,3,4,5,6]",
     "...": "plus all other item fields"
@@ -295,7 +295,7 @@ Returns all daily tasks for the given date (default: today in `weather_tz`). Laz
 **Example:**
 ```bash
 curl -H "Authorization: Bearer $DS_TOKEN" \
-  "https://daily.aiworks.app.br/integration/v1/tasks?date=2026-04-20"
+  "https://your-domain.example/integration/v1/tasks?date=2026-04-20"
 ```
 
 #### `GET /tasks/:id`
@@ -313,7 +313,7 @@ Toggles the `completed` flag on a single daily task. Returns the updated task. I
 **Example:**
 ```bash
 curl -X POST -H "Authorization: Bearer $DS_TOKEN" \
-  https://daily.aiworks.app.br/integration/v1/tasks/123/toggle
+  https://your-domain.example/integration/v1/tasks/123/toggle
 ```
 
 #### `PUT /tasks/:id`
@@ -402,7 +402,7 @@ Returns all standalone routine_items (both active and inactive), sorted by activ
 **Example:**
 ```bash
 curl -H "Authorization: Bearer $DS_TOKEN" \
-  https://daily.aiworks.app.br/integration/v1/items
+  https://your-domain.example/integration/v1/items
 ```
 
 #### `GET /items/:id`
@@ -445,7 +445,7 @@ Creates a new standalone item. Body follows the `Item` type; required fields: `t
 
 **Node.js example:**
 ```js
-const res = await fetch('https://daily.aiworks.app.br/integration/v1/items', {
+const res = await fetch('https://your-domain.example/integration/v1/items', {
   method: 'POST',
   headers: {
     'Authorization': `Bearer ${process.env.DS_TOKEN}`,
@@ -539,7 +539,7 @@ Soft-remove one day (same as `PUT {removed:true}`). Reversible.
 ```bash
 # preview, then clean
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"dry_run":true}' https://daily.aiworks.app.br/integration/v1/items/6/occurrences/prune
+  -d '{"dry_run":true}' https://your-domain.example/integration/v1/items/6/occurrences/prune
 ```
 
 ---
@@ -726,16 +726,16 @@ If you're building a Claude Code skill around this API, start with this SKILL.md
 ```markdown
 ---
 name: daily-screen
-description: Use when Pedro asks to create/update/delete items, protocols, or settings in his Daily Screen app at daily.aiworks.app.br. Triggers include "adiciona no daily", "cria um protocolo", "marca como feito hoje", "desativa vitamina", "atualiza localização do weather".
+description: Use when the owner asks to create/update/delete items, protocols, or settings in their Daily Screen app at your-domain.example. Triggers include "add to daily", "create a protocol", "mark as done today", "deactivate vitamin", "change the weather city".
 ---
 
 # Daily Screen Integration
 
-You have programmatic access to Pedro's Daily Screen app (a tablet-based medication/supplement/reminder checklist). Use the REST API at `https://daily.aiworks.app.br/integration/v1`.
+You have programmatic access to the owner's Daily Screen app (a tablet-based medication/supplement/reminder checklist). Use the REST API at `https://your-domain.example/integration/v1`.
 
 ## Setup
 
-1. Token is stored in `$DS_TOKEN` env var (one-time setup by Pedro).
+1. Token is stored in `$DS_TOKEN` env var (one-time setup by the owner).
 2. Always send `Authorization: Bearer $DS_TOKEN`.
 3. Respect rate limits (120/min per token). Back off on 429.
 
