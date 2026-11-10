@@ -69,25 +69,25 @@ function buildLegacy(db) {
     protocol_id: null, phase_order: null, start_date: null, end_date: null, created_at: '2026-01-01 00:00:00',
   };
 
-  // 1) Item simples (Ritalina) com 3 dias marcados
-  const ritalinaId = item.run({ ...base, title: 'Ritalina', category: 'medication', icon: '💊' }).lastInsertRowid;
-  for (const d of ['2026-06-05', '2026-06-06', '2026-06-07']) dt.run(ritalinaId, d, 1, d + 'T08:00:00Z');
-  dt.run(ritalinaId, '2026-06-08', 0, null); // dia pendente
+  // 1) Item simples (Remédio A) com 3 dias marcados
+  const remedioAId = item.run({ ...base, title: 'Remédio A', category: 'medication', icon: '💊' }).lastInsertRowid;
+  for (const d of ['2026-06-05', '2026-06-06', '2026-06-07']) dt.run(remedioAId, d, 1, d + 'T08:00:00Z');
+  dt.run(remedioAId, '2026-06-08', 0, null); // dia pendente
 
-  // 2) Caixa Atentah 80mg: 31 doses marcadas + cycle_start hoje (comprou de novo) → bagunça real
-  const atentahId = item.run({
-    ...base, title: 'Atentah 80mg', category: 'medication', icon: '💊',
+  // 2) Caixa Magnésio 80mg: 31 doses marcadas + cycle_start hoje (comprou de novo) → bagunça real
+  const magnesioId = item.run({
+    ...base, title: 'Magnésio 80mg', category: 'medication', icon: '💊',
     total_count: 31, completed_count: 0, cycle_start_date: '2026-06-08',
-    followup_title: 'Comprar Atentah', followup_category: 'reminder', followup_icon: '🛒', followup_recreate: 1,
+    followup_title: 'Comprar Magnésio', followup_category: 'reminder', followup_icon: '🛒', followup_recreate: 1,
   }).lastInsertRowid;
-  const atentahDays = [];
-  for (let i = 0; i < 31; i++) atentahDays.push(addDays('2026-05-05', i));
-  for (const d of atentahDays) dt.run(atentahId, d, 1, d + 'T08:00:00Z');
+  const magnesioDays = [];
+  for (let i = 0; i < 31; i++) magnesioDays.push(addDays('2026-05-05', i));
+  for (const d of magnesioDays) dt.run(magnesioId, d, 1, d + 'T08:00:00Z');
 
-  // 2b) Follow-up legado "Comprar Atentah" (já completado)
+  // 2b) Follow-up legado "Comprar Magnésio" (já completado)
   const fuId = item.run({
-    ...base, title: 'Comprar Atentah', category: 'reminder', icon: '🛒',
-    total_count: 1, completed_count: 1, active: 0, recreate_item_id: atentahId, created_at: '2026-06-08 00:00:00',
+    ...base, title: 'Comprar Magnésio', category: 'reminder', icon: '🛒',
+    total_count: 1, completed_count: 1, active: 0, recreate_item_id: magnesioId, created_at: '2026-06-08 00:00:00',
   }).lastInsertRowid;
   dt.run(fuId, '2026-06-08', 1, '2026-06-08T09:00:00Z');
 
@@ -105,7 +105,7 @@ function buildLegacy(db) {
   for (const d of ['2026-05-20', '2026-05-21', '2026-05-22']) dt.run(p1, d, 1, d + 'T08:00:00Z');
   for (const d of ['2026-05-27', '2026-05-28']) dt.run(p2, d, 1, d + 'T08:00:00Z');
 
-  return { ritalinaId, atentahId, fuId, protoId, p1, p2 };
+  return { remedioAId, magnesioId, fuId, protoId, p1, p2 };
 }
 
 function addDays(dateStr, days) {
