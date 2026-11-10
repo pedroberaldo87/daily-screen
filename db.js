@@ -176,7 +176,7 @@ function seedIfEmpty() {
   const count = db.prepare('SELECT COUNT(*) as count FROM templates').get().count;
   if (count > 0) return;
   const items = [
-    { title: 'Tomar Ritalina', category: 'medication', icon: '💊', sort_order: 1 },
+    { title: 'Tomar remédio', category: 'medication', icon: '💊', sort_order: 1 },
     { title: 'Vitamina D', category: 'supplement', icon: '☀️', sort_order: 2 },
     { title: 'Ômega 3', category: 'supplement', icon: '🐟', sort_order: 3 },
     { title: 'Creatina', category: 'supplement', icon: '💪', sort_order: 4 },

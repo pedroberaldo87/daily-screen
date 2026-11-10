@@ -24,13 +24,13 @@ test('invariante: nenhum daily_task completado é perdido na migração', () => 
   assert.equal(after, before, 'histórico completo preservado');
 });
 
-test('Atentah: caixa cheia migra para 1 concluída, SEM caixa nova ativa vazia', () => {
+test('Magnésio: caixa cheia migra para 1 concluída, SEM caixa nova ativa vazia', () => {
   const { db } = legacyDb();
   migrate(db, TODAY);
 
-  // template count "Atentah 80mg"
-  const tmpl = db.prepare("SELECT * FROM templates WHERE name = 'Atentah 80mg' AND kind = 'count'").get();
-  assert.ok(tmpl, 'template Atentah deve existir');
+  // template count "Magnésio 80mg"
+  const tmpl = db.prepare("SELECT * FROM templates WHERE name = 'Magnésio 80mg' AND kind = 'count'").get();
+  assert.ok(tmpl, 'template Magnésio deve existir');
 
   const series = db.prepare('SELECT * FROM series WHERE template_id = ? ORDER BY seq').all(tmpl.id);
   const completed = series.filter((s) => s.status === 'completed');
@@ -49,7 +49,7 @@ test('item simples vira template(simple) + série perpétua com seu histórico',
   const { db } = legacyDb();
   migrate(db, TODAY);
 
-  const tmpl = db.prepare("SELECT * FROM templates WHERE name = 'Ritalina' AND kind = 'simple'").get();
+  const tmpl = db.prepare("SELECT * FROM templates WHERE name = 'Remédio A' AND kind = 'simple'").get();
   assert.ok(tmpl);
   const series = db.prepare('SELECT * FROM series WHERE template_id = ?').all(tmpl.id);
   assert.equal(series.length, 1);

@@ -13,7 +13,7 @@ function freshModel() {
 
 test('createItem simples cria template(simple) + phase + 1 série perpétua ativa', () => {
   const { db, m } = freshModel();
-  const id = m.createItem({ title: 'Ritalina', category: 'medication', icon: '💊' });
+  const id = m.createItem({ title: 'Remédio A', category: 'medication', icon: '💊' });
 
   const tmpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(id);
   assert.equal(tmpl.kind, 'simple');
@@ -24,14 +24,14 @@ test('createItem simples cria template(simple) + phase + 1 série perpétua ativ
   const series = db.prepare('SELECT * FROM series WHERE template_id = ?').all(id);
   assert.equal(series.length, 1);
   assert.equal(series[0].status, 'active');
-  assert.equal(series[0].title, 'Ritalina');
+  assert.equal(series[0].title, 'Remédio A');
   assert.equal(series[0].total_count, null);
   assert.equal(series[0].end_date, null); // perpétua
 });
 
 test('item simples gera daily_task no dia e nunca conclui', () => {
   const { db, m } = freshModel();
-  m.createItem({ title: 'Ritalina', category: 'medication' });
+  m.createItem({ title: 'Remédio A', category: 'medication' });
 
   m.generateDailyTasks('2026-06-08');
   const tasks = db.prepare("SELECT * FROM daily_tasks WHERE date = '2026-06-08'").all();
@@ -47,8 +47,8 @@ test('item simples gera daily_task no dia e nunca conclui', () => {
 test('createItem com total_count cria template(count) + série corrente', () => {
   const { db, m } = freshModel();
   const id = m.createItem({
-    title: 'Atentah', category: 'medication', total_count: 3,
-    followup_title: 'Comprar Atentah', followup_category: 'reminder', followup_icon: '🛒',
+    title: 'Magnésio', category: 'medication', total_count: 3,
+    followup_title: 'Comprar Magnésio', followup_category: 'reminder', followup_icon: '🛒',
   });
   const tmpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(id);
   assert.equal(tmpl.kind, 'count');
@@ -63,8 +63,8 @@ test('createItem com total_count cria template(count) + série corrente', () => 
 test('caixa conclui a série ao atingir o total e gera follow-up', () => {
   const { db, m } = freshModel();
   m.createItem({
-    title: 'Atentah', category: 'medication', total_count: 3,
-    followup_title: 'Comprar Atentah', followup_category: 'reminder', followup_icon: '🛒',
+    title: 'Magnésio', category: 'medication', total_count: 3,
+    followup_title: 'Comprar Magnésio', followup_category: 'reminder', followup_icon: '🛒',
   });
 
   // marcar 3 dias
@@ -79,16 +79,16 @@ test('caixa conclui a série ao atingir o total e gera follow-up', () => {
   assert.equal(serie.status, 'completed');
   assert.ok(serie.completed_at, 'completed_at deve estar setado');
 
-  // follow-up "Comprar Atentah" deve existir como item/série ativa
-  const fu = db.prepare("SELECT * FROM series WHERE title = 'Comprar Atentah' AND status='active'").get();
+  // follow-up "Comprar Magnésio" deve existir como item/série ativa
+  const fu = db.prepare("SELECT * FROM series WHERE title = 'Comprar Magnésio' AND status='active'").get();
   assert.ok(fu, 'follow-up de compra deve existir e estar ativo');
 });
 
 test('desmarcar uma dose abaixo do total reabre a série (reconcile reversível)', () => {
   const { db, m } = freshModel();
   m.createItem({
-    title: 'Atentah', category: 'medication', total_count: 3,
-    followup_title: 'Comprar Atentah', followup_category: 'reminder', followup_icon: '🛒',
+    title: 'Magnésio', category: 'medication', total_count: 3,
+    followup_title: 'Comprar Magnésio', followup_category: 'reminder', followup_icon: '🛒',
   });
   const dates = ['2026-06-06', '2026-06-07', '2026-06-08'];
   const ids = [];
@@ -104,7 +104,7 @@ test('desmarcar uma dose abaixo do total reabre a série (reconcile reversível)
   const serie = db.prepare('SELECT * FROM series WHERE total_count = 3').get();
   assert.equal(serie.status, 'active', 'série deve reabrir');
   assert.equal(serie.completed_count, 2);
-  const fu = db.prepare("SELECT * FROM series WHERE title = 'Comprar Atentah' AND status='active'").get();
+  const fu = db.prepare("SELECT * FROM series WHERE title = 'Comprar Magnésio' AND status='active'").get();
   assert.equal(fu, undefined, 'follow-up pendente deve ser desfeito');
 });
 
@@ -113,8 +113,8 @@ test('desmarcar uma dose abaixo do total reabre a série (reconcile reversível)
 test('recreate cria NOVA série seq+1 zerada; a velha continua concluída com histórico', () => {
   const { db, m } = freshModel();
   m.createItem({
-    title: 'Atentah', category: 'medication', total_count: 3,
-    followup_title: 'Comprar Atentah', followup_category: 'reminder', followup_icon: '🛒',
+    title: 'Magnésio', category: 'medication', total_count: 3,
+    followup_title: 'Comprar Magnésio', followup_category: 'reminder', followup_icon: '🛒',
     followup_recreate: 1,
   });
   const dates = ['2026-06-06', '2026-06-07', '2026-06-08'];
@@ -127,7 +127,7 @@ test('recreate cria NOVA série seq+1 zerada; a velha continua concluída com hi
   m.generateDailyTasks('2026-06-09');
   const fuTask = db.prepare(`
     SELECT dt.id FROM daily_tasks dt JOIN series s ON s.id = dt.series_id
-    WHERE s.title = 'Comprar Atentah' AND dt.date = '2026-06-09'
+    WHERE s.title = 'Comprar Magnésio' AND dt.date = '2026-06-09'
   `).get();
   m.toggleTask(fuTask.id);
   const res = m.recreateFromFollowup(fuTask.id, '2026-06-09');
@@ -146,7 +146,7 @@ test('recreate cria NOVA série seq+1 zerada; a velha continua concluída com hi
 
 test('setTaskCompleted é idempotente e não alterna indevidamente o estado', () => {
   const { db, m } = freshModel();
-  m.createItem({ title: 'Ritalina', category: 'medication', icon: '💊' });
+  m.createItem({ title: 'Remédio A', category: 'medication', icon: '💊' });
 
   m.generateDailyTasks('2026-06-08');
   const taskId = db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-08'").get().id;
@@ -172,7 +172,7 @@ test('getItemView retorna item standalone por id', () => {
 
 test('getHistoryView materializa faixa e expõe histórico filtrável', () => {
   const { db, m } = freshModel();
-  const itemId = m.createItem({ title: 'Ritalina', category: 'medication', periods: ['morning'] });
+  const itemId = m.createItem({ title: 'Remédio A', category: 'medication', periods: ['morning'] });
   const protocolId = m.createProtocol({
     name: 'Desmame',
     start_date: '2026-06-01',
@@ -198,7 +198,7 @@ test('getHistoryView materializa faixa e expõe histórico filtrável', () => {
 
 test('getItemAdherence calcula concluídas, faltas e streaks por item', () => {
   const { db, m } = freshModel();
-  const itemId = m.createItem({ title: 'Atentah', category: 'medication' });
+  const itemId = m.createItem({ title: 'Magnésio', category: 'medication' });
 
   for (const date of ['2026-06-01', '2026-06-02', '2026-06-03']) m.generateDailyTasks(date);
   m.toggleTask(db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-01'").get().id);
@@ -216,11 +216,11 @@ test('getItemAdherence calcula concluídas, faltas e streaks por item', () => {
 
 test('getAdherenceSummary agrega por categoria e devolve quebra por entidade', () => {
   const { db, m } = freshModel();
-  const itemId = m.createItem({ title: 'Atentah', category: 'medication' });
+  const itemId = m.createItem({ title: 'Magnésio', category: 'medication' });
   m.createItem({ title: 'Creatina', category: 'supplement' });
 
   for (const date of ['2026-06-01', '2026-06-02']) m.generateDailyTasks(date);
-  m.toggleTask(db.prepare("SELECT dt.id FROM daily_tasks dt JOIN series s ON s.id = dt.series_id WHERE s.title = 'Atentah' AND dt.date = '2026-06-01'").get().id);
+  m.toggleTask(db.prepare("SELECT dt.id FROM daily_tasks dt JOIN series s ON s.id = dt.series_id WHERE s.title = 'Magnésio' AND dt.date = '2026-06-01'").get().id);
 
   const summary = m.getAdherenceSummary({ dateFrom: '2026-06-01', dateTo: '2026-06-02', category: 'medication' });
   assert.equal(summary.category, 'medication');

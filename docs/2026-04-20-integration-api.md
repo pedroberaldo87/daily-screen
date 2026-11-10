@@ -374,7 +374,7 @@ Returns adherence metrics for one standalone item.
 ```json
 {
   "item_id": 123,
-  "title": "Tomar Atentah",
+  "title": "Tomar Magnésio",
   "category": "medication",
   "date_from": "2026-06-01",
   "date_to": "2026-06-07",
@@ -484,7 +484,7 @@ Converts a standalone item into the first phase of a brand-new protocol. **Prese
 **Body — short form (all optional):**
 ```json
 {
-  "name": "Ritalina taper",
+  "name": "Prednisone taper",
   "first_phase_duration": 30,
   "second_phase_duration": 15,
   "repeat_indefinitely": false
@@ -554,14 +554,14 @@ Returns active protocols with their phases embedded, newest first. Pass `?includ
 [
   {
     "id": 3,
-    "name": "Ritalina taper",
+    "name": "Prednisone taper",
     "start_date": "2026-04-01",
     "repeat_indefinitely": 0,
     "active": 1,
     "created_at": "2026-04-01 10:00:00",
     "phases": [
-      { "id": 22, "phase_order": 1, "title": "Ritalina 10mg", "duration_days": 30, "...": "..." },
-      { "id": 23, "phase_order": 2, "title": "Ritalina 5mg",  "duration_days": 15, "...": "..." }
+      { "id": 22, "phase_order": 1, "title": "Prednisone 10mg", "duration_days": 30, "...": "..." },
+      { "id": 23, "phase_order": 2, "title": "Prednisone 5mg",  "duration_days": 15, "...": "..." }
     ]
   }
 ]
@@ -579,19 +579,19 @@ Creates a protocol with phases in one call. Phase dates (`start_date`, `end_date
 **Body:**
 ```json
 {
-  "name": "Ritalina taper",
+  "name": "Prednisone taper",
   "start_date": "2026-05-01",
   "repeat_indefinitely": false,
   "phases": [
     {
-      "title": "Ritalina 10mg",
+      "title": "Prednisone 10mg",
       "category": "medication",
       "icon": "💊",
       "periods": ["morning"],
       "duration_days": 30
     },
     {
-      "title": "Ritalina 5mg",
+      "title": "Prednisone 5mg",
       "category": "medication",
       "icon": "💊",
       "periods": ["morning"],
