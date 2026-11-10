@@ -25,6 +25,7 @@ class SQLiteStore extends Store {
 
     // Cleanup expired sessions every hour
     this._cleanupInterval = setInterval(() => this._cleanup.run(Date.now()), 60 * 60 * 1000);
+    this._cleanupInterval.unref(); // never keep the process (or a test run) alive
   }
 
   get(sid, callback) {

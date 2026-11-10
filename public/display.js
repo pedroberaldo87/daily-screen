@@ -244,6 +244,7 @@ async function fetchTasks(interactive = false) {
   try {
     const opts = interactive ? { cache: 'no-store' } : {};
     const res = await fetch(`${API_BASE}/tasks?date=${currentDate}`, opts);
+    if (res.status === 401) { location.reload(); return; } // pairing lost: page shows "not paired"
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     tasks = await res.json();
     hideLoadError();
@@ -329,51 +330,10 @@ function createTaskElement(task) {
     </div>
   `;
 
-  // Tap = toggle. Long-press (~600ms) = ask to remove from the routine.
-  // Pointer events cover both touch (wall tablet) and mouse (testing).
-  let pressTimer = null;
-  let longPressed = false;
-  const startPress = () => {
-    longPressed = false;
-    pressTimer = setTimeout(() => {
-      longPressed = true;
-      showDeletePrompt(task);
-    }, 600);
-  };
-  const cancelPress = () => clearTimeout(pressTimer);
-  el.addEventListener('pointerdown', startPress);
-  el.addEventListener('pointerup', cancelPress);
-  el.addEventListener('pointerleave', cancelPress);
-  el.addEventListener('pointercancel', cancelPress);
-  el.addEventListener('click', () => {
-    if (longPressed) { longPressed = false; return; } // long-press handled it
-    toggleTask(task.id, el);
-  });
+  // Tap = toggle. Removing an item is done in the admin panel: the paired
+  // display credential cannot delete.
+  el.addEventListener('click', () => toggleTask(task.id, el));
   return el;
-}
-
-function showDeletePrompt(task) {
-  const overlay = document.getElementById('delete-prompt');
-  document.getElementById('delete-text').textContent = t('display.deletePrompt', { title: task.title });
-  overlay.classList.add('active');
-  const yes = document.getElementById('delete-yes');
-  const no = document.getElementById('delete-no');
-  const close = () => {
-    overlay.classList.remove('active');
-    yes.onclick = null;
-    no.onclick = null;
-  };
-  no.onclick = close;
-  yes.onclick = async () => {
-    close();
-    try {
-      const res = await fetch(`${API_BASE}/tasks/${task.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await fetchTasks();
-    } catch (err) {
-      console.error('Failed to delete task:', err);
-    }
-  };
 }
 
 // ═══ Toggle ═══

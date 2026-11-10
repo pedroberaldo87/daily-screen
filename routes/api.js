@@ -30,13 +30,35 @@ const {
 } = require('../lib/validators');
 
 const rateLimit = require('express-rate-limit');
+const { requireApiCaller, requirePrivileged } = require('../middleware/api-auth');
 
 const router = Router();
 
-// Auth middleware for write operations (returns 401 JSON, not redirect)
-function requireApiAuth(req, res, next) {
-  if (req.session && req.session.authenticated) return next();
-  res.status(401).json({ error: 'Authentication required' });
+// Every /api/* route needs a caller: admin session, Bearer integration token, or
+// the paired display cookie (which only reaches the endpoints the display page
+// calls — see middleware/api-auth.js). Failed attempts are throttled per IP;
+// only 401s count, so legitimate 4xx answers never lock anyone out.
+const authFailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  requestWasSuccessful: (req, res) => res.statusCode !== 401,
+  message: { error: 'Too many failed requests' },
+});
+router.use(authFailLimiter);
+router.use(requireApiCaller);
+
+// Management routes: admin session or integration token, never the display.
+const requireApiAuth = requirePrivileged;
+
+// Location (weather_lat / weather_lon, ~10 m precision) is only for the admin session.
+const LOCATION_SETTINGS = ['weather_lat', 'weather_lon'];
+function settingsFor(req) {
+  const settings = getAllSettings();
+  if (req.auth && req.auth.type === 'admin') return settings;
+  for (const key of LOCATION_SETTINGS) delete settings[key];
+  return settings;
 }
 
 // ═══ Daily Tasks (display screen) ═══
@@ -54,24 +76,23 @@ router.post('/tasks/:id/toggle', (req, res) => {
 });
 
 // User confirmed "Sim" on the recreate prompt for a completed follow-up.
-// Public like /toggle — the wall tablet acts without a login session.
+// Reachable by the paired display, like /toggle.
 router.post('/tasks/:id/recreate', (req, res) => {
   const result = recreateFromFollowup(Number(req.params.id), todayDate());
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
 });
 
-// Remove the item/protocol behind a task — from the wall tablet (public, like
-// /toggle). Long-press + confirm on the screen guards against misclicks; being
-// public, it only archives (reversible in the admin), never hard-deletes.
-router.delete('/tasks/:id', (req, res) => {
+// Remove the item/protocol behind a task. Admin or integration token only — the
+// paired display cannot call it. It only archives (reversible in the admin).
+router.delete('/tasks/:id', requireApiAuth, (req, res) => {
   const result = deleteTaskItem(Number(req.params.id), { archiveOnly: true });
   if (!result.ok) return res.status(404).json(result);
   res.json(result);
 });
 
-// Completed series (boxes + protocol phases) for the "Concluídos" panel — public
-// like /tasks so the wall tablet renders it without a login session.
+// Completed series (boxes + protocol phases) for the "Concluídos" panel; the
+// paired display may read it, like /tasks.
 router.get('/completed', (req, res) => {
   res.json(getCompletedSeries());
 });
@@ -101,7 +122,7 @@ const geocodingLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-router.get('/geocoding', geocodingLimiter, async (req, res) => {
+router.get('/geocoding', requireApiAuth, geocodingLimiter, async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json([]);
 
@@ -130,7 +151,7 @@ router.get('/geocoding', geocodingLimiter, async (req, res) => {
 // ═══ Settings ═══
 
 router.get('/settings', (req, res) => {
-  res.json(getAllSettings());
+  res.json(settingsFor(req));
 });
 
 router.put('/settings', requireApiAuth, (req, res) => {
@@ -140,7 +161,7 @@ router.put('/settings', requireApiAuth, (req, res) => {
   for (const [key, value] of Object.entries(entries)) {
     setSetting(key, String(value));
   }
-  res.json(getAllSettings());
+  res.json(settingsFor(req));
 });
 
 // ═══ Routine Items (admin panel) ═══
