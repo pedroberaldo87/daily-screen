@@ -1,25 +1,47 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── Config ─────────────────���────────────────���───
+# ── Config ──────────────────────────────────────
 # Required: set these before running (env vars or export)
 DEPLOY_HOST="${DEPLOY_HOST:?Set DEPLOY_HOST to your VPS IP or hostname}"
 DEPLOY_KEY="${DEPLOY_KEY:?Set DEPLOY_KEY to the path of your SSH private key}"
 # Optional: defaults provided
 DEPLOY_USER="${DEPLOY_USER:-root}"
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/daily-screen}"
+# known_hosts file that holds the VPS host key (pin it once, see README "Pin the server host key")
+DEPLOY_KNOWN_HOSTS="${DEPLOY_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}"
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
-TARBALL="/tmp/daily-screen-deploy.tar.gz"
 
-SSH_CMD="ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST"
+# Host key verification stays on: an unknown or changed key aborts the deploy.
+if [ ! -s "$DEPLOY_KNOWN_HOSTS" ]; then
+  echo "✗ $DEPLOY_KNOWN_HOSTS is missing or empty. Pin the server host key first (see README)." >&2
+  exit 1
+fi
+SSH_OPTS=(-i "$DEPLOY_KEY" -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$DEPLOY_KNOWN_HOSTS")
+REMOTE="$DEPLOY_USER@$DEPLOY_HOST"
+
+# Local scratch space (build context + tarball), private to this run.
+WORK_DIR="$(mktemp -d)"
+TARBALL="$WORK_DIR/daily-screen-deploy.tar.gz"
+# Private staging dir on the VPS (mode 700, created in step 2); empty until then.
+REMOTE_STAGE=""
+
+cleanup() {
+  rm -rf "$WORK_DIR"
+  # Best effort: the remote script removes the stage dir itself; this covers failures before it runs.
+  if [ -n "$REMOTE_STAGE" ]; then
+    printf 'rm -rf %q\n' "$REMOTE_STAGE" | ssh "${SSH_OPTS[@]}" "$REMOTE" bash -s >/dev/null 2>&1 || true
+  fi
+}
+trap 'cleanup' EXIT
 
 echo "═══ Daily Screen — Deploy ═══"
 
 # ── 0. Build image locally ──
 # The VPS is shared and never builds: a build there starved its memory and took other apps down (2026-11-05).
 echo "→ Building image locally from commit $(git -C "$APP_DIR" rev-parse --short HEAD)..."
-BUILD_CTX="$(mktemp -d)"
-trap 'rm -rf "$BUILD_CTX"' EXIT
+BUILD_CTX="$WORK_DIR/context"
+mkdir "$BUILD_CTX"
 git -C "$APP_DIR" archive HEAD | tar -x -C "$BUILD_CTX"
 docker build --platform linux/amd64 -t daily-screen-app:latest "$BUILD_CTX"
 
@@ -39,29 +61,47 @@ tar -czf "$TARBALL" \
 echo "  Tarball: $(du -h "$TARBALL" | cut -f1)"
 
 # ── 2. Upload to VPS ──
+# Stage in a private directory (umask 077 gives mode 700), never at a fixed path in the shared /tmp.
 echo "→ Uploading to VPS..."
-scp -i "$DEPLOY_KEY" -o StrictHostKeyChecking=no "$TARBALL" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/daily-screen-deploy.tar.gz"
-docker save daily-screen-app:latest | gzip | $SSH_CMD 'docker load'
+REMOTE_STAGE="$(ssh "${SSH_OPTS[@]}" "$REMOTE" 'umask 077 && mktemp -d')"
+if ! [[ "$REMOTE_STAGE" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+  echo "✗ Unexpected staging path from server: '$REMOTE_STAGE'" >&2
+  REMOTE_STAGE=""
+  exit 1
+fi
+scp "${SSH_OPTS[@]}" "$TARBALL" "$REMOTE:$REMOTE_STAGE/daily-screen-deploy.tar.gz"
+docker save daily-screen-app:latest | gzip | ssh "${SSH_OPTS[@]}" "$REMOTE" 'docker load'
 
 # ── 3. Extract, restart on VPS ──
+# The values are sent as quoted assignments (printf %q) ahead of a quoted heredoc, so nothing
+# is expanded or word-split by the remote shell.
 echo "→ Deploying on VPS..."
-$SSH_CMD bash -s <<REMOTE
+{
+  printf 'DEPLOY_PATH=%q\nSTAGE=%q\n' "$DEPLOY_PATH" "$REMOTE_STAGE"
+  cat <<'REMOTE_SCRIPT'
 set -euo pipefail
+umask 077
+
+trap 'rm -rf "$STAGE"' EXIT
 
 # Scoped cleanup
 echo "→ Pruning old Docker resources (scoped)..."
 docker image prune -f
 docker container prune -f
 
-# Back up .env before overwriting
-cp "$DEPLOY_PATH/docker/.env" /tmp/daily-screen-env-backup 2>/dev/null || true
+# Back up .env before overwriting. The deploy fails if the backup cannot be written.
+if [ ! -f "$DEPLOY_PATH/docker/.env" ]; then
+  echo "✗ $DEPLOY_PATH/docker/.env not found. Create it on the server first (see README)." >&2
+  exit 1
+fi
+cp -p "$DEPLOY_PATH/docker/.env" "$STAGE/env-backup"
 
 # Extract
 mkdir -p "$DEPLOY_PATH"
-tar -xzf "$TARBALL" -C "$DEPLOY_PATH"
+tar -xzf "$STAGE/daily-screen-deploy.tar.gz" -C "$DEPLOY_PATH"
 
 # Restore .env
-cp /tmp/daily-screen-env-backup "$DEPLOY_PATH/docker/.env" 2>/dev/null || true
+cp -p "$STAGE/env-backup" "$DEPLOY_PATH/docker/.env"
 
 # Restart with the uploaded image
 cd "$DEPLOY_PATH/docker"
@@ -71,23 +111,22 @@ docker compose up -d --no-build
 echo "→ Waiting for container..."
 sleep 5
 if docker ps --filter "name=daily-screen-app" --filter "status=running" -q | grep -q .; then
-  echo "��� Container running"
+  echo "✓ Container running"
 else
   echo "✗ Container not running!"
   docker logs daily-screen-app --tail 20
   exit 1
 fi
 
-# Post-build cleanup
-echo "→ Pruning post-build resources (scoped)..."
+# Post-deploy cleanup (the trap removes the staging dir with the tarball and the .env backup)
+echo "→ Pruning post-deploy resources (scoped)..."
 docker image prune -f
 
-# Cleanup
-rm -f "$TARBALL" /tmp/daily-screen-env-backup
-
 echo "═══ Deploy complete ═══"
-REMOTE
+REMOTE_SCRIPT
+} | ssh "${SSH_OPTS[@]}" "$REMOTE" bash -s
 
-# ── 4. Cleanup local ──
-rm -f "$TARBALL"
+# ── 4. Cleanup ──
+# The remote script already removed its staging dir; the EXIT trap removes the local scratch dir.
+REMOTE_STAGE=""
 echo "✓ Done"
