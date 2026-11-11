@@ -91,9 +91,11 @@ No primeiro deploy, crie o `$DEPLOY_PATH/docker/.env` no servidor, à mão.
 **Fixe a chave do servidor (uma vez).** O `deploy.sh` roda `ssh` e `scp` com `StrictHostKeyChecking=yes`, então recusa um servidor cuja chave não esteja no `DEPLOY_KNOWN_HOSTS`. Adicione a chave antes do primeiro deploy e confira a impressão digital com uma obtida por outro canal (o painel do provedor, ou `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` rodado no servidor):
 
 ```bash
-ssh-keyscan -t ed25519 seu-servidor > /tmp/seu-servidor.key   # não é confiável até você conferir
-ssh-keygen -lf /tmp/seu-servidor.key                           # compare com a impressão digital confiável
-cat /tmp/seu-servidor.key >> ~/.ssh/known_hosts                # só se for igual
+keyfile=$(mktemp)                                    # arquivo privado, não um caminho fixo em /tmp
+ssh-keyscan -t ed25519 seu-servidor > "$keyfile"     # não é confiável até você conferir
+ssh-keygen -lf "$keyfile"                            # compare com a impressão digital confiável
+cat "$keyfile" >> ~/.ssh/known_hosts                 # só se for igual
+rm -f "$keyfile"
 ```
 
 Use um arquivo próprio (e defina `DEPLOY_KNOWN_HOSTS`) se não quiser a chave no seu `known_hosts` principal. Se a chave do servidor mudar depois, o deploy falha; descubra o motivo antes de trocar a entrada.

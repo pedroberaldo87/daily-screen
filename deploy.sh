@@ -40,15 +40,19 @@ echo "═══ Daily Screen — Deploy ═══"
 # ── 0. Build image locally ──
 # The VPS is shared and never builds: a build there starved its memory and took other apps down (2026-11-05).
 echo "→ Building image locally from commit $(git -C "$APP_DIR" rev-parse --short HEAD)..."
+# The image and the tarball both come from this committed snapshot, so they always match.
+if [ -n "$(git -C "$APP_DIR" status --porcelain)" ]; then
+  echo "! Warning: uncommitted changes in $APP_DIR are NOT deployed (only commit $(git -C "$APP_DIR" rev-parse --short HEAD) is)." >&2
+fi
 BUILD_CTX="$WORK_DIR/context"
 mkdir "$BUILD_CTX"
 git -C "$APP_DIR" archive HEAD | tar -x -C "$BUILD_CTX"
 docker build --platform linux/amd64 -t daily-screen-app:latest "$BUILD_CTX"
 
 # ── 1. Create tarball ──
-echo "→ Creating tarball..."
+echo "→ Creating tarball from the same commit..."
 tar -czf "$TARBALL" \
-  -C "$APP_DIR" \
+  -C "$BUILD_CTX" \
   --exclude='node_modules' \
   --exclude='*.db' \
   --exclude='*.db-shm' \
@@ -80,9 +84,12 @@ echo "→ Deploying on VPS..."
   printf 'DEPLOY_PATH=%q\nSTAGE=%q\n' "$DEPLOY_PATH" "$REMOTE_STAGE"
   cat <<'REMOTE_SCRIPT'
 set -euo pipefail
-umask 077
 
 trap 'rm -rf "$STAGE"' EXIT
+
+# One-off migration: older deploys left these fixed-path files in /tmp (a copy of docker/.env and
+# the upload). Remove them so the secret does not outlive the upgrade.
+rm -f /tmp/daily-screen-env-backup /tmp/daily-screen-deploy.tar.gz
 
 # Scoped cleanup
 echo "→ Pruning old Docker resources (scoped)..."
@@ -94,9 +101,9 @@ if [ ! -f "$DEPLOY_PATH/docker/.env" ]; then
   echo "✗ $DEPLOY_PATH/docker/.env not found. Create it on the server first (see README)." >&2
   exit 1
 fi
-cp -p "$DEPLOY_PATH/docker/.env" "$STAGE/env-backup"
+(umask 077 && cp -p "$DEPLOY_PATH/docker/.env" "$STAGE/env-backup")
 
-# Extract
+# Extract (default umask: the app tree must stay readable by whoever runs the stack)
 mkdir -p "$DEPLOY_PATH"
 tar -xzf "$STAGE/daily-screen-deploy.tar.gz" -C "$DEPLOY_PATH"
 

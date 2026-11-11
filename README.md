@@ -91,9 +91,11 @@ On the first deploy, create `$DEPLOY_PATH/docker/.env` on the server by hand.
 **Pin the server host key (once).** `deploy.sh` runs `ssh` and `scp` with `StrictHostKeyChecking=yes`, so it refuses a server whose key is not already in `DEPLOY_KNOWN_HOSTS`. Add the key before the first deploy and check its fingerprint against one you got out of band (the hosting provider's console, or `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` run on the server):
 
 ```bash
-ssh-keyscan -t ed25519 your-server > /tmp/your-server.key   # untrusted until you check it
-ssh-keygen -lf /tmp/your-server.key                          # compare with the trusted fingerprint
-cat /tmp/your-server.key >> ~/.ssh/known_hosts               # only if it matches
+keyfile=$(mktemp)                                    # private file, not a fixed path in /tmp
+ssh-keyscan -t ed25519 your-server > "$keyfile"      # untrusted until you check it
+ssh-keygen -lf "$keyfile"                            # compare with the trusted fingerprint
+cat "$keyfile" >> ~/.ssh/known_hosts                 # only if it matches
+rm -f "$keyfile"
 ```
 
 Use a dedicated file (and set `DEPLOY_KNOWN_HOSTS`) if you do not want the key in your main `known_hosts`. If the server key changes later, the deploy fails; find out why before you replace the entry.
