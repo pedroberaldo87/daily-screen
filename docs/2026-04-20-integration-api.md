@@ -269,7 +269,7 @@ Returns server info + echoes the token identity.
 Returns all daily tasks for the given date (default: today in `weather_tz`). Lazy-generates missing tasks from active items that match the weekday + date window.
 
 **Query:**
-- `date` (optional) — `YYYY-MM-DD`; defaults to today
+- `date` (optional) — a real `YYYY-MM-DD` day within 366 days before or after today; defaults to today. Anything else is `400`.
 
 **Response 200:**
 ```json
@@ -357,7 +357,7 @@ Removes the whole item/protocol behind the task: it is **archived** (`active = 0
 Returns generated daily task history for a date window. The server materializes missing `daily_tasks` in the requested range first, so callers don't need to "touch" each day in advance.
 
 **Query:**
-- `date_from`, `date_to` — explicit `YYYY-MM-DD` window; or
+- `date_from`, `date_to` — explicit window of real `YYYY-MM-DD` days, at most 3660 days long, ending no more than 366 days after today (otherwise `400`); or
 - `days` — relative window ending today in `weather_tz`
 - `category` (optional)
 - `item_id` (optional, standalone items only)
