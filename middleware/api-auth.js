@@ -12,6 +12,7 @@
 
 const crypto = require('crypto');
 const { requireBearerToken } = require('./token-auth');
+const { isAdminSession } = require('./auth');
 
 const DISPLAY_COOKIE = 'ds_display';
 const DISPLAY_COOKIE_MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000; // 400 days (browser cap)
@@ -73,10 +74,6 @@ function readCookie(req, name) {
     if (part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
   }
   return null;
-}
-
-function isAdminSession(req) {
-  return Boolean(req.session && req.session.authenticated);
 }
 
 function hasDisplayCookie(req) {

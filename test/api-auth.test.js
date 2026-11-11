@@ -34,7 +34,7 @@ function makeToken() {
 // Builds a valid signed session cookie by writing the session row the way the store does.
 function makeAdminCookie() {
   const sid = crypto.randomBytes(16).toString('hex');
-  const sess = { cookie: { maxAge: 3600000, httpOnly: true, path: '/' }, authenticated: true };
+  const sess = { cookie: { maxAge: 3600000, httpOnly: true, path: '/' }, authenticated: true, email: 'admin@example.com' };
   db.prepare('INSERT INTO sessions (sid, sess, expired) VALUES (?, ?, ?)')
     .run(sid, JSON.stringify(sess), Date.now() + 3600000);
   return `connect.sid=${encodeURIComponent('s:' + signature.sign(sid, process.env.SESSION_SECRET))}`;

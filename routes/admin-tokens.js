@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const path = require('path');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAuthJson } = require('../middleware/auth');
 const {
   createApiToken,
   listApiTokens,
@@ -10,12 +10,6 @@ const {
 const { generateToken } = require('../middleware/token-auth');
 
 const router = Router();
-
-// Auth guard that returns JSON 401 (for API calls from the admin panel fetch())
-function requireAuthJson(req, res, next) {
-  if (req.session && req.session.authenticated) return next();
-  res.status(401).json({ error: 'Authentication required' });
-}
 
 // HTML page (redirects if not authed)
 router.get('/tokens', requireAuth, (req, res) => {
