@@ -255,7 +255,7 @@
 
   <div class="toolbar">
     <div class="section-title" data-i18n="tokens.listTitle">Seus tokens</div>
-    <button class="btn btn-primary" onclick="openCreateModal()">
+    <button class="btn btn-primary" data-click="openCreateModal">
       <span data-i18n="tokens.new">Novo token</span>
     </button>
   </div>
@@ -277,8 +277,8 @@
         <input type="datetime-local" id="token-expires">
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeCreateModal()" data-i18n="tokens.cancel">Cancelar</button>
-        <button class="btn btn-primary" onclick="submitCreate()" data-i18n="tokens.create">Criar</button>
+        <button class="btn btn-secondary" data-click="closeCreateModal" data-i18n="tokens.cancel">Cancelar</button>
+        <button class="btn btn-primary" data-click="submitCreate" data-i18n="tokens.create">Criar</button>
       </div>
     </div>
   </div>
@@ -294,10 +294,10 @@
       <div class="reveal-box">
         <label data-i18n="tokens.tokenLabel">Token</label>
         <div class="plaintext" id="plaintext-value"></div>
-        <button class="btn btn-secondary btn-sm" onclick="copyToken()" data-i18n="tokens.copy">Copiar</button>
+        <button class="btn btn-secondary btn-sm" data-click="copyToken" data-i18n="tokens.copy">Copiar</button>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-primary" onclick="closeRevealModal()" data-i18n="tokens.done">Pronto</button>
+        <button class="btn btn-primary" data-click="closeRevealModal" data-i18n="tokens.done">Pronto</button>
       </div>
     </div>
   </div>

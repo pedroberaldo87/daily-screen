@@ -378,11 +378,10 @@ function showRecreatePrompt(taskId, prompt) {
   const no = document.getElementById('recreate-no');
   const close = () => {
     overlay.classList.remove('active');
-    yes.onclick = null;
-    no.onclick = null;
+    yes.removeEventListener('click', onYes);
+    no.removeEventListener('click', close);
   };
-  no.onclick = close;
-  yes.onclick = async () => {
+  const onYes = async () => {
     close();
     try {
       await fetch(`${API_BASE}/tasks/${taskId}/recreate`, { method: 'POST' });
@@ -391,6 +390,8 @@ function showRecreatePrompt(taskId, prompt) {
       console.error('Failed to recreate task:', err);
     }
   };
+  no.addEventListener('click', close);
+  yes.addEventListener('click', onYes);
 }
 
 

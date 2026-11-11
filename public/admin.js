@@ -1779,6 +1779,25 @@ document.getElementById('items-list').addEventListener('click', (e) => {
   }
 });
 
+// Static buttons in views/admin.html name their handler in data-click. The CSP
+// forbids inline on*= attributes, so bind them here instead.
+const CLICK_HANDLERS = {
+  openSettingsModal, closeSettingsModal, saveFonts, resetFonts,
+  quickAdd, openProtocolModal, toggleScheduleRow, convertEditItemToProtocol,
+  closeModal, addPhaseToForm, closeProtocolModal, addHistoryDay, pruneHistory,
+  closeHistoryModal, closeConfirm,
+};
+document.querySelectorAll('[data-click]').forEach((el) => {
+  const handler = Object.prototype.hasOwnProperty.call(CLICK_HANDLERS, el.dataset.click)
+    ? CLICK_HANDLERS[el.dataset.click]
+    : null;
+  if (!handler) return;
+  el.addEventListener('click', (e) => {
+    if (el.tagName === 'A') e.preventDefault();
+    handler();
+  });
+});
+
 setupWeekdayButtons();
 setupPeriodButtons();
 setupFontSliders();
