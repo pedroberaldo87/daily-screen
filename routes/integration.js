@@ -39,11 +39,13 @@ const {
   validateSettings,
   validateProtocolData,
   todayDate,
+  isRealDate,
+  daysBetween,
+  checkDateWindow,
 } = require('../lib/validators');
 const { requireBearerToken } = require('../middleware/token-auth');
 
 const router = Router();
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
@@ -91,19 +93,30 @@ function maybeReplayIdempotent(req, res) {
   return 'handled';
 }
 
+// History and adherence read through materializeTasksInRange, which inserts one
+// row per matching day per series. Keep the window bounded in both span and distance.
+const MAX_RANGE_DAYS = 3660;
+const MAX_FUTURE_DAYS = 366;
+
 function resolveDateRange(query, defaultDays = 30) {
   if (query.date_from || query.date_to) {
     const dateFrom = query.date_from;
     const dateTo = query.date_to;
-    if (!DATE_RE.test(String(dateFrom || '')) || !DATE_RE.test(String(dateTo || ''))) {
-      return { error: 'date_from and date_to must be YYYY-MM-DD' };
+    if (!isRealDate(dateFrom) || !isRealDate(dateTo)) {
+      return { error: 'date_from and date_to must be valid YYYY-MM-DD days' };
     }
     if (dateFrom > dateTo) return { error: 'date_from must be on or before date_to' };
+    if (daysBetween(dateFrom, dateTo) + 1 > MAX_RANGE_DAYS) {
+      return { error: `date range must not exceed ${MAX_RANGE_DAYS} days` };
+    }
+    if (daysBetween(todayDate(), dateTo) > MAX_FUTURE_DAYS) {
+      return { error: `date_to must not be more than ${MAX_FUTURE_DAYS} days after today` };
+    }
     return { dateFrom, dateTo };
   }
   const days = Number(query.days || defaultDays);
-  if (!Number.isInteger(days) || days < 1 || days > 3660) {
-    return { error: 'days must be integer 1-3660' };
+  if (!Number.isInteger(days) || days < 1 || days > MAX_RANGE_DAYS) {
+    return { error: `days must be integer 1-${MAX_RANGE_DAYS}` };
   }
   const dateTo = todayDate();
   const dateFrom = require('../model').addDays(dateTo, -(days - 1));
@@ -162,11 +175,14 @@ router.get('/health', (req, res) => {
 
 // ═══ Tasks ═══
 
+// getTasksForDate writes the day's rows before reading them: real dates only, within a year of today.
+const TASK_DATE_WINDOW_DAYS = 366;
+
 router.get('/tasks', (req, res) => {
-  const date = req.query.date || todayDate();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
-  }
+  const today = todayDate();
+  const raw = req.query.date === '' || req.query.date === undefined ? today : req.query.date;
+  const { date, error } = checkDateWindow(raw, { today, pastDays: TASK_DATE_WINDOW_DAYS, futureDays: TASK_DATE_WINDOW_DAYS });
+  if (error) return res.status(400).json({ error });
   res.json(getTasksForDate(date));
 });
 
