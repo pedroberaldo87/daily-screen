@@ -10,6 +10,12 @@
 - `/api/geocoding` is no longer public.
 - The tablet's long-press "remove from routine" gesture is gone (it needed `DELETE`, which the display cannot call). Remove items from the admin panel.
 - Removed `docs/security-audit-2026-04-04.md`.
+- `deploy.sh` now builds the image locally and ships it to the server (the shared VPS never builds).
+- `deploy.sh` verifies the server's SSH host key (`StrictHostKeyChecking=yes`, file set by `DEPLOY_KNOWN_HOSTS`, default `~/.ssh/known_hosts`). **Pin the host key once before the next deploy**; see "Pin the server host key" in the README.
+- `deploy.sh` stages the upload and the `docker/.env` backup in a private `mktemp -d` directory on the server (mode 700) instead of fixed `/tmp` paths, fails if the backup cannot be written, and removes the directory on every exit path.
+- `.dockerignore` now excludes `.env` files in any directory (`**/.env`), so `docker/.env` can no longer be copied into an image.
+- `deploy.sh` now builds the server tarball from the same `git archive` snapshot as the image (uncommitted changes are never shipped; it warns when the tree is dirty), applies `umask 077` only to the `.env` backup so the extracted app tree keeps normal modes, and removes the legacy `/tmp/daily-screen-env-backup` and `/tmp/daily-screen-deploy.tar.gz` that older deploys could leave on the server.
+- README host-key snippet uses `mktemp` instead of a fixed `/tmp` path.
 
 ### Upgrade notes
 
