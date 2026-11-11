@@ -59,6 +59,14 @@ function hashRequestBody(body) {
   return crypto.createHash('sha256').update(stableStringify(body || null)).digest('hex');
 }
 
+// The request hash must describe the body as the client sent it. validateItemData and
+// validateProtocolData rewrite weekdays/periods in place, so the hash is taken once,
+// before validation (maybeReplayIdempotent runs first), and reused when saving.
+function requestHashOf(req) {
+  if (!req.idempotencyRequestHash) req.idempotencyRequestHash = hashRequestBody(req.body);
+  return req.idempotencyRequestHash;
+}
+
 function sendIdempotent(req, res, payload, statusCode) {
   const key = req.get('Idempotency-Key');
   if (!key) return res.status(statusCode).json(payload);
@@ -67,7 +75,7 @@ function sendIdempotent(req, res, payload, statusCode) {
     method: req.method,
     path: req.route.path,
     idempotencyKey: key,
-    requestHash: hashRequestBody(req.body),
+    requestHash: requestHashOf(req),
     statusCode,
     responseBody: payload,
   });
@@ -77,6 +85,7 @@ function sendIdempotent(req, res, payload, statusCode) {
 function maybeReplayIdempotent(req, res) {
   const key = req.get('Idempotency-Key');
   if (!key) return null;
+  requestHashOf(req);
   const existing = getApiIdempotencyKey({
     tokenId: req.apiToken.id,
     method: req.method,
@@ -84,8 +93,7 @@ function maybeReplayIdempotent(req, res) {
     idempotencyKey: key,
   });
   if (!existing) return null;
-  const requestHash = hashRequestBody(req.body);
-  if (existing.request_hash !== requestHash) {
+  if (existing.request_hash !== requestHashOf(req)) {
     res.status(409).json({ error: 'Idempotency-Key already used with a different payload' });
     return 'handled';
   }
