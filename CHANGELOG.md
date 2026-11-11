@@ -12,6 +12,8 @@
 - Removed `docs/security-audit-2026-04-04.md`.
 - **Stored XSS hardening in the admin panel and display.** The shared `escapeHtml` now also encodes `"`, `'` and `` ` `` (it used to cover only `& < >`, so a double quote in an item or protocol text field broke out of an HTML attribute). Every interpolated value in `admin.js`, `display.js` and `admin-tokens.js` is escaped, numbers included, and the token list coerces the id used in its inline handlers to a number.
 - `total_count` is now validated server-side as an integer 1–100000 or `null`, for items and protocol phases. Item APIs also validate `followup_category`, `followup_icon` length and `active`, with the same rules as protocols. Requests that used to be accepted with other values now get `400`.
+- On startup, stored `total_count` values in `phases` and `series` that are not an integer 1–100000 (for example markup saved before this validation) are set to `NULL`. Valid values are untouched.
+- The service worker cache is now `daily-screen-v27`, so installed tablets fetch the fixed `display.js` instead of serving the old one from cache.
 
 ### Upgrade notes
 
