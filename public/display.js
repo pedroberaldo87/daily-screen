@@ -242,6 +242,32 @@ async function fetchWeather() {
 
 // ═══ Tasks ═══
 
+// The server answers 401 when this display is not (or no longer) paired. Drop
+// the service worker and its caches first, then reload, so the reload reaches
+// the server's "not paired" page instead of a cached display shell.
+let pairingLostHandled = false;
+async function handlePairingLost() {
+  if (pairingLostHandled) return;
+  pairingLostHandled = true;
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch (err) {
+    console.error('Failed to unregister service worker:', err);
+  }
+  try {
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (err) {
+    console.error('Failed to clear caches:', err);
+  }
+  location.reload();
+}
+
 // `interactive` = user-triggered load (navigation / first paint). Those must
 // never show another day's tasks under a switched date, so on failure we clear
 // and surface an error. Background polls (interactive=false) keep the last good
@@ -250,7 +276,7 @@ async function fetchTasks(interactive = false) {
   try {
     const opts = interactive ? { cache: 'no-store' } : {};
     const res = await fetch(`${API_BASE}/tasks?date=${currentDate}`, opts);
-    if (res.status === 401) { location.reload(); return; } // pairing lost: page shows "not paired"
+    if (res.status === 401) { handlePairingLost(); return; } // pairing lost: page shows "not paired"
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     tasks = await res.json();
     hideLoadError();
@@ -374,7 +400,10 @@ async function toggleTask(id, el) {
   }
 }
 
+let closeRecreatePrompt = null; // closes the prompt currently shown, if any
+
 function showRecreatePrompt(taskId, prompt) {
+  if (closeRecreatePrompt) closeRecreatePrompt(); // never stack listeners
   const overlay = document.getElementById('recreate-prompt');
   document.getElementById('recreate-icon').textContent = prompt.icon || '🔁';
   document.getElementById('recreate-text').textContent = t('display.recreatePrompt', { title: prompt.title });
@@ -384,11 +413,11 @@ function showRecreatePrompt(taskId, prompt) {
   const no = document.getElementById('recreate-no');
   const close = () => {
     overlay.classList.remove('active');
-    yes.onclick = null;
-    no.onclick = null;
+    yes.removeEventListener('click', onYes);
+    no.removeEventListener('click', close);
+    if (closeRecreatePrompt === close) closeRecreatePrompt = null;
   };
-  no.onclick = close;
-  yes.onclick = async () => {
+  const onYes = async () => {
     close();
     try {
       await fetch(`${API_BASE}/tasks/${taskId}/recreate`, { method: 'POST' });
@@ -397,6 +426,9 @@ function showRecreatePrompt(taskId, prompt) {
       console.error('Failed to recreate task:', err);
     }
   };
+  no.addEventListener('click', close);
+  yes.addEventListener('click', onYes);
+  closeRecreatePrompt = close;
 }
 
 

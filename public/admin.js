@@ -1,3 +1,27 @@
+// Static buttons in views/admin.html name their handler in data-click. The CSP
+// forbids inline on*= attributes, so bind them here instead. This runs first
+// (function declarations below are hoisted) so an exception later in the file
+// cannot leave every button dead; the IIFE keeps CLICK_HANDLERS out of the
+// global scope.
+(function bindClickHandlers() {
+  const CLICK_HANDLERS = {
+    openSettingsModal, closeSettingsModal, saveFonts, resetFonts,
+    quickAdd, openProtocolModal, toggleScheduleRow, convertEditItemToProtocol,
+    closeModal, addPhaseToForm, closeProtocolModal, addHistoryDay, pruneHistory,
+    closeHistoryModal, closeConfirm,
+  };
+  document.querySelectorAll('[data-click]').forEach((el) => {
+    const handler = Object.prototype.hasOwnProperty.call(CLICK_HANDLERS, el.dataset.click)
+      ? CLICK_HANDLERS[el.dataset.click]
+      : null;
+    if (!handler) return;
+    el.addEventListener('click', (e) => {
+      if (el.tagName === 'A') e.preventDefault();
+      handler();
+    });
+  });
+})();
+
 const API = '/api';
 
 const WEEKDAY_KEYS = ['weekday.sun', 'weekday.mon', 'weekday.tue', 'weekday.wed', 'weekday.thu', 'weekday.fri', 'weekday.sat'];
