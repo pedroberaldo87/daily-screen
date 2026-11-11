@@ -141,19 +141,19 @@ function renderPeriodNav() {
     const word = labels[p];
     let html = '';
     if (mode === 'icons') {
-      html = `<span class="pn-icon">${icon}</span>`;
+      html = `<span class="pn-icon">${escapeHtml(icon)}</span>`;
       btn.classList.add('icon-only');
       btn.classList.remove('with-icon');
       btn.setAttribute('aria-label', word);
       btn.title = word;
     } else if (mode === 'both') {
-      html = `<span class="pn-icon">${icon}</span><span class="pn-word">${word}</span>`;
+      html = `<span class="pn-icon">${escapeHtml(icon)}</span><span class="pn-word">${escapeHtml(word)}</span>`;
       btn.classList.add('with-icon');
       btn.classList.remove('icon-only');
       btn.removeAttribute('aria-label');
       btn.removeAttribute('title');
     } else {
-      html = `<span class="pn-word">${word}</span>`;
+      html = `<span class="pn-word">${escapeHtml(word)}</span>`;
       btn.classList.remove('icon-only', 'with-icon');
       btn.removeAttribute('aria-label');
       btn.removeAttribute('title');
@@ -221,7 +221,7 @@ async function fetchWeather() {
       <div class="weather-content">
         <span class="weather-icon">${escapeHtml(data.icon)}</span>
         <div class="weather-info">
-          <span class="weather-temp">${Math.round(data.temperature)}°C</span>
+          <span class="weather-temp">${escapeHtml(Math.round(data.temperature))}°C</span>
           <span class="weather-desc">${escapeHtml(data.description)}</span>
         </div>
       </div>
@@ -315,7 +315,7 @@ function createTaskElement(task) {
     : '';
 
   const countHTML = task.total_count
-    ? `<span class="task-count">${task.completed_count}/${task.total_count}</span>`
+    ? `<span class="task-count">${escapeHtml(task.completed_count)}/${escapeHtml(task.total_count)}</span>`
     : '';
 
   el.innerHTML = `

@@ -17,12 +17,6 @@ function formatDate(s) {
   return d.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
 }
 
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-  ));
-}
-
 function tt(key, fallback) {
   return (typeof t === 'function') ? t(key, fallback) : fallback;
 }
@@ -35,45 +29,48 @@ async function loadTokens() {
     const tokens = await res.json();
     renderTokens(tokens);
   } catch (err) {
-    list.innerHTML = `<div class="empty-state">${esc(err.message)}</div>`;
+    list.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
   }
 }
 
 function renderTokens(tokens) {
   const list = document.getElementById('token-list');
   if (!tokens.length) {
-    list.innerHTML = `<div class="empty-state">${tt('tokens.empty', 'Nenhum token ainda. Crie um para começar.')}</div>`;
+    list.innerHTML = `<div class="empty-state">${escapeHtml(tt('tokens.empty', 'Nenhum token ainda. Crie um para começar.'))}</div>`;
     return;
   }
 
   list.innerHTML = tokens.map(tok => {
+    // The id lands inside an inline onclick; coerce to a number so a
+    // non-numeric value can never carry script (NaN is inert there).
+    const tokId = Number(tok.id);
     const now = new Date();
     const isRevoked = !!tok.revoked_at;
     const isExpired = tok.expires_at && new Date(tok.expires_at.replace(' ', 'T') + 'Z') <= now;
 
     let badge;
     if (isRevoked) {
-      badge = `<span class="badge badge-revoked">${tt('tokens.revoked', 'Revogado')}</span>`;
+      badge = `<span class="badge badge-revoked">${escapeHtml(tt('tokens.revoked', 'Revogado'))}</span>`;
     } else if (isExpired) {
-      badge = `<span class="badge badge-expired">${tt('tokens.expired', 'Expirado')}</span>`;
+      badge = `<span class="badge badge-expired">${escapeHtml(tt('tokens.expired', 'Expirado'))}</span>`;
     } else {
-      badge = `<span class="badge badge-active">${tt('tokens.active', 'Ativo')}</span>`;
+      badge = `<span class="badge badge-active">${escapeHtml(tt('tokens.active', 'Ativo'))}</span>`;
     }
 
     const actions = isRevoked
-      ? `<button class="btn btn-danger btn-sm" onclick="deleteToken(${tok.id})">${tt('tokens.delete', 'Deletar')}</button>`
-      : `<button class="btn btn-danger btn-sm" onclick="revokeToken(${tok.id})">${tt('tokens.revoke', 'Revogar')}</button>`;
+      ? `<button class="btn btn-danger btn-sm" onclick="deleteToken(${escapeHtml(tokId)})">${escapeHtml(tt('tokens.delete', 'Deletar'))}</button>`
+      : `<button class="btn btn-danger btn-sm" onclick="revokeToken(${escapeHtml(tokId)})">${escapeHtml(tt('tokens.revoke', 'Revogar'))}</button>`;
 
     return `
       <div class="token-row${isRevoked || isExpired ? ' revoked' : ''}">
         <div class="token-info">
-          <div class="name">${esc(tok.name)} ${badge}</div>
-          <div class="prefix">${esc(tok.token_prefix)}…</div>
+          <div class="name">${escapeHtml(tok.name)} ${badge}</div>
+          <div class="prefix">${escapeHtml(tok.token_prefix)}…</div>
           <div class="meta">
-            <strong>${tt('tokens.created', 'Criado')}:</strong> ${formatDate(tok.created_at)}
+            <strong>${escapeHtml(tt('tokens.created', 'Criado'))}:</strong> ${escapeHtml(formatDate(tok.created_at))}
             &nbsp;·&nbsp;
-            <strong>${tt('tokens.lastUsed', 'Último uso')}:</strong> ${formatDate(tok.last_used_at)}
-            ${tok.expires_at ? `&nbsp;·&nbsp;<strong>${tt('tokens.expires', 'Expira')}:</strong> ${formatDate(tok.expires_at)}` : ''}
+            <strong>${escapeHtml(tt('tokens.lastUsed', 'Último uso'))}:</strong> ${escapeHtml(formatDate(tok.last_used_at))}
+            ${tok.expires_at ? `&nbsp;·&nbsp;<strong>${escapeHtml(tt('tokens.expires', 'Expira'))}:</strong> ${escapeHtml(formatDate(tok.expires_at))}` : ''}
           </div>
         </div>
         <div class="token-actions">${actions}</div>
