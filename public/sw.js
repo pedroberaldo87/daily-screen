@@ -1,4 +1,4 @@
-const CACHE_NAME = 'daily-screen-v28';
+const CACHE_NAME = 'daily-screen-v29';
 const SHELL_ASSETS = [
   '/',
   '/public/style.css',
@@ -26,7 +26,11 @@ self.addEventListener('activate', (e) => {
 
 // Fetch strategy:
 // - API calls: network-first, cache fallback (stale data > no data)
-// - Shell assets: cache-first, network fallback
+// - Navigations (the HTML shell): network-first. The cached copy is only an
+//   offline fallback, so a 401 "not paired" answer from the server always
+//   reaches the page (a cache-first shell would trap an unpaired tablet in a
+//   reload loop). Non-OK answers are never cached.
+// - Other shell assets: cache-first, network fallback
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
@@ -53,8 +57,23 @@ self.addEventListener('fetch', (e) => {
           );
         })
     );
+  } else if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (e.request.method === 'GET' && res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match(e.request);
+          return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+        })
+    );
   } else {
-    // Cache-first for shell
+    // Cache-first for static shell assets
     e.respondWith(
       caches.match(e.request).then((cached) => cached || fetch(e.request))
     );

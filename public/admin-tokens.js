@@ -1,3 +1,20 @@
+// Static buttons in views/admin-tokens.html name their handler in data-click.
+// The CSP forbids inline on*= attributes, so bind them here instead. This runs
+// first (function declarations below are hoisted) so an exception later in the
+// file cannot leave every button dead; the IIFE keeps CLICK_HANDLERS out of the
+// global scope.
+(function bindClickHandlers() {
+  const CLICK_HANDLERS = {
+    openCreateModal, closeCreateModal, submitCreate, copyToken, closeRevealModal,
+  };
+  document.querySelectorAll('[data-click]').forEach((el) => {
+    const handler = Object.prototype.hasOwnProperty.call(CLICK_HANDLERS, el.dataset.click)
+      ? CLICK_HANDLERS[el.dataset.click]
+      : null;
+    if (handler) el.addEventListener('click', () => handler());
+  });
+})();
+
 (async function init() {
   try {
     const settings = await fetch('/api/settings').then(r => r.json());
@@ -183,18 +200,6 @@ function toast(msg, kind) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove('visible'), 2500);
 }
-
-// Static buttons in views/admin-tokens.html name their handler in data-click.
-// The CSP forbids inline on*= attributes, so bind them here instead.
-const CLICK_HANDLERS = {
-  openCreateModal, closeCreateModal, submitCreate, copyToken, closeRevealModal,
-};
-document.querySelectorAll('[data-click]').forEach((el) => {
-  const handler = Object.prototype.hasOwnProperty.call(CLICK_HANDLERS, el.dataset.click)
-    ? CLICK_HANDLERS[el.dataset.click]
-    : null;
-  if (handler) el.addEventListener('click', () => handler());
-});
 
 // Revoke/delete buttons are rendered per token by renderTokens(); delegate.
 document.getElementById('token-list').addEventListener('click', (e) => {
