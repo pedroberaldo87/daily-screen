@@ -15,6 +15,14 @@ SSH_CMD="ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOS
 
 echo "═══ Daily Screen — Deploy ═══"
 
+# ── 0. Build image locally ──
+# The VPS is shared and never builds: a build there starved its memory and took other apps down (2026-11-05).
+echo "→ Building image locally from commit $(git -C "$APP_DIR" rev-parse --short HEAD)..."
+BUILD_CTX="$(mktemp -d)"
+trap 'rm -rf "$BUILD_CTX"' EXIT
+git -C "$APP_DIR" archive HEAD | tar -x -C "$BUILD_CTX"
+docker build --platform linux/amd64 -t daily-screen-app:latest "$BUILD_CTX"
+
 # ── 1. Create tarball ──
 echo "→ Creating tarball..."
 tar -czf "$TARBALL" \
@@ -33,8 +41,9 @@ echo "  Tarball: $(du -h "$TARBALL" | cut -f1)"
 # ── 2. Upload to VPS ──
 echo "→ Uploading to VPS..."
 scp -i "$DEPLOY_KEY" -o StrictHostKeyChecking=no "$TARBALL" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/daily-screen-deploy.tar.gz"
+docker save daily-screen-app:latest | gzip | $SSH_CMD 'docker load'
 
-# ── 3. Extract, build, restart on VPS ──
+# ── 3. Extract, restart on VPS ──
 echo "→ Deploying on VPS..."
 $SSH_CMD bash -s <<REMOTE
 set -euo pipefail
@@ -43,7 +52,6 @@ set -euo pipefail
 echo "→ Pruning old Docker resources (scoped)..."
 docker image prune -f
 docker container prune -f
-docker builder prune -f
 
 # Back up .env before overwriting
 cp "$DEPLOY_PATH/docker/.env" /tmp/daily-screen-env-backup 2>/dev/null || true
@@ -55,10 +63,9 @@ tar -xzf "$TARBALL" -C "$DEPLOY_PATH"
 # Restore .env
 cp /tmp/daily-screen-env-backup "$DEPLOY_PATH/docker/.env" 2>/dev/null || true
 
-# Build and restart
+# Restart with the uploaded image
 cd "$DEPLOY_PATH/docker"
-docker compose build --no-cache
-docker compose up -d
+docker compose up -d --no-build
 
 # Health check
 echo "→ Waiting for container..."
@@ -74,7 +81,6 @@ fi
 # Post-build cleanup
 echo "→ Pruning post-build resources (scoped)..."
 docker image prune -f
-docker builder prune -f
 
 # Cleanup
 rm -f "$TARBALL" /tmp/daily-screen-env-backup
