@@ -12,6 +12,8 @@
 - Removed `docs/security-audit-2026-04-04.md`.
 - **Stored XSS hardening in the admin panel and display.** The shared `escapeHtml` now also encodes `"`, `'` and `` ` `` (it used to cover only `& < >`, so a double quote in an item or protocol text field broke out of an HTML attribute). Every interpolated value in `admin.js`, `display.js` and `admin-tokens.js` is escaped, numbers included, and the token list coerces the id used in its inline handlers to a number.
 - `total_count` is now validated server-side as an integer 1–100000 or `null`, for items and protocol phases. Item APIs also validate `followup_category`, `followup_icon` length and `active`, with the same rules as protocols. Requests that used to be accepted with other values now get `400`.
+- On startup, stored `total_count` values in `phases` and `series` that are not an integer 1–100000 (for example markup saved before this validation) are set to `NULL`. Valid values are untouched.
+- The service worker cache is now `daily-screen-v27`, so installed tablets fetch the fixed `display.js` instead of serving the old one from cache.
 - **Input and session hardening.**
   - `GET /integration/v1/history`, `/adherence` and `/adherence/summary`: `date_from` / `date_to` must be real calendar days, span at most 3660 days (the same cap as `days`) and end at most 366 days after today. Wider windows used to loop over millions of days and write one row per day per series. They now get `400`.
   - `GET /api/tasks?date=` and `GET /integration/v1/tasks?date=` require a real `YYYY-MM-DD` day close to today before generating that day's rows: the paired display ±31 days, admin session and Bearer token ±366 days. Anything else gets `400`. Repeated `date` parameters get `400` too.

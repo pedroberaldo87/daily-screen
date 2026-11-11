@@ -103,6 +103,21 @@ function initSchema(db) {
   }
 }
 
+// One-off data fix (idempotent, so it simply runs at every startup): rows
+// stored before total_count was validated can hold markup or fractions, because
+// SQLite columns are loosely typed. Those values reach innerHTML in the admin
+// panel and on the wall display. Anything that is not an integer in 1..100000
+// becomes NULL ("no count"); valid values are left alone.
+const MAX_STORED_TOTAL_COUNT = 100000;
+function sanitizeTotalCounts(db) {
+  for (const table of ['phases', 'series']) {
+    db.prepare(`UPDATE ${table} SET total_count = NULL
+      WHERE total_count IS NOT NULL
+        AND (typeof(total_count) <> 'integer' OR total_count < 1 OR total_count > ?)`)
+      .run(MAX_STORED_TOTAL_COUNT);
+  }
+}
+
 // Does series `s` fall on `date`? 'week' uses the weekdays (every N weeks,
 // counted from the anchor's week); 'day'/'month' count from the anchor and
 // ignore weekdays. Anchor = start_date, else the series' creation day. Monthly
@@ -127,6 +142,7 @@ function occursOn(s, date) {
 
 function createModel(db) {
   initSchema(db);
+  sanitizeTotalCounts(db);
 
   // ── Series creation: snapshot the phase into an immutable series row ──
   function spawnSeries(templateId, phase, { seq = 1, start_date = null, end_date = null, source_series_id = null } = {}) {
@@ -1415,4 +1431,4 @@ function dayCount(startStr, endStr) {
   return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000) + 1;
 }
 
-module.exports = { initSchema, createModel, migrate, addDays };
+module.exports = { initSchema, sanitizeTotalCounts, createModel, migrate, addDays };
