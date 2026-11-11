@@ -51,9 +51,15 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// The server refuses display requests more than this many days from today (400),
+// so the day arrows stop here instead of walking into the load-error banner.
+const MAX_DAYS_FROM_TODAY = 31;
+
 function navigateDate(offset) {
   const d = new Date(currentDate + 'T12:00:00');
   d.setDate(d.getDate() + offset);
+  const days = Math.round((d - new Date(todayStr() + 'T12:00:00')) / 86400000);
+  if (Math.abs(days) > MAX_DAYS_FROM_TODAY) return;
   currentDate = d.toISOString().split('T')[0];
   updateDateDisplay();
   updateTodayButton();
@@ -141,19 +147,19 @@ function renderPeriodNav() {
     const word = labels[p];
     let html = '';
     if (mode === 'icons') {
-      html = `<span class="pn-icon">${icon}</span>`;
+      html = `<span class="pn-icon">${escapeHtml(icon)}</span>`;
       btn.classList.add('icon-only');
       btn.classList.remove('with-icon');
       btn.setAttribute('aria-label', word);
       btn.title = word;
     } else if (mode === 'both') {
-      html = `<span class="pn-icon">${icon}</span><span class="pn-word">${word}</span>`;
+      html = `<span class="pn-icon">${escapeHtml(icon)}</span><span class="pn-word">${escapeHtml(word)}</span>`;
       btn.classList.add('with-icon');
       btn.classList.remove('icon-only');
       btn.removeAttribute('aria-label');
       btn.removeAttribute('title');
     } else {
-      html = `<span class="pn-word">${word}</span>`;
+      html = `<span class="pn-word">${escapeHtml(word)}</span>`;
       btn.classList.remove('icon-only', 'with-icon');
       btn.removeAttribute('aria-label');
       btn.removeAttribute('title');
@@ -221,7 +227,7 @@ async function fetchWeather() {
       <div class="weather-content">
         <span class="weather-icon">${escapeHtml(data.icon)}</span>
         <div class="weather-info">
-          <span class="weather-temp">${Math.round(data.temperature)}°C</span>
+          <span class="weather-temp">${escapeHtml(Math.round(data.temperature))}°C</span>
           <span class="weather-desc">${escapeHtml(data.description)}</span>
         </div>
       </div>
@@ -236,6 +242,32 @@ async function fetchWeather() {
 
 // ═══ Tasks ═══
 
+// The server answers 401 when this display is not (or no longer) paired. Drop
+// the service worker and its caches first, then reload, so the reload reaches
+// the server's "not paired" page instead of a cached display shell.
+let pairingLostHandled = false;
+async function handlePairingLost() {
+  if (pairingLostHandled) return;
+  pairingLostHandled = true;
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch (err) {
+    console.error('Failed to unregister service worker:', err);
+  }
+  try {
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (err) {
+    console.error('Failed to clear caches:', err);
+  }
+  location.reload();
+}
+
 // `interactive` = user-triggered load (navigation / first paint). Those must
 // never show another day's tasks under a switched date, so on failure we clear
 // and surface an error. Background polls (interactive=false) keep the last good
@@ -244,7 +276,7 @@ async function fetchTasks(interactive = false) {
   try {
     const opts = interactive ? { cache: 'no-store' } : {};
     const res = await fetch(`${API_BASE}/tasks?date=${currentDate}`, opts);
-    if (res.status === 401) { location.reload(); return; } // pairing lost: page shows "not paired"
+    if (res.status === 401) { handlePairingLost(); return; } // pairing lost: page shows "not paired"
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     tasks = await res.json();
     hideLoadError();
@@ -315,7 +347,7 @@ function createTaskElement(task) {
     : '';
 
   const countHTML = task.total_count
-    ? `<span class="task-count">${task.completed_count}/${task.total_count}</span>`
+    ? `<span class="task-count">${escapeHtml(task.completed_count)}/${escapeHtml(task.total_count)}</span>`
     : '';
 
   el.innerHTML = `
@@ -368,7 +400,10 @@ async function toggleTask(id, el) {
   }
 }
 
+let closeRecreatePrompt = null; // closes the prompt currently shown, if any
+
 function showRecreatePrompt(taskId, prompt) {
+  if (closeRecreatePrompt) closeRecreatePrompt(); // never stack listeners
   const overlay = document.getElementById('recreate-prompt');
   document.getElementById('recreate-icon').textContent = prompt.icon || '🔁';
   document.getElementById('recreate-text').textContent = t('display.recreatePrompt', { title: prompt.title });
@@ -378,11 +413,11 @@ function showRecreatePrompt(taskId, prompt) {
   const no = document.getElementById('recreate-no');
   const close = () => {
     overlay.classList.remove('active');
-    yes.onclick = null;
-    no.onclick = null;
+    yes.removeEventListener('click', onYes);
+    no.removeEventListener('click', close);
+    if (closeRecreatePrompt === close) closeRecreatePrompt = null;
   };
-  no.onclick = close;
-  yes.onclick = async () => {
+  const onYes = async () => {
     close();
     try {
       await fetch(`${API_BASE}/tasks/${taskId}/recreate`, { method: 'POST' });
@@ -391,6 +426,9 @@ function showRecreatePrompt(taskId, prompt) {
       console.error('Failed to recreate task:', err);
     }
   };
+  no.addEventListener('click', close);
+  yes.addEventListener('click', onYes);
+  closeRecreatePrompt = close;
 }
 
 

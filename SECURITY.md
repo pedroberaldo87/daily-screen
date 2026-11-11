@@ -22,6 +22,7 @@ Out of scope: problems in a deployment you or someone else runs (reverse proxy, 
 
 - Serve it over HTTPS. With `NODE_ENV=production` the session cookie is `Secure`.
 - Keep `SESSION_SECRET`, `GOOGLE_CLIENT_SECRET` and the API tokens out of version control. `.env` is already in `.gitignore`.
-- List only the accounts you trust in `ADMIN_EMAILS`.
+- List only the accounts you trust in `ADMIN_EMAILS`. The list is read from the environment, so removing an address and restarting ends that admin's existing sessions on their next request. To end every session at once (for example after a leaked cookie), change `SESSION_SECRET` and restart.
+- When the app runs behind a reverse proxy, `NODE_ENV=production` sets `trust proxy` to 1 so that per-IP limits (sign-in start, failed logins) see the client address from `X-Forwarded-For`. Make sure your proxy overwrites that header rather than appending to one sent by the client. Do not publish the container port directly: with `trust proxy` on, a client that can reach the app without the proxy chooses its own `X-Forwarded-For` value and so escapes the per-IP limits. If a CDN sits in front of the proxy, every visitor shares the CDN's address unless you raise `trust proxy` to match the hop count (and have the proxy trust the CDN's ranges), so the 20 sign-in starts per 15 minutes becomes one budget for everyone.
 - Every `/api/*` route needs an admin session, an integration token or a paired display. Treat `DISPLAY_KEY` like a password: it passes through the URL once at pairing, and changing it unpairs every display.
 - An Integration API token has full access to that API. Revoke tokens you no longer use, in the admin panel under **Tokens**.

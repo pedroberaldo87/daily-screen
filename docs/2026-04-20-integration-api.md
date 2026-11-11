@@ -168,7 +168,7 @@ type Item = {
   repeat_every: number;               // 1..365, default 1 — "every N <repeat_unit>"
   repeat_unit: "day" | "week" | "month"; // default "week"; counted from start_date (see 9.3.1)
   periods: string;                    // JSON array of "morning"|"afternoon"|"night", [] = day-long
-  total_count: number | null;         // if set, item becomes a counter
+  total_count: number | null;         // if set, item becomes a counter: integer 1..100000 (JSON number); 0, "", numeric strings, fractions and out-of-range values are rejected with 400
   completed_count: number;            // counter progress (marked tasks + manual correction). PUT /items/:id {completed_count} corrects it on the current cartela; marked tasks are kept, and lowering it below total reopens a closed cartela
   alert_penultimate: string | null;   // shown at total_count - 1
   alert_last: string | null;          // shown at total_count (triggers followup)
@@ -269,7 +269,7 @@ Returns server info + echoes the token identity.
 Returns all daily tasks for the given date (default: today in `weather_tz`). Lazy-generates missing tasks from active items that match the weekday + date window.
 
 **Query:**
-- `date` (optional) — `YYYY-MM-DD`; defaults to today
+- `date` (optional) — a real `YYYY-MM-DD` day within 366 days before or after today; defaults to today. Anything else is `400`.
 
 **Response 200:**
 ```json
@@ -357,7 +357,7 @@ Removes the whole item/protocol behind the task: it is **archived** (`active = 0
 Returns generated daily task history for a date window. The server materializes missing `daily_tasks` in the requested range first, so callers don't need to "touch" each day in advance.
 
 **Query:**
-- `date_from`, `date_to` — explicit `YYYY-MM-DD` window; or
+- `date_from`, `date_to` — explicit window of real `YYYY-MM-DD` days, at most 3660 days long, ending no more than 366 days after today (otherwise `400`); or
 - `days` — relative window ending today in `weather_tz`
 - `category` (optional)
 - `item_id` (optional, standalone items only)
@@ -701,6 +701,8 @@ Phase `start_date`/`end_date` are **computed** from the protocol's `start_date` 
 You can send just one of the three period times; the validator merges it with stored values and checks the resulting state. But if the merge fails chronology, you get 400.
 
 ### 9.9. `total_count` and followup
+`total_count` must be a JSON integer from 1 to 100000, or `null` for "no counter". Anything else (`0`, `""`, `"30"`, `1.5`, `100001`, objects, markup) answers `400` on `POST`/`PUT /items` and on `POST`/`PUT /protocols` (per phase, as `phases[i].total_count`). The server does not coerce values.
+
 When you set `total_count` on an item and a daily_task toggle brings `completed_count` to that max, the server automatically:
 1. Closes the current series
 2. Creates/reuses a hidden follow-up template using the `followup_*` fields (if any)

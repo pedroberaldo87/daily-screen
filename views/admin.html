@@ -1166,7 +1166,7 @@
   <div class="admin-header">
     <h1 data-i18n="admin.title">Daily Screen — Admin</h1>
     <nav>
-      <a href="#" onclick="event.preventDefault(); openSettingsModal();"><span style="font-size:0.95rem">⚙️</span> <span data-i18n="admin.settings">Configurações</span></a>
+      <a href="#" data-click="openSettingsModal"><span style="font-size:0.95rem">⚙️</span> <span data-i18n="admin.settings">Configurações</span></a>
       <a href="/admin/tokens" data-i18n="admin.tokens">Tokens</a>
       <a href="/" target="_blank" data-i18n="admin.viewScreen">Ver tela</a>
       <a href="/admin/logout" data-i18n="admin.logout">Sair</a>
@@ -1274,8 +1274,8 @@
                 <input type="range" id="fs-task-count" data-key="font_task_count" min="0.4" max="1.2" step="0.02" value="0.6">
               </div>
               <div class="font-panel-actions">
-                <button class="btn btn-secondary btn-sm" onclick="resetFonts()" data-i18n="admin.resetDefaults">Voltar ao padrão</button>
-                <button class="btn btn-primary btn-sm" onclick="saveFonts()" data-i18n="common.save">Salvar</button>
+                <button class="btn btn-secondary btn-sm" data-click="resetFonts" data-i18n="admin.resetDefaults">Voltar ao padrão</button>
+                <button class="btn btn-primary btn-sm" data-click="saveFonts" data-i18n="common.save">Salvar</button>
               </div>
             </div>
           </div>
@@ -1284,7 +1284,7 @@
       </div>
 
       <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="closeSettingsModal()" data-i18n="common.close">Fechar</button>
+        <button type="button" class="btn btn-secondary" data-click="closeSettingsModal" data-i18n="common.close">Fechar</button>
       </div>
     </div>
   </div>
@@ -1316,8 +1316,8 @@
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="quickAdd()" data-i18n="common.add">Adicionar</button>
-        <button class="btn btn-secondary" onclick="openProtocolModal()" data-i18n="admin.newProtocolShort">+ Protocolo</button>
+        <button class="btn btn-primary" data-click="quickAdd" data-i18n="common.add">Adicionar</button>
+        <button class="btn btn-secondary" data-click="openProtocolModal" data-i18n="admin.newProtocolShort">+ Protocolo</button>
       </div>
     </div>
   </div>
@@ -1369,7 +1369,7 @@
             <span class="sch-icon">🗓</span>
             <span><strong data-i18n="admin.schedule">Cronograma</strong> · <span id="schedule-summary-text" data-i18n="admin.scheduleCollapsed">Todo dia, sem janela</span></span>
           </div>
-          <button type="button" class="schedule-toggle" id="schedule-toggle-btn" onclick="toggleScheduleRow()" data-i18n="admin.configure">Configurar</button>
+          <button type="button" class="schedule-toggle" id="schedule-toggle-btn" data-click="toggleScheduleRow" data-i18n="admin.configure">Configurar</button>
           <div class="schedule-fields" id="schedule-fields" hidden>
             <div>
               <label data-i18n="admin.windowStart">Data de início (opcional)</label>
@@ -1382,7 +1382,7 @@
           </div>
           <div class="schedule-actions" id="schedule-actions" hidden>
             <small class="convert-hint" data-i18n="admin.convertToProtocolHint">Abre o protocolo já preenchido com este item como Fase 1 para você revisar. Nada muda até você salvar.</small>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="convertEditItemToProtocol()" data-i18n="admin.convertToProtocol">Virar protocolo</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-click="convertEditItemToProtocol" data-i18n="admin.convertToProtocol">Virar protocolo</button>
           </div>
         </div>
 
@@ -1491,7 +1491,7 @@
         </div>
 
         <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()" data-i18n="common.cancel">Cancelar</button>
+          <button type="button" class="btn btn-secondary" data-click="closeModal" data-i18n="common.cancel">Cancelar</button>
           <button type="submit" class="btn btn-primary" data-i18n="common.save">Salvar</button>
         </div>
       </form>
@@ -1530,7 +1530,7 @@
           <div class="panel-title" data-i18n="admin.phases">Fases</div>
           <small class="period-help" style="display:block;margin-bottom:10px" data-i18n="admin.phasesHelp">Cada fase vira uma rotina ativa no período de datas calculado abaixo.</small>
           <div id="phases-container" class="phase-list"></div>
-          <button type="button" class="phase-add-btn" onclick="addPhaseToForm()" data-i18n="admin.addPhase">+ Adicionar fase</button>
+          <button type="button" class="phase-add-btn" data-click="addPhaseToForm" data-i18n="admin.addPhase">+ Adicionar fase</button>
         </div>
 
         <!-- Timeline preview -->
@@ -1589,7 +1589,7 @@
         </div>
 
         <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeProtocolModal()" data-i18n="common.cancel">Cancelar</button>
+          <button type="button" class="btn btn-secondary" data-click="closeProtocolModal" data-i18n="common.cancel">Cancelar</button>
           <button type="submit" class="btn btn-primary" data-i18n="common.save">Salvar</button>
         </div>
       </form>
@@ -1615,7 +1615,7 @@
         <div class="hist-add-hint" data-i18n="admin.historyAddHint">Cria a tarefa nessa data no tablet, mesmo fora da regra.</div>
         <div class="hist-add-form">
           <input type="date" id="history-add-date">
-          <button type="button" class="btn btn-primary" id="history-add-btn" onclick="addHistoryDay()">
+          <button type="button" class="btn btn-primary" id="history-add-btn" data-click="addHistoryDay">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
             <span data-i18n="admin.historyAddButton">Adicionar</span>
           </button>
@@ -1633,10 +1633,10 @@
 
       <footer class="hist-foot">
         <div class="hist-maint">
-          <button type="button" class="btn btn-danger" id="history-prune-btn" onclick="pruneHistory()"></button>
+          <button type="button" class="btn btn-danger" id="history-prune-btn" data-click="pruneHistory"></button>
           <span class="hist-maint-hint" data-i18n="admin.historyPruneHint">Remove os dias passados, não marcados, que não cabem na regra atual. Dá para restaurar.</span>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="closeHistoryModal()" data-i18n="common.close">Fechar</button>
+        <button type="button" class="btn btn-secondary" data-click="closeHistoryModal" data-i18n="common.close">Fechar</button>
       </footer>
     </div>
   </div>
@@ -1645,7 +1645,7 @@
     <div class="confirm-box">
       <p id="confirm-message"></p>
       <div class="btn-row">
-        <button class="btn btn-secondary" onclick="closeConfirm()" data-i18n="common.cancel">Cancelar</button>
+        <button class="btn btn-secondary" data-click="closeConfirm" data-i18n="common.cancel">Cancelar</button>
         <button class="btn btn-danger" id="confirm-action" style="background:var(--accent-danger);color:#fff" data-i18n="common.confirm">Confirmar</button>
       </div>
     </div>

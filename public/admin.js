@@ -1,3 +1,27 @@
+// Static buttons in views/admin.html name their handler in data-click. The CSP
+// forbids inline on*= attributes, so bind them here instead. This runs first
+// (function declarations below are hoisted) so an exception later in the file
+// cannot leave every button dead; the IIFE keeps CLICK_HANDLERS out of the
+// global scope.
+(function bindClickHandlers() {
+  const CLICK_HANDLERS = {
+    openSettingsModal, closeSettingsModal, saveFonts, resetFonts,
+    quickAdd, openProtocolModal, toggleScheduleRow, convertEditItemToProtocol,
+    closeModal, addPhaseToForm, closeProtocolModal, addHistoryDay, pruneHistory,
+    closeHistoryModal, closeConfirm,
+  };
+  document.querySelectorAll('[data-click]').forEach((el) => {
+    const handler = Object.prototype.hasOwnProperty.call(CLICK_HANDLERS, el.dataset.click)
+      ? CLICK_HANDLERS[el.dataset.click]
+      : null;
+    if (!handler) return;
+    el.addEventListener('click', (e) => {
+      if (el.tagName === 'A') e.preventDefault();
+      handler();
+    });
+  });
+})();
+
 const API = '/api';
 
 const WEEKDAY_KEYS = ['weekday.sun', 'weekday.mon', 'weekday.tue', 'weekday.wed', 'weekday.thu', 'weekday.fri', 'weekday.sat'];
@@ -116,7 +140,7 @@ function buildItemCard(item) {
         ? `<button class="btn btn-sm btn-danger" data-action="deactivate">${escapeHtml(t('common.deactivate'))}</button>`
         : `<button class="btn btn-sm btn-secondary" data-action="reactivate">${escapeHtml(t('common.reactivate'))}</button>`
       }
-      <button class="btn btn-sm btn-danger" data-delete-id="${item.id}" data-delete-title="${escapeHtml(item.title)}">${escapeHtml(t('common.delete'))}</button>
+      <button class="btn btn-sm btn-danger" data-delete-id="${escapeHtml(item.id)}" data-delete-title="${escapeHtml(item.title)}">${escapeHtml(t('common.delete'))}</button>
     </div>
   `;
   wrap.appendChild(card);
@@ -136,7 +160,7 @@ function buildItemCard(item) {
         <span class="serie-name">${escapeHtml(name)}</span>
         <span class="serie-meta">${escapeHtml(range)}</span>
         <span class="serie-tag ${active ? 'tag-active' : 'tag-done'}">${active ? 'ativa' : 'concluída'}</span>
-        <span class="serie-count ${active ? 'active' : ''}">${s.completed_count}/${s.total_count}</span>
+        <span class="serie-count ${active ? 'active' : ''}">${escapeHtml(s.completed_count)}/${escapeHtml(s.total_count)}</span>
       </div>`;
     }).join('');
     wrap.appendChild(block);
@@ -156,7 +180,7 @@ function renderItems(items, protocols = []) {
   if (protocols.length > 0) {
     const section = document.createElement('div');
     section.className = 'period-group period-group-protocols';
-    section.innerHTML = `<h3 class="period-group-title">${escapeHtml(t('admin.protocols'))} <span class="period-group-count">${protocols.length}</span></h3>`;
+    section.innerHTML = `<h3 class="period-group-title">${escapeHtml(t('admin.protocols'))} <span class="period-group-count">${escapeHtml(protocols.length)}</span></h3>`;
     for (const p of protocols) {
       section.appendChild(buildProtocolCard(p));
     }
@@ -194,7 +218,7 @@ function renderItems(items, protocols = []) {
     if (list.length === 0) continue;
     const section = document.createElement('div');
     section.className = `period-group period-group-${def.key}`;
-    section.innerHTML = `<h3 class="period-group-title">${escapeHtml(t(def.labelKey))} <span class="period-group-count">${list.length}</span></h3>`;
+    section.innerHTML = `<h3 class="period-group-title">${escapeHtml(t(def.labelKey))} <span class="period-group-count">${escapeHtml(list.length)}</span></h3>`;
     for (const item of list) {
       section.appendChild(buildItemCard(item));
     }
@@ -440,7 +464,7 @@ function buildPhaseCard(phase = {}) {
       <span class="phase-number"></span>
       <label class="phase-duration-group">
         <span class="phase-duration-label">${escapeHtml(t('admin.phaseDuration'))}</span>
-        <input type="number" class="phase-duration" min="1" max="3650" value="${phase.duration_days != null ? phase.duration_days : ''}" required>
+        <input type="number" class="phase-duration" min="1" max="3650" value="${escapeHtml(phase.duration_days != null ? phase.duration_days : '')}" required>
         <span class="phase-duration-suffix">${escapeHtml(t('admin.daysUnit'))}</span>
       </label>
       <button type="button" class="phase-remove" data-action="remove-phase" title="${escapeHtml(t('admin.removePhase'))}">✕</button>
@@ -1023,14 +1047,14 @@ function historyRow(o) {
   // No check for removed days or days still ahead (a dose that hasn't happened).
   const check = (o.removed_at || o.date > today)
     ? '<span class="hist-spacer"></span>'
-    : `<button type="button" class="hist-check${o.completed ? ' on' : ''}" data-hist="toggle" data-id="${o.id}"
+    : `<button type="button" class="hist-check${o.completed ? ' on' : ''}" data-hist="toggle" data-id="${escapeHtml(o.id)}"
         data-completed="${o.completed ? 1 : 0}" aria-pressed="${o.completed ? 'true' : 'false'}"
         aria-label="${escapeHtml(`${t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark')} ${dm}`)}"
         title="${escapeHtml(t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark'))}">${HIST_ICON.check}</button>`;
   const link = o.removed_at
-    ? `<button type="button" class="hist-link restore" data-hist="restore" data-id="${o.id}">${HIST_ICON.restore}${escapeHtml(t('admin.historyRestore'))}</button>`
-    : `<button type="button" class="hist-link edit" data-hist="edit" data-id="${o.id}" data-date="${o.date}" data-completed="${o.completed ? 1 : 0}">${HIST_ICON.edit}${escapeHtml(t('admin.historyEdit'))}</button>
-       <button type="button" class="hist-link" data-hist="remove" data-id="${o.id}" data-date="${o.date}">${HIST_ICON.remove}${escapeHtml(t('admin.historyRemove'))}</button>`;
+    ? `<button type="button" class="hist-link restore" data-hist="restore" data-id="${escapeHtml(o.id)}">${HIST_ICON.restore}${escapeHtml(t('admin.historyRestore'))}</button>`
+    : `<button type="button" class="hist-link edit" data-hist="edit" data-id="${escapeHtml(o.id)}" data-date="${escapeHtml(o.date)}" data-completed="${o.completed ? 1 : 0}">${HIST_ICON.edit}${escapeHtml(t('admin.historyEdit'))}</button>
+       <button type="button" class="hist-link" data-hist="remove" data-id="${escapeHtml(o.id)}" data-date="${escapeHtml(o.date)}">${HIST_ICON.remove}${escapeHtml(t('admin.historyRemove'))}</button>`;
   return `<div class="hist-row${o.removed_at ? ' removed' : ''}">
     <div class="hist-day"><span class="hist-day-dow">${escapeHtml(t(WEEKDAY_KEYS[dow]))}</span><span class="hist-day-num">${escapeHtml(dm)}</span></div>
     <div class="hist-body">
@@ -1116,10 +1140,10 @@ async function addHistoryDay() {
 // to a future day (the server refuses it too).
 function startHistoryEdit(btn) {
   const row = btn.closest('.hist-row');
-  const max = btn.dataset.completed === '1' ? ` max="${todayISO()}"` : '';
+  const max = btn.dataset.completed === '1' ? ` max="${escapeHtml(todayISO())}"` : '';
   row.querySelector('.hist-body').innerHTML = `<div class="hist-edit-form">
-    <input type="date" value="${btn.dataset.date}"${max} aria-label="${escapeHtml(t('admin.historyEditDate'))}">
-    <button type="button" class="btn btn-primary" data-hist="edit-save" data-id="${btn.dataset.id}" data-date="${btn.dataset.date}">${escapeHtml(t('admin.historySave'))}</button>
+    <input type="date" value="${escapeHtml(btn.dataset.date)}"${max} aria-label="${escapeHtml(t('admin.historyEditDate'))}">
+    <button type="button" class="btn btn-primary" data-hist="edit-save" data-id="${escapeHtml(btn.dataset.id)}" data-date="${escapeHtml(btn.dataset.date)}">${escapeHtml(t('admin.historySave'))}</button>
     <button type="button" class="btn btn-secondary" data-hist="edit-cancel">${escapeHtml(t('admin.historyCancel'))}</button>
   </div>`;
   row.querySelector('.hist-actions').innerHTML = '';
@@ -1580,7 +1604,7 @@ function openWeekdaysPopover(card, anchorEl) {
     <div class="popover-title">${escapeHtml(t('admin.weekdays'))}</div>
     <div class="weekday-selector">
       ${[0,1,2,3,4,5,6].map(d => `
-        <button type="button" class="weekday-btn${current.includes(d) ? ' active' : ''}" data-day="${d}">${escapeHtml(t(WEEKDAY_KEYS[d]))}</button>
+        <button type="button" class="weekday-btn${current.includes(d) ? ' active' : ''}" data-day="${escapeHtml(d)}">${escapeHtml(t(WEEKDAY_KEYS[d]))}</button>
       `).join('')}
     </div>
   `;
@@ -1627,7 +1651,7 @@ function openPeriodsPopover(card, anchorEl) {
     <div class="popover-title">${escapeHtml(t('admin.periods'))}</div>
     <div class="period-selector">
       ${order.map(p => `
-        <button type="button" class="period-btn${current.includes(p) ? ' active' : ''}" data-period="${p}">${escapeHtml(t('period.' + p))}</button>
+        <button type="button" class="period-btn${current.includes(p) ? ' active' : ''}" data-period="${escapeHtml(p)}">${escapeHtml(t('period.' + p))}</button>
       `).join('')}
     </div>
     <small class="period-help">${escapeHtml(t('admin.periodsHelp'))}</small>

@@ -7,6 +7,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const { createModel, migrate } = require('./model');
+const { DEFAULT_TZ, resolveTimeZone, localDate } = require('./lib/timezone');
 
 const dbPath = process.env.DATABASE_PATH || './daily-screen.db';
 const db = new Database(path.resolve(dbPath));
@@ -64,10 +65,11 @@ function getAllSettings() {
 }
 
 // Local clock (avoids circular require on lib/validators, which needs getSetting).
+// An invalid stored zone falls back to the default instead of throwing, so a bad
+// settings row cannot break every request or stop the app from booting.
 function todayDate() {
-  const tz = getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo');
-  const parts = new Date().toLocaleDateString('en-CA', { timeZone: tz }).split('-');
-  return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+  const tz = resolveTimeZone(getSetting('weather_tz', process.env.WEATHER_TZ || DEFAULT_TZ));
+  return localDate(tz);
 }
 
 // Run the legacy migration (idempotent) BEFORE building the model.

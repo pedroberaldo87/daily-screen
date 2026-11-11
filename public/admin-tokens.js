@@ -1,3 +1,20 @@
+// Static buttons in views/admin-tokens.html name their handler in data-click.
+// The CSP forbids inline on*= attributes, so bind them here instead. This runs
+// first (function declarations below are hoisted) so an exception later in the
+// file cannot leave every button dead; the IIFE keeps CLICK_HANDLERS out of the
+// global scope.
+(function bindClickHandlers() {
+  const CLICK_HANDLERS = {
+    openCreateModal, closeCreateModal, submitCreate, copyToken, closeRevealModal,
+  };
+  document.querySelectorAll('[data-click]').forEach((el) => {
+    const handler = Object.prototype.hasOwnProperty.call(CLICK_HANDLERS, el.dataset.click)
+      ? CLICK_HANDLERS[el.dataset.click]
+      : null;
+    if (handler) el.addEventListener('click', () => handler());
+  });
+})();
+
 (async function init() {
   try {
     const settings = await fetch('/api/settings').then(r => r.json());
@@ -17,12 +34,6 @@ function formatDate(s) {
   return d.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
 }
 
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-  ));
-}
-
 function tt(key, fallback) {
   return (typeof t === 'function') ? t(key, fallback) : fallback;
 }
@@ -35,45 +46,48 @@ async function loadTokens() {
     const tokens = await res.json();
     renderTokens(tokens);
   } catch (err) {
-    list.innerHTML = `<div class="empty-state">${esc(err.message)}</div>`;
+    list.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
   }
 }
 
 function renderTokens(tokens) {
   const list = document.getElementById('token-list');
   if (!tokens.length) {
-    list.innerHTML = `<div class="empty-state">${tt('tokens.empty', 'Nenhum token ainda. Crie um para começar.')}</div>`;
+    list.innerHTML = `<div class="empty-state">${escapeHtml(tt('tokens.empty', 'Nenhum token ainda. Crie um para começar.'))}</div>`;
     return;
   }
 
   list.innerHTML = tokens.map(tok => {
+    // The id lands in a data attribute; coerce to a number so a
+    // non-numeric value can never carry markup.
+    const tokId = Number(tok.id);
     const now = new Date();
     const isRevoked = !!tok.revoked_at;
     const isExpired = tok.expires_at && new Date(tok.expires_at.replace(' ', 'T') + 'Z') <= now;
 
     let badge;
     if (isRevoked) {
-      badge = `<span class="badge badge-revoked">${tt('tokens.revoked', 'Revogado')}</span>`;
+      badge = `<span class="badge badge-revoked">${escapeHtml(tt('tokens.revoked', 'Revogado'))}</span>`;
     } else if (isExpired) {
-      badge = `<span class="badge badge-expired">${tt('tokens.expired', 'Expirado')}</span>`;
+      badge = `<span class="badge badge-expired">${escapeHtml(tt('tokens.expired', 'Expirado'))}</span>`;
     } else {
-      badge = `<span class="badge badge-active">${tt('tokens.active', 'Ativo')}</span>`;
+      badge = `<span class="badge badge-active">${escapeHtml(tt('tokens.active', 'Ativo'))}</span>`;
     }
 
     const actions = isRevoked
-      ? `<button class="btn btn-danger btn-sm" onclick="deleteToken(${tok.id})">${tt('tokens.delete', 'Deletar')}</button>`
-      : `<button class="btn btn-danger btn-sm" onclick="revokeToken(${tok.id})">${tt('tokens.revoke', 'Revogar')}</button>`;
+      ? `<button class="btn btn-danger btn-sm" data-token-action="delete" data-id="${escapeHtml(tokId)}">${escapeHtml(tt('tokens.delete', 'Deletar'))}</button>`
+      : `<button class="btn btn-danger btn-sm" data-token-action="revoke" data-id="${escapeHtml(tokId)}">${escapeHtml(tt('tokens.revoke', 'Revogar'))}</button>`;
 
     return `
       <div class="token-row${isRevoked || isExpired ? ' revoked' : ''}">
         <div class="token-info">
-          <div class="name">${esc(tok.name)} ${badge}</div>
-          <div class="prefix">${esc(tok.token_prefix)}…</div>
+          <div class="name">${escapeHtml(tok.name)} ${badge}</div>
+          <div class="prefix">${escapeHtml(tok.token_prefix)}…</div>
           <div class="meta">
-            <strong>${tt('tokens.created', 'Criado')}:</strong> ${formatDate(tok.created_at)}
+            <strong>${escapeHtml(tt('tokens.created', 'Criado'))}:</strong> ${escapeHtml(formatDate(tok.created_at))}
             &nbsp;·&nbsp;
-            <strong>${tt('tokens.lastUsed', 'Último uso')}:</strong> ${formatDate(tok.last_used_at)}
-            ${tok.expires_at ? `&nbsp;·&nbsp;<strong>${tt('tokens.expires', 'Expira')}:</strong> ${formatDate(tok.expires_at)}` : ''}
+            <strong>${escapeHtml(tt('tokens.lastUsed', 'Último uso'))}:</strong> ${escapeHtml(formatDate(tok.last_used_at))}
+            ${tok.expires_at ? `&nbsp;·&nbsp;<strong>${escapeHtml(tt('tokens.expires', 'Expira'))}:</strong> ${escapeHtml(formatDate(tok.expires_at))}` : ''}
           </div>
         </div>
         <div class="token-actions">${actions}</div>
@@ -186,6 +200,16 @@ function toast(msg, kind) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove('visible'), 2500);
 }
+
+// Revoke/delete buttons are rendered per token by renderTokens(); delegate.
+document.getElementById('token-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-token-action]');
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+  if (!Number.isInteger(id)) return;
+  if (btn.dataset.tokenAction === 'delete') deleteToken(id);
+  else if (btn.dataset.tokenAction === 'revoke') revokeToken(id);
+});
 
 // Close modals on Escape
 document.addEventListener('keydown', (e) => {

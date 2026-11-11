@@ -22,11 +22,13 @@ const {
 } = require('../db');
 const { fetchWeather } = require('../weather');
 const { mountOccurrences } = require('./occurrences');
+const { resolveTimeZone } = require('../lib/timezone');
 const {
   validateItemData,
   validateSettings,
   validateProtocolData,
   todayDate,
+  checkDateWindow,
 } = require('../lib/validators');
 
 const rateLimit = require('express-rate-limit');
@@ -63,10 +65,19 @@ function settingsFor(req) {
 
 // ═══ Daily Tasks (display screen) ═══
 
+// getTasksForDate writes the day's rows before reading them, so the date is
+// checked first. The wall display steps a day at a time around today and gets a
+// narrow window; admin and Bearer callers (backfill, planning) get a year each way.
+const DISPLAY_DATE_WINDOW_DAYS = 31;
+const PRIVILEGED_DATE_WINDOW_DAYS = 366;
+
 router.get('/tasks', (req, res) => {
-  const date = req.query.date || todayDate();
-  const tasks = getTasksForDate(date);
-  res.json(tasks);
+  const today = todayDate();
+  const raw = req.query.date === '' || req.query.date === undefined ? today : req.query.date;
+  const days = req.auth && req.auth.type === 'display' ? DISPLAY_DATE_WINDOW_DAYS : PRIVILEGED_DATE_WINDOW_DAYS;
+  const { date, error } = checkDateWindow(raw, { today, pastDays: days, futureDays: days });
+  if (error) return res.status(400).json({ error });
+  res.json(getTasksForDate(date));
 });
 
 router.post('/tasks/:id/toggle', (req, res) => {
@@ -103,7 +114,7 @@ router.get('/weather', async (req, res) => {
   try {
     const lat = getSetting('weather_lat', process.env.WEATHER_LAT || '-23.55');
     const lon = getSetting('weather_lon', process.env.WEATHER_LON || '-46.63');
-    const tz = getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo');
+    const tz = resolveTimeZone(getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo'));
     const data = await fetchWeather(lat, lon, tz);
     data.cityName = getSetting('weather_city', null);
     res.json(data);

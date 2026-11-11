@@ -34,16 +34,19 @@ const {
 } = require('../db');
 const { fetchWeather } = require('../weather');
 const { mountOccurrences } = require('./occurrences');
+const { resolveTimeZone } = require('../lib/timezone');
 const {
   validateItemData,
   validateSettings,
   validateProtocolData,
   todayDate,
+  isRealDate,
+  daysBetween,
+  checkDateWindow,
 } = require('../lib/validators');
 const { requireBearerToken } = require('../middleware/token-auth');
 
 const router = Router();
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
@@ -57,6 +60,14 @@ function hashRequestBody(body) {
   return crypto.createHash('sha256').update(stableStringify(body || null)).digest('hex');
 }
 
+// The request hash must describe the body as the client sent it. validateItemData and
+// validateProtocolData rewrite weekdays/periods in place, so the hash is taken once,
+// before validation (maybeReplayIdempotent runs first), and reused when saving.
+function requestHashOf(req) {
+  if (!req.idempotencyRequestHash) req.idempotencyRequestHash = hashRequestBody(req.body);
+  return req.idempotencyRequestHash;
+}
+
 function sendIdempotent(req, res, payload, statusCode) {
   const key = req.get('Idempotency-Key');
   if (!key) return res.status(statusCode).json(payload);
@@ -65,7 +76,7 @@ function sendIdempotent(req, res, payload, statusCode) {
     method: req.method,
     path: req.route.path,
     idempotencyKey: key,
-    requestHash: hashRequestBody(req.body),
+    requestHash: requestHashOf(req),
     statusCode,
     responseBody: payload,
   });
@@ -75,6 +86,7 @@ function sendIdempotent(req, res, payload, statusCode) {
 function maybeReplayIdempotent(req, res) {
   const key = req.get('Idempotency-Key');
   if (!key) return null;
+  requestHashOf(req);
   const existing = getApiIdempotencyKey({
     tokenId: req.apiToken.id,
     method: req.method,
@@ -82,8 +94,7 @@ function maybeReplayIdempotent(req, res) {
     idempotencyKey: key,
   });
   if (!existing) return null;
-  const requestHash = hashRequestBody(req.body);
-  if (existing.request_hash !== requestHash) {
+  if (existing.request_hash !== requestHashOf(req)) {
     res.status(409).json({ error: 'Idempotency-Key already used with a different payload' });
     return 'handled';
   }
@@ -91,19 +102,30 @@ function maybeReplayIdempotent(req, res) {
   return 'handled';
 }
 
+// History and adherence read through materializeTasksInRange, which inserts one
+// row per matching day per series. Keep the window bounded in both span and distance.
+const MAX_RANGE_DAYS = 3660;
+const MAX_FUTURE_DAYS = 366;
+
 function resolveDateRange(query, defaultDays = 30) {
   if (query.date_from || query.date_to) {
     const dateFrom = query.date_from;
     const dateTo = query.date_to;
-    if (!DATE_RE.test(String(dateFrom || '')) || !DATE_RE.test(String(dateTo || ''))) {
-      return { error: 'date_from and date_to must be YYYY-MM-DD' };
+    if (!isRealDate(dateFrom) || !isRealDate(dateTo)) {
+      return { error: 'date_from and date_to must be valid YYYY-MM-DD days' };
     }
     if (dateFrom > dateTo) return { error: 'date_from must be on or before date_to' };
+    if (daysBetween(dateFrom, dateTo) + 1 > MAX_RANGE_DAYS) {
+      return { error: `date range must not exceed ${MAX_RANGE_DAYS} days` };
+    }
+    if (daysBetween(todayDate(), dateTo) > MAX_FUTURE_DAYS) {
+      return { error: `date_to must not be more than ${MAX_FUTURE_DAYS} days after today` };
+    }
     return { dateFrom, dateTo };
   }
   const days = Number(query.days || defaultDays);
-  if (!Number.isInteger(days) || days < 1 || days > 3660) {
-    return { error: 'days must be integer 1-3660' };
+  if (!Number.isInteger(days) || days < 1 || days > MAX_RANGE_DAYS) {
+    return { error: `days must be integer 1-${MAX_RANGE_DAYS}` };
   }
   const dateTo = todayDate();
   const dateFrom = require('../model').addDays(dateTo, -(days - 1));
@@ -154,7 +176,7 @@ router.get('/health', (req, res) => {
     ok: true,
     version: pkg.version,
     now: new Date().toISOString(),
-    tz: getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo'),
+    tz: resolveTimeZone(getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo')),
     today: todayDate(),
     token: { prefix: req.apiToken.prefix, name: req.apiToken.name },
   });
@@ -162,11 +184,14 @@ router.get('/health', (req, res) => {
 
 // ═══ Tasks ═══
 
+// getTasksForDate writes the day's rows before reading them: real dates only, within a year of today.
+const TASK_DATE_WINDOW_DAYS = 366;
+
 router.get('/tasks', (req, res) => {
-  const date = req.query.date || todayDate();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
-  }
+  const today = todayDate();
+  const raw = req.query.date === '' || req.query.date === undefined ? today : req.query.date;
+  const { date, error } = checkDateWindow(raw, { today, pastDays: TASK_DATE_WINDOW_DAYS, futureDays: TASK_DATE_WINDOW_DAYS });
+  if (error) return res.status(400).json({ error });
   res.json(getTasksForDate(date));
 });
 
@@ -325,7 +350,7 @@ router.get('/weather', async (req, res) => {
   try {
     const lat = getSetting('weather_lat', process.env.WEATHER_LAT || '-23.55');
     const lon = getSetting('weather_lon', process.env.WEATHER_LON || '-46.63');
-    const tz = getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo');
+    const tz = resolveTimeZone(getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo'));
     const data = await fetchWeather(lat, lon, tz);
     data.cityName = getSetting('weather_city', null);
     res.json(data);
