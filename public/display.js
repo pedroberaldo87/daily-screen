@@ -51,9 +51,15 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// The server refuses display requests more than this many days from today (400),
+// so the day arrows stop here instead of walking into the load-error banner.
+const MAX_DAYS_FROM_TODAY = 31;
+
 function navigateDate(offset) {
   const d = new Date(currentDate + 'T12:00:00');
   d.setDate(d.getDate() + offset);
+  const days = Math.round((d - new Date(todayStr() + 'T12:00:00')) / 86400000);
+  if (Math.abs(days) > MAX_DAYS_FROM_TODAY) return;
   currentDate = d.toISOString().split('T')[0];
   updateDateDisplay();
   updateTodayButton();

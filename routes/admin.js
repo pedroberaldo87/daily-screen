@@ -2,7 +2,7 @@ const { Router } = require('express');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, isAdminSession } = require('../middleware/auth');
 const google = require('../lib/google-oauth');
 
 google.assertConfigured();
@@ -34,11 +34,18 @@ router.get('/login', (req, res) => {
 
 // Start Google sign-in: remember state + nonce for this attempt, then hand off to Google
 router.get('/auth/google', signInStartLimiter, (req, res, next) => {
+  // Already signed in: leave the session (and its cookie) exactly as it is. This URL
+  // is reachable cross-site (SameSite=Lax sends the cookie on a top-level GET), so it
+  // must never be able to shorten a logged-in admin's session. A session that no
+  // longer qualifies is destroyed by isAdminSession; send that browser to the login page.
+  if (req.session && req.session.authenticated) {
+    return res.redirect(isAdminSession(req) ? '/admin' : '/admin/login');
+  }
   const state = crypto.randomBytes(16).toString('base64url');
   const nonce = crypto.randomBytes(16).toString('base64url');
   const redirectUri = callbackUrl(req);
   req.session.oauth = { state, nonce, redirectUri, startedAt: Date.now() };
-  // Nothing here is authenticated yet: keep the row (and cookie) only as long as the
+  // Nothing here is authenticated (checked above): keep the row (and cookie) only as long as the
   // attempt itself is valid. A successful login regenerates the session with the
   // normal 30-day lifetime.
   req.session.cookie.maxAge = LOGIN_ATTEMPT_TTL_MS;

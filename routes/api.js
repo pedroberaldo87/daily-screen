@@ -22,6 +22,7 @@ const {
 } = require('../db');
 const { fetchWeather } = require('../weather');
 const { mountOccurrences } = require('./occurrences');
+const { resolveTimeZone } = require('../lib/timezone');
 const {
   validateItemData,
   validateSettings,
@@ -113,7 +114,7 @@ router.get('/weather', async (req, res) => {
   try {
     const lat = getSetting('weather_lat', process.env.WEATHER_LAT || '-23.55');
     const lon = getSetting('weather_lon', process.env.WEATHER_LON || '-46.63');
-    const tz = getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo');
+    const tz = resolveTimeZone(getSetting('weather_tz', process.env.WEATHER_TZ || 'America/Sao_Paulo'));
     const data = await fetchWeather(lat, lon, tz);
     data.cityName = getSetting('weather_city', null);
     res.json(data);
