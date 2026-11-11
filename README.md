@@ -72,7 +72,7 @@ cp docker/.env.example docker/.env     # then edit it
 cd docker && docker compose up -d
 ```
 
-`deploy.sh` packs the project, uploads it over SSH, rebuilds the containers on a server and checks that the container is running. It keeps the server's `docker/.env` between deploys.
+`deploy.sh` builds the Docker image on your machine (`linux/amd64`, from the committed `HEAD`), ships it with `docker save | ssh docker load`, uploads the project files over SSH, restarts the containers with `docker compose up -d --no-build` and checks that the container is running. The server never builds. It keeps the server's `docker/.env` between deploys; the script stops if that file is missing or cannot be backed up. Uploads go to a private temporary directory (mode 700) on the server, removed on every exit path.
 
 ```bash
 DEPLOY_HOST=your-server DEPLOY_KEY=~/.ssh/your_key ./deploy.sh
@@ -84,8 +84,21 @@ DEPLOY_HOST=your-server DEPLOY_KEY=~/.ssh/your_key ./deploy.sh
 | `DEPLOY_KEY` | yes | none |
 | `DEPLOY_USER` | no | `root` |
 | `DEPLOY_PATH` | no | `/opt/daily-screen` |
+| `DEPLOY_KNOWN_HOSTS` | no | `~/.ssh/known_hosts` |
 
 On the first deploy, create `$DEPLOY_PATH/docker/.env` on the server by hand.
+
+**Pin the server host key (once).** `deploy.sh` runs `ssh` and `scp` with `StrictHostKeyChecking=yes`, so it refuses a server whose key is not already in `DEPLOY_KNOWN_HOSTS`. Add the key before the first deploy and check its fingerprint against one you got out of band (the hosting provider's console, or `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` run on the server):
+
+```bash
+keyfile=$(mktemp)                                    # private file, not a fixed path in /tmp
+ssh-keyscan -t ed25519 your-server > "$keyfile"      # untrusted until you check it
+ssh-keygen -lf "$keyfile"                            # compare with the trusted fingerprint
+cat "$keyfile" >> ~/.ssh/known_hosts                 # only if it matches
+rm -f "$keyfile"
+```
+
+Use a dedicated file (and set `DEPLOY_KNOWN_HOSTS`) if you do not want the key in your main `known_hosts`. If the server key changes later, the deploy fails; find out why before you replace the entry.
 
 ## Configuration
 

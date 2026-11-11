@@ -72,7 +72,7 @@ cp docker/.env.example docker/.env     # depois edite
 cd docker && docker compose up -d
 ```
 
-O `deploy.sh` empacota o projeto, envia por SSH, reconstrói os contêineres no servidor e confere se o contêiner está rodando. Ele mantém o `docker/.env` do servidor entre os deploys.
+O `deploy.sh` constrói a imagem Docker na sua máquina (`linux/amd64`, a partir do `HEAD` commitado), envia com `docker save | ssh docker load`, envia os arquivos do projeto por SSH, reinicia os contêineres com `docker compose up -d --no-build` e confere se o contêiner está rodando. O servidor nunca constrói. Ele mantém o `docker/.env` do servidor entre os deploys; o script para se esse arquivo não existir ou não puder ser copiado. Os envios vão para um diretório temporário privado (modo 700) no servidor, apagado em qualquer saída.
 
 ```bash
 DEPLOY_HOST=seu-servidor DEPLOY_KEY=~/.ssh/sua_chave ./deploy.sh
@@ -84,8 +84,21 @@ DEPLOY_HOST=seu-servidor DEPLOY_KEY=~/.ssh/sua_chave ./deploy.sh
 | `DEPLOY_KEY` | sim | nenhum |
 | `DEPLOY_USER` | não | `root` |
 | `DEPLOY_PATH` | não | `/opt/daily-screen` |
+| `DEPLOY_KNOWN_HOSTS` | não | `~/.ssh/known_hosts` |
 
 No primeiro deploy, crie o `$DEPLOY_PATH/docker/.env` no servidor, à mão.
+
+**Fixe a chave do servidor (uma vez).** O `deploy.sh` roda `ssh` e `scp` com `StrictHostKeyChecking=yes`, então recusa um servidor cuja chave não esteja no `DEPLOY_KNOWN_HOSTS`. Adicione a chave antes do primeiro deploy e confira a impressão digital com uma obtida por outro canal (o painel do provedor, ou `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` rodado no servidor):
+
+```bash
+keyfile=$(mktemp)                                    # arquivo privado, não um caminho fixo em /tmp
+ssh-keyscan -t ed25519 seu-servidor > "$keyfile"     # não é confiável até você conferir
+ssh-keygen -lf "$keyfile"                            # compare com a impressão digital confiável
+cat "$keyfile" >> ~/.ssh/known_hosts                 # só se for igual
+rm -f "$keyfile"
+```
+
+Use um arquivo próprio (e defina `DEPLOY_KNOWN_HOSTS`) se não quiser a chave no seu `known_hosts` principal. Se a chave do servidor mudar depois, o deploy falha; descubra o motivo antes de trocar a entrada.
 
 ## Configuração
 

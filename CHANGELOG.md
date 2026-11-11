@@ -21,6 +21,12 @@
   - Pre-login Google sign-in sessions live 10 minutes (row and cookie) instead of 30 days, and `GET /admin/auth/google` is limited to 20 requests per IP per 15 minutes (`429`). The session issued after a successful login keeps its 30 days. Opening the sign-in URL while already signed in no longer touches the existing session (it redirects to `/admin`).
   - Admin sessions are checked against `ADMIN_EMAILS` on every request, not only at sign-in. Removing an address ends that admin's session on the next request after the server restarts with the new value; sessions with no stored email are also refused (sign in again).
   - Retrying `POST /integration/v1/items` or `/protocols` with the same `Idempotency-Key` and an array `weekdays` / `periods` replays the first response instead of answering `409`.
+- `deploy.sh` now builds the image locally and ships it to the server (the shared VPS never builds).
+- `deploy.sh` verifies the server's SSH host key (`StrictHostKeyChecking=yes`, file set by `DEPLOY_KNOWN_HOSTS`, default `~/.ssh/known_hosts`). **Pin the host key once before the next deploy**; see "Pin the server host key" in the README.
+- `deploy.sh` stages the upload and the `docker/.env` backup in a private `mktemp -d` directory on the server (mode 700) instead of fixed `/tmp` paths, fails if the backup cannot be written, and removes the directory on every exit path.
+- `.dockerignore` now excludes `.env` files in any directory (`**/.env`), so `docker/.env` can no longer be copied into an image.
+- `deploy.sh` now builds the server tarball from the same `git archive` snapshot as the image (uncommitted changes are never shipped; it warns when the tree is dirty), applies `umask 077` only to the `.env` backup so the extracted app tree keeps normal modes, and removes the legacy `/tmp/daily-screen-env-backup` and `/tmp/daily-screen-deploy.tar.gz` that older deploys could leave on the server.
+- README host-key snippet uses `mktemp` instead of a fixed `/tmp` path.
 
 ### Upgrade notes
 
