@@ -51,8 +51,11 @@ docker build --platform linux/amd64 -t daily-screen-app:latest "$BUILD_CTX"
 
 # ── 1. Create tarball ──
 echo "→ Creating tarball from the same commit..."
-tar -czf "$TARBALL" \
+# COPYFILE_DISABLE keeps macOS tar from adding AppleDouble "._*" files (they ended up on the VPS on 2026-11-13).
+COPYFILE_DISABLE=1 tar -czf "$TARBALL" \
   -C "$BUILD_CTX" \
+  --exclude='._*' \
+  --exclude='.DS_Store' \
   --exclude='node_modules' \
   --exclude='*.db' \
   --exclude='*.db-shm' \
