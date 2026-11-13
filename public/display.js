@@ -346,6 +346,11 @@ function createTaskElement(task) {
     ? `<div class="task-alert ${escapeHtml(task.alert.type)}">${escapeHtml(task.alert.message)}</div>`
     : '';
 
+  // "Comprar" follow-up: say which item's box ran out.
+  const sourceHTML = task.source
+    ? `<span class="task-source">↳ ${escapeHtml(t('display.followupFrom'))} ${escapeHtml(task.source.icon || '')} <b class="${escapeHtml(task.source.category)}">${escapeHtml(task.source.title)}</b></span>`
+    : '';
+
   const countHTML = task.total_count
     ? `<span class="task-count">${escapeHtml(task.completed_count)}/${escapeHtml(task.total_count)}</span>`
     : '';
@@ -354,6 +359,7 @@ function createTaskElement(task) {
     <span class="task-icon">${escapeHtml(task.icon)}</span>
     <div class="task-body">
       <span class="task-title">${escapeHtml(task.title)}</span>
+      ${sourceHTML}
       ${alertHTML}
     </div>
     <div class="task-check-group">
@@ -406,7 +412,10 @@ function showRecreatePrompt(taskId, prompt) {
   if (closeRecreatePrompt) closeRecreatePrompt(); // never stack listeners
   const overlay = document.getElementById('recreate-prompt');
   document.getElementById('recreate-icon').textContent = prompt.icon || '🔁';
-  document.getElementById('recreate-text').textContent = t('display.recreatePrompt', { title: prompt.title });
+  const starts = prompt.start_date
+    ? '\n' + t('display.recreateStarts', { date: new Date(prompt.start_date + 'T12:00:00').toLocaleDateString(getLocale(), { weekday: 'short', day: '2-digit', month: '2-digit' }) })
+    : '';
+  document.getElementById('recreate-text').textContent = t('display.recreatePrompt', { title: prompt.title }) + starts;
   overlay.classList.add('active');
 
   const yes = document.getElementById('recreate-yes');

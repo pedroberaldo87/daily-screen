@@ -19,6 +19,8 @@
   "display.goodWork": "Buen trabajo hoy.",
   "display.loadError": "Sin conexión — no se pudo cargar este día.",
   "display.recreatePrompt": "¿Recrear \"{title}\"?",
+  "display.recreateStarts": "Empieza {date}",
+  "display.followupFrom": "de",
   "display.recreateYes": "Sí, recrear",
   "display.recreateNo": "No",
   "display.deletePrompt": "¿Quitar \"{title}\" de la rutina?",

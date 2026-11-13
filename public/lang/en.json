@@ -19,6 +19,8 @@
   "display.goodWork": "Great job today.",
   "display.loadError": "No connection — couldn't load this day.",
   "display.recreatePrompt": "Recreate \"{title}\"?",
+  "display.recreateStarts": "Starts {date}",
+  "display.followupFrom": "from",
   "display.recreateYes": "Yes, recreate",
   "display.recreateNo": "No",
   "display.deletePrompt": "Remove \"{title}\" from the routine?",

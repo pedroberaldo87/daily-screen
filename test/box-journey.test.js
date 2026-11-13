@@ -339,3 +339,70 @@ test('contador mostra doses até o dia, progressivo (não repete o total)', () =
   assert.equal(cc('2026-06-04'), 3, 'dia 4 = doses até ali (1,2,3)');
   assert.equal(cc('2026-06-05'), 3, 'dia 5 = doses até ali (1,2,3)');
 });
+
+test('"Comprar" diz de qual item veio; tarefa comum não traz origem', () => {
+  const { db, m } = freshModel();
+  makeBox(m, 1);
+  m.generateDailyTasks('2026-06-06');
+  m.toggleTask(db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-06'").get().id);
+  m.generateDailyTasks('2026-06-07');
+  const view = m.getTasksView('2026-06-07');
+  const fu = view.find((t) => t.title === 'Comprar Magnésio');
+  const src = db.prepare("SELECT icon FROM series WHERE title = 'Magnésio'").get();
+  assert.deepEqual(fu.source, { title: 'Magnésio', icon: src.icon, category: 'medication' });
+  const plain = m.getTasksView('2026-06-06').find((t) => t.title === 'Magnésio');
+  assert.equal(plain.source, null);
+});
+
+// ── Cartela nova continua o ritmo da anterior (caso Mounjaro, 2026-11-13) ──
+// Sextas, a cada 2 semanas, desde 02/10 → doses 30/10 e 13/11 fecham a cartela de 2.
+function closeBiweeklyBox() {
+  const { db, m } = freshModel();
+  const tmplId = m.createItem({
+    title: 'Mounjaro', category: 'medication', total_count: 2,
+    start_date: '2026-10-02', weekdays: '[5]', repeat_every: 2, repeat_unit: 'week',
+    followup_title: 'Próxima cartela', followup_recreate: 1,
+  });
+  for (const date of ['2026-10-30', '2026-11-13']) {
+    m.generateDailyTasks(date);
+    m.toggleTask(db.prepare("SELECT dt.id FROM daily_tasks dt JOIN series s ON s.id = dt.series_id WHERE s.title = 'Mounjaro' AND dt.date = ?").get(date).id);
+  }
+  m.generateDailyTasks('2026-11-13');
+  const fuId = db.prepare("SELECT dt.id FROM daily_tasks dt JOIN series s ON s.id = dt.series_id WHERE s.title = 'Próxima cartela'").get().id;
+  const newStart = () => db.prepare("SELECT start_date FROM series WHERE template_id = ? AND status = 'active'").get(tmplId).start_date;
+  return { db, m, fuId, newStart };
+}
+
+test('comprei no dia da última dose: cartela nova começa na próxima dose válida, não hoje', () => {
+  const { db, m, fuId, newStart } = closeBiweeklyBox();
+  const res = m.toggleTask(fuId, '2026-11-13');
+  assert.equal(res.recreate_prompt.start_date, '2026-11-27', 'o prompt mostra quando começa');
+  m.recreateFromFollowup(fuId, '2026-11-13');
+  assert.equal(newStart(), '2026-11-27');
+  m.generateDailyTasks('2026-11-13');
+  const today = db.prepare("SELECT COUNT(*) c FROM daily_tasks dt JOIN series s ON s.id = dt.series_id WHERE s.title = 'Mounjaro' AND dt.date = '2026-11-13'").get().c;
+  assert.equal(today, 1, 'hoje só a dose já tomada, sem duplicata');
+});
+
+test('comprei numa segunda: mantém a sexta certa do ritmo quinzenal', () => {
+  const { m, fuId, newStart } = closeBiweeklyBox();
+  m.recreateFromFollowup(fuId, '2026-11-16');
+  assert.equal(newStart(), '2026-11-27', 'não 20/11, que é a semana errada');
+});
+
+test('comprei atrasado: começa na próxima dose válida a partir de hoje', () => {
+  const { m, fuId, newStart } = closeBiweeklyBox();
+  m.recreateFromFollowup(fuId, '2026-11-30');
+  assert.equal(newStart(), '2026-12-11');
+});
+
+test('item diário: cartela nova começa no dia seguinte à última dose', () => {
+  const { db, m } = freshModel();
+  const tmplId = makeBox(m, 1);
+  m.generateDailyTasks('2026-06-06');
+  m.toggleTask(db.prepare("SELECT id FROM daily_tasks WHERE date = '2026-06-06'").get().id);
+  m.generateDailyTasks('2026-06-06');
+  const fuId = db.prepare("SELECT dt.id FROM daily_tasks dt JOIN series s ON s.id = dt.series_id WHERE s.title = 'Comprar Magnésio'").get().id;
+  m.recreateFromFollowup(fuId, '2026-06-06');
+  assert.equal(db.prepare("SELECT start_date FROM series WHERE template_id = ? AND status = 'active'").get(tmplId).start_date, '2026-06-07');
+});

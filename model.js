@@ -422,6 +422,8 @@ function createModel(db) {
       protocol_id: isProto ? r.template_id : null,
       phase_order: isProto ? r.sort_order : null,
       alert,
+      // Follow-up ("Comprar"): the item whose box ran out, so the tablet can say which.
+      source: r.source_title ? { title: r.source_title, icon: r.source_icon, category: r.source_category } : null,
     };
   }
 
@@ -431,10 +433,12 @@ function createModel(db) {
       s.alert_penultimate, s.alert_last, s.end_date, s.template_id, t.kind AS tkind,
       t.alert_penultimate AS t_alert_penultimate, t.alert_last AS t_alert_last,
       s.phase_id = (SELECT id FROM phases WHERE template_id = s.template_id
-                    ORDER BY phase_order DESC, id DESC LIMIT 1) AS is_last_phase
+                    ORDER BY phase_order DESC, id DESC LIMIT 1) AS is_last_phase,
+      src.title AS source_title, src.icon AS source_icon, src.category AS source_category
     FROM daily_tasks dt
     JOIN series s ON s.id = dt.series_id
-    JOIN templates t ON t.id = s.template_id`;
+    JOIN templates t ON t.id = s.template_id
+    LEFT JOIN series src ON src.id = s.source_series_id`;
 
   function getTasksView(date) {
     const rows = db.prepare(`${TASK_SELECT} WHERE dt.date = ? AND t.active = 1 AND dt.removed_at IS NULL ORDER BY s.sort_order, s.id`).all(date);
@@ -442,7 +446,7 @@ function createModel(db) {
   }
 
   // ── Toggle a daily_task, recount + reconcile its series, return task shape ──
-  function toggleTask(id) {
+  function toggleTask(id, today) {
     const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(id);
     if (!task) return null;
     // A removed occurrence (admin "Histórico") can't be marked until restored.
@@ -485,6 +489,7 @@ function createModel(db) {
             type: orig.kind === 'protocol' ? 'protocol' : 'item',
             title: orig.kind === 'protocol' ? orig.name : origPhase.title,
             icon: origPhase.icon || result.icon,
+            start_date: nextBoxStart(orig.id, origPhase, serie.source_series_id, today || row.date),
           };
         }
       }
@@ -1198,6 +1203,23 @@ function createModel(db) {
     return toggleTask(dailyId);
   }
 
+  // Cartela nova continua o ritmo da anterior: 1ª dose válida depois da última
+  // dose dela, nunca antes de hoje. Regra = a atual do item; âncora = a da cartela
+  // velha (comprar numa segunda não muda qual sexta é a quinzenal). Protocolo
+  // reinicia do zero, então segue começando hoje.
+  function nextBoxStart(origId, phase, sourceSeriesId, today) {
+    const orig = db.prepare('SELECT kind FROM templates WHERE id = ?').get(origId);
+    const prev = sourceSeriesId && db.prepare('SELECT * FROM series WHERE id = ?').get(sourceSeriesId);
+    if (!orig || orig.kind === 'protocol' || !prev || prev.template_id !== origId) return today;
+    const last = db.prepare(
+      'SELECT MAX(date) d FROM daily_tasks WHERE series_id = ? AND completed = 1 AND removed_at IS NULL'
+    ).get(prev.id).d;
+    const rule = { ...phase, start_date: prev.start_date, created_at: prev.created_at };
+    let d = last && last >= today ? addDays(last, 1) : today;
+    for (let i = 0; i < 3660; i++, d = addDays(d, 1)) if (occursOn(rule, d)) return d;
+    return today;
+  }
+
   // ── "Comprei": start a brand-new series of the original template ──
   function recreateFromFollowup(dailyTaskId, today) {
     const task = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyTaskId);
@@ -1218,7 +1240,7 @@ function createModel(db) {
       if (!alreadyActive) {
         const phase = db.prepare('SELECT * FROM phases WHERE template_id = ? ORDER BY phase_order LIMIT 1').get(origId);
         const nextSeq = (db.prepare('SELECT MAX(seq) m FROM series WHERE template_id = ?').get(origId).m || 0) + 1;
-        spawnSeries(origId, phase, { seq: nextSeq, start_date: today, end_date: null });
+        spawnSeries(origId, phase, { seq: nextSeq, start_date: nextBoxStart(origId, phase, fu.source_series_id, today), end_date: null });
       }
       // The follow-up series stays completed (drops out of generation).
       db.prepare("UPDATE series SET status = 'completed', completed_at = COALESCE(completed_at, ?) WHERE id = ?")

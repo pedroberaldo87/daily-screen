@@ -584,6 +584,19 @@ html, body {
   text-decoration-thickness: 1.5px;
 }
 
+/* Follow-up origin ("↳ de 💉 Mounjaro"): same size as the title — the tablet is low-res */
+.task-source {
+  font-size: var(--fs-task-title, 1.05rem);
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+.task-source b { font-weight: 600; }
+.task-source b.medication { color: var(--accent-med); }
+.task-source b.supplement { color: var(--accent-sup); }
+.task-source b.reminder   { color: var(--accent-rem); }
+.task.completed .task-source,
+.task.completed .task-source b { color: var(--text-muted); }
+
 /* Check circle — big and satisfying */
 .task-check {
   width: 42px;
@@ -883,6 +896,7 @@ html, body {
 }
 
 .recreate-text {
+  white-space: pre-line; /* 2nd line: when the new box starts */
   font-family: var(--font-display);
   font-size: 2.1rem;
   font-weight: 400;

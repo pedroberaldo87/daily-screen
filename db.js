@@ -84,7 +84,7 @@ function getTasksForDate(date) {
   return model.getTasksView(date);
 }
 function toggleTask(id) {
-  return model.toggleTask(id);
+  return model.toggleTask(id, todayDate());
 }
 function getTask(id) {
   return model.getTaskById(id);
