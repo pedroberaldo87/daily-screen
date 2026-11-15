@@ -326,7 +326,10 @@ function renderTasks() {
   for (const cat of categories) {
     const col = document.getElementById(`col-${cat}`);
     const container = col.querySelector('.column-tasks');
-    const catTasks = visible.filter(t => t.category === cat);
+    // Pending first, done at the bottom; each group keeps the server order
+    // (timed doses by time, then the manual order). Array sort is stable.
+    const catTasks = visible.filter(t => t.category === cat)
+      .sort((a, b) => (a.completed ? 1 : 0) - (b.completed ? 1 : 0));
 
     // Hide empty columns
     col.dataset.empty = catTasks.length === 0 ? 'true' : 'false';
@@ -408,6 +411,9 @@ async function toggleTask(id, el) {
   const wasCompleted = el.classList.contains('completed');
   el.classList.toggle('completed');
 
+  // The redraw below moves a done task to the bottom of its column: let the
+  // green check animation finish where the finger is before it moves.
+  const settled = new Promise((r) => setTimeout(r, wasCompleted ? 0 : 700));
   if (!wasCompleted) {
     el.classList.add('just-completed');
     setTimeout(() => el.classList.remove('just-completed'), 700);
@@ -427,6 +433,7 @@ async function toggleTask(id, el) {
     // row: the counter (X/N), and follow-ups that get spawned (box completed)
     // or removed (box reopened). Without this the number froze and "Comprar"
     // lingered as a ghost. The optimistic green above is just instant feedback.
+    await settled;
     await fetchTasks();
   } catch (err) {
     console.error('Failed to toggle task:', err);
