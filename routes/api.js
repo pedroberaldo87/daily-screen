@@ -45,6 +45,9 @@ const authFailLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  // requestWasSuccessful is only consulted with skipSuccessfulRequests on;
+  // without it EVERY request counted and a busy paired tablet got 429.
+  skipSuccessfulRequests: true,
   requestWasSuccessful: (req, res) => res.statusCode !== 401,
   message: { error: 'Too many failed requests' },
 });

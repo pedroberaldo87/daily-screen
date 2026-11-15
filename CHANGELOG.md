@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- **The `/api` and display-page rate limits counted every request, not only failed ones** (`requestWasSuccessful` is only consulted with `skipSuccessfulRequests`). A paired tablet that polls every minute and marks a dozen doses in 15 minutes got `429` (marks undone, list stuck). Both limits now count only failures; `test/rate-limit.test.js` covers it.
 - Giving an item dose times after today's dose was marked no longer leaves an extra card; the taken dose takes the first free new time. Same when converting an item into a protocol.
 
 
