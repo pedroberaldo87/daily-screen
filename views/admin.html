@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/public/icon.svg" type="image/svg+xml">
   <title>Daily Screen — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -280,11 +281,6 @@
     .badge.medication { background: rgba(242,115,106,0.15); color: var(--accent-med); }
     .badge.supplement { background: rgba(232,168,75,0.15); color: var(--accent-sup); }
     .badge.reminder   { background: rgba(107,143,212,0.15); color: var(--accent-rem); }
-
-    .count-badge {
-      font-size: 0.65rem; color: var(--accent-sup);
-      background: rgba(232,168,75,0.1); padding: 1px 6px; border-radius: 3px;
-    }
 
     /* Status icons (alerts + follow-up) */
     .status-icon {
@@ -946,40 +942,6 @@
       color: var(--accent-success);
       font-weight: 600;
     }
-
-    /* Protocol cards on listing */
-    .protocol-card {
-      background: var(--bg-card);
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      margin-bottom: 8px;
-      border: 1px solid var(--border);
-      transition: border-color 0.15s;
-    }
-    .protocol-card:hover { border-color: rgba(255,255,255,0.14); }
-    .protocol-card.inactive { opacity: 0.5; }
-    .protocol-card-head {
-      display: flex; align-items: center; gap: 12px;
-    }
-    .protocol-card-info { flex: 1; min-width: 0; }
-    .protocol-card-title {
-      font-weight: 600; font-size: 0.98rem;
-    }
-    .protocol-card-meta {
-      font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;
-      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-    }
-    .protocol-status {
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 0.66rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-    }
-    .protocol-status.active { background: rgba(94,194,106,0.14); color: var(--accent-success); }
-    .protocol-status.upcoming { background: rgba(107,143,212,0.14); color: var(--accent-rem); }
-    .protocol-status.ended { background: rgba(255,255,255,0.06); color: var(--text-muted); }
-    .protocol-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
     /* Location search */
     .search-wrap { position: relative; }

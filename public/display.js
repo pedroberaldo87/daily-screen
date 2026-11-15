@@ -242,7 +242,6 @@ async function fetchWeather() {
           <span class="weather-desc">${escapeHtml(data.description)}</span>
         </div>
       </div>
-      ${data.cityName ? `<p class="weather-city">${escapeHtml(data.cityName)}</p>` : ''}
       ${data.hint ? `<p class="weather-hint">${escapeHtml(data.hint)}</p>` : ''}
     `;
   } catch (err) {

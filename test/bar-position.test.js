@@ -24,6 +24,11 @@ test('bar_position aceita top e bottom e recusa o resto', () => {
   }
 });
 
+test('configuração com chave fora da lista é recusada (as chaves "key"/"value" de teste não entram de novo)', () => {
+  assert.deepEqual(validateSettings({ key: 'pentest_marker', value: 'true' }),
+    ['unknown setting: key', 'unknown setting: value']);
+});
+
 test('tela do tablet: a barra é horizontal e leva o progresso dentro, sem a coluna lateral', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'views', 'display.html'), 'utf8');
   assert.ok(!html.includes('info-strip'), 'a coluna lateral antiga ainda está na página');

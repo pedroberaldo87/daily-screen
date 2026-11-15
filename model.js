@@ -121,7 +121,13 @@ function upgradeDoseSlots(db) {
   if (cols.includes('slot')) return;
   const keep = ['id', 'series_id', 'date', 'completed', 'completed_at', 'created_at', 'origin', 'removed_at'];
   db.transaction(() => {
-    const before = db.prepare('SELECT COUNT(*) c, SUM(completed = 1) m FROM daily_tasks').get();
+    // A row whose series no longer exists (written with foreign keys off, e.g.
+    // by the legacy migration) would fail the copy under foreign keys and
+    // crash-loop the boot. It is already garbage: leave it out, log it.
+    const orphanWhere = 'series_id NOT IN (SELECT id FROM series)';
+    const orphans = db.prepare(`SELECT COUNT(*) c FROM daily_tasks WHERE ${orphanWhere}`).get().c;
+    if (orphans) console.warn(`[upgradeDoseSlots] ${orphans} daily_tasks row(s) point to a missing series and were left out`);
+    const before = db.prepare(`SELECT COUNT(*) c, SUM(completed = 1) m FROM daily_tasks WHERE NOT (${orphanWhere})`).get();
     db.exec(`
       CREATE TABLE daily_tasks_slots (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,7 +141,8 @@ function upgradeDoseSlots(db) {
         slot TEXT NOT NULL DEFAULT '',
         UNIQUE(series_id, date, slot)
       );
-      INSERT INTO daily_tasks_slots (${keep.join(', ')}, slot) SELECT ${keep.join(', ')}, '' FROM daily_tasks;
+      INSERT INTO daily_tasks_slots (${keep.join(', ')}, slot) SELECT ${keep.join(', ')}, '' FROM daily_tasks
+        WHERE series_id IN (SELECT id FROM series);
       DROP TABLE daily_tasks;
       ALTER TABLE daily_tasks_slots RENAME TO daily_tasks;
       CREATE INDEX IF NOT EXISTS idx_daily_tasks_date ON daily_tasks(date);
@@ -934,6 +941,37 @@ function createModel(db) {
     };
   }
 
+  // Rule or dose times changed: from `from` on, a dose already TAKEN whose time
+  // left the list moves into the day's first free time (so "took it, then gave
+  // the medicine a time" keeps one dose, not a taken orphan plus fresh ones);
+  // then pending doses that no longer fit (day off the rule, or time gone)
+  // are dropped. Past days stay as history. Taken doses never disappear.
+  function fitDosesToRule(s, from) {
+    const slots = doseSlots(s);
+    const rows = db.prepare('SELECT * FROM daily_tasks WHERE series_id = ? AND date >= ? ORDER BY date, slot').all(s.id, from);
+    const byDate = new Map();
+    for (const r of rows) (byDate.get(r.date) || byDate.set(r.date, []).get(r.date)).push(r);
+    for (const [date, day] of byDate) {
+      if (!occursOn(s, date)) continue;
+      for (const taken of day.filter((r) => r.completed && !r.removed_at && !slots.includes(r.slot))) {
+        // a time already taken, or removed by hand (tombstone), is not free
+        const target = slots.find((sl) => !day.some((r) => r.slot === sl && (r.completed || r.removed_at)));
+        if (target === undefined) continue;
+        const occupant = day.find((r) => r.slot === target);
+        if (occupant) {
+          db.prepare('DELETE FROM daily_tasks WHERE id = ?').run(occupant.id);
+          day.splice(day.indexOf(occupant), 1);
+        }
+        db.prepare('UPDATE daily_tasks SET slot = ? WHERE id = ?').run(target, taken.id);
+        taken.slot = target;
+      }
+    }
+    for (const r of rows) {
+      if (r.completed || r.removed_at) continue;
+      if (!occursOn(s, r.date) || !slots.includes(r.slot)) db.prepare('DELETE FROM daily_tasks WHERE id = ?').run(r.id);
+    }
+  }
+
   // ── Admin write CRUD (operate on templates/phases, reflect on active series) ──
   function reflectOnActiveSeries(templateId, fields) {
     const sets = Object.keys(fields).map((k) => `${k} = @${k}`).join(', ');
@@ -992,14 +1030,7 @@ function createModel(db) {
       // it too — lowering the count reopens it via reconcileCountCycle.
       if (!targets.length && data.completed_count !== undefined && currentSeries(id)) targets.push(currentSeries(id));
       for (const s of targets) {
-        // Rule changed (weekdays/frequency): drop pending tasks from today on
-        // that no longer fit it. Past unmarked days stay as missed history.
-        // Same for a dose time taken out of the list. Marked doses always stay.
-        const pending = db.prepare('SELECT id, date, slot FROM daily_tasks WHERE series_id=? AND completed=0 AND removed_at IS NULL AND date>=?').all(s.id, from);
-        const slots = doseSlots(s);
-        for (const dt of pending) {
-          if (!occursOn(s, dt.date) || !slots.includes(dt.slot)) db.prepare('DELETE FROM daily_tasks WHERE id=?').run(dt.id);
-        }
+        fitDosesToRule(s, from);
         // Manual "Já completou": keep the marked tasks as they are, store the
         // difference as an offset on this cartela.
         if (data.completed_count !== undefined) {
@@ -1156,6 +1187,7 @@ function createModel(db) {
         next.repeat_every, next.repeat_unit, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
       );
       reflectOnActiveSeries(id, { ...next, start_date: f.start_date, end_date: f.end_date });
+      for (const s of db.prepare("SELECT * FROM series WHERE template_id = ? AND status = 'active'").all(id)) fitDosesToRule(s, today);
       // No active cartela (closed, "Comprar" pending): phase 1 gets a fresh one.
       if (!db.prepare("SELECT 1 FROM series WHERE template_id = ? AND status = 'active'").get(id)) {
         const nextSeq = (db.prepare('SELECT MAX(seq) m FROM series WHERE template_id = ?').get(id).m || 0) + 1;

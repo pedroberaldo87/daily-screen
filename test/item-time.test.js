@@ -125,13 +125,14 @@ test('caixa acaba no meio do dia: a nova começa no mesmo dia, só com as doses 
     ['09:00 velha x', '15:00 velha x', '23:00 nova o']);
 });
 
-test('tirar um horário apaga a dose pendente dele de hoje em diante; dose marcada fica', () => {
+test('tirar horários: pendentes somem de hoje em diante; a dose já tomada ocupa o horário que sobrou', () => {
   const { m } = freshModel();
   const id = m.createItem({ title: 'Adorlan', category: 'medication', times: THREE });
   const [d9] = day(m, '2026-11-15');
   m.toggleTask(d9.id);
   m.updateItem(id, { times: '["15:00"]' }, '2026-11-15');
-  assert.deepEqual(m.getTasksView('2026-11-15').map((t) => `${t.time} ${t.completed}`), ['09:00 1', '15:00 0']);
+  // took today's dose at 09:00; the medicine is now once a day → today is done, no second dose
+  assert.deepEqual(m.getTasksView('2026-11-15').map((t) => `${t.time} ${t.completed}`), ['15:00 1']);
   assert.deepEqual(day(m, '2026-11-16').map((t) => t.time), ['15:00']);
 });
 
@@ -283,4 +284,50 @@ test('Integration API: horário inválido volta 400; lançamento aceita o horár
   assert.equal(moved.body.time, '08:00');
   const badTime = await call('POST', `/integration/v1/items/${it.body.id}/occurrences`, { date: '2026-01-06', time: '8h' });
   assert.equal(badTime.status, 400);
+});
+
+// ── Review fixes (2026-11-15) ──
+
+test('dose marcada sem horário + item ganha horários: a marcada vira a primeira dose, sem cartão a mais', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'A', category: 'medication', start_date: '2026-11-15' });
+  const [only] = day(m, '2026-11-15');
+  m.toggleTask(only.id);
+  m.updateItem(id, { times: '["08:00","20:00"]' }, '2026-11-15');
+  assert.deepEqual(day(m, '2026-11-15').map((t) => `${t.time} ${t.completed}`), ['08:00 1', '20:00 0']);
+  // and back: times removed with the 08:00 dose taken → one untimed dose, taken
+  m.updateItem(id, { times: '[]' }, '2026-11-15');
+  assert.deepEqual(day(m, '2026-11-15').map((t) => `${t.time} ${t.completed}`), ['null 1']);
+});
+
+test('virar protocolo com horários não deixa o cartão sem horário de hoje sobrando', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'C', category: 'medication', start_date: '2026-11-15' });
+  day(m, '2026-11-15');
+  m.convertItemToProtocol(id, { today: '2026-11-15', start_date: '2026-11-15', phases: [
+    { title: 'C', category: 'medication', duration_days: 3, times: ['08:00', '20:00'] },
+  ] });
+  assert.deepEqual(day(m, '2026-11-15').map((t) => t.time), ['08:00', '20:00']);
+});
+
+test('conversão do banco no boot: marcação órfã (caixa apagada) não trava o boot e fica de fora', () => {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  const m0 = createModel(db);
+  m0.createItem({ title: 'X', category: 'medication', start_date: '2026-11-14' });
+  m0.generateDailyTasks('2026-11-14');
+  m0.toggleTask(m0.getTasksView('2026-11-14')[0].id);
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE dt_old (id INTEGER PRIMARY KEY AUTOINCREMENT, series_id INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+      date TEXT NOT NULL, completed INTEGER DEFAULT 0, completed_at TEXT, created_at TEXT, origin TEXT, removed_at TEXT,
+      UNIQUE(series_id, date));
+    INSERT INTO dt_old SELECT id, series_id, date, completed, completed_at, created_at, origin, removed_at FROM daily_tasks;
+    INSERT INTO dt_old (series_id, date, completed) VALUES (999, '2026-11-14', 1);
+    DROP TABLE daily_tasks; ALTER TABLE dt_old RENAME TO daily_tasks;
+  `);
+  db.pragma('foreign_keys = ON');
+  createModel(db); // boot: must not throw
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM daily_tasks').get().c, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE completed = 1').get().c, 1);
 });
