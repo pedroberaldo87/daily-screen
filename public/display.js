@@ -578,6 +578,8 @@ async function loadSettings() {
     const settings = await res.json();
     applyFontSettings(settings);
     applyPeriodSettings(settings);
+    // Info bar on top (default) or at the bottom of the screen.
+    document.body.classList.toggle('bar-bottom', settings.bar_position === 'bottom');
     await initI18n(settings);
     renderPeriodNav();
     // applyTranslations() (inside initI18n) may have overwritten dynamic text

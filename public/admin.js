@@ -1443,6 +1443,7 @@ const PERIOD_SETTINGS_DEFAULTS = {
   period_afternoon_start: '12:00',
   period_night_start: '18:00',
   period_display_mode: 'words',
+  bar_position: 'top',
 };
 
 function applyPeriodSettings(settings) {
@@ -1454,6 +1455,7 @@ function applyPeriodSettings(settings) {
   document.getElementById('setting-afternoon-start').value = get('period_afternoon_start');
   document.getElementById('setting-night-start').value = get('period_night_start');
   document.getElementById('setting-display-mode').value = get('period_display_mode');
+  document.getElementById('setting-bar-position').value = get('bar_position');
 }
 
 function showSaveStatus(el, text, kind) {
@@ -1501,6 +1503,9 @@ function setupPeriodSettingsAutoSave() {
   bind('setting-afternoon-start', 'period_afternoon_start');
   bind('setting-night-start', 'period_night_start');
   bind('setting-display-mode', 'period_display_mode');
+  const barSel = document.getElementById('setting-bar-position');
+  barSel.addEventListener('change', () =>
+    autoSavePeriodSetting('bar_position', barSel.value, document.getElementById('bar-save-status')));
 }
 
 // ═══ Language Selector ═══

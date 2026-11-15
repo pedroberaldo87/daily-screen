@@ -84,58 +84,54 @@ html, body {
 .screen {
   position: relative; z-index: 1;
   display: flex;
-  height: calc(100% - 52px); /* Leave room for progress dock */
+  flex-direction: column;       /* info bar on top (setting bar_position) */
+  height: 100%;
   padding: var(--gap);
   gap: var(--gap);
 }
+body.bar-bottom .screen { flex-direction: column-reverse; }
 
-/* ═══ INFO PANEL (left — visual, atmospheric) ═══ */
-
-.info-strip {
-  width: 230px;
+/* ═══ INFO BAR (horizontal, top or bottom) ═══
+   Was a 230px left column; on the wall tablet that width was what the task
+   titles lacked. Big font settings are capped here (min()) so the bar stays
+   one thin row: clock and arrows must never be cut. */
+.info-bar {
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 20px 22px;
+  gap: 12px;
+  padding: 10px 16px;
   background:
-    radial-gradient(ellipse at 50% 20%, rgba(232, 168, 75, 0.04) 0%, transparent 70%),
+    radial-gradient(ellipse at 12% 50%, rgba(232, 168, 75, 0.05) 0%, transparent 60%),
     rgba(18, 16, 26, 0.65);
   backdrop-filter: blur(16px);
   border-radius: var(--radius);
   border: 1px solid rgba(255, 255, 255, 0.04);
   animation: fadeIn 0.6s ease-out both;
-  overflow: hidden;
   position: relative;
-}
-
-/* Subtle decorative arc behind clock */
-.info-strip::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: -30px;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  border: 1px solid rgba(232, 168, 75, 0.06);
-  pointer-events: none;
+  min-width: 0;
 }
 
 .info-clock-section {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  text-align: center;
-  position: relative;
-  z-index: 1;
+  gap: 14px;
+  flex: 0 1 auto;       /* greeting/date give room first (ellipsis); the clock never shrinks */
+  min-width: 0;
+}
+.info-clock-section .clock { flex-shrink: 0; }
+
+.info-day {
+  display: flex;
+  flex-direction: column;
+  min-width: 9em;
 }
 
 .clock {
   font-family: var(--font-display);
-  font-size: var(--fs-clock, 3.6rem);
+  font-size: min(var(--fs-clock, 3.6rem), 3.4rem);
   font-weight: 200;
   font-optical-sizing: auto;
   color: var(--text-primary);
@@ -146,33 +142,36 @@ html, body {
 
 .greeting {
   font-family: var(--font-display);
-  font-size: var(--fs-greeting, 1.25rem);
+  font-size: min(var(--fs-greeting, 1.25rem), 1.5rem);
   font-weight: 400;
   font-style: italic;
   color: var(--accent-sup);
-  margin-top: 8px;
+  line-height: 1.15;
   opacity: 0.9;
+  white-space: nowrap;
 }
 
 .date {
-  font-size: var(--fs-date, 0.88rem);
+  font-size: min(var(--fs-date, 0.88rem), 1.05rem);
   font-weight: 400;
   color: var(--text-secondary);
-  margin-top: 8px;
+  margin-top: 2px;
   text-transform: capitalize;
-  line-height: 1.4;
+  line-height: 1.25;
+  /* Never cut: on another day the date is what matters; it wraps to 2 lines. */
 }
 
 /* ─── Weather (visual, spacious) ─── */
 
 .info-weather {
-  padding: 18px 16px;
+  padding: 6px 14px;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.04);
   position: relative;
   z-index: 1;
-  width: 100%;
+  flex-shrink: 0;
+  max-width: 260px;
 }
 
 .weather-loading {
@@ -184,12 +183,11 @@ html, body {
 .weather-content {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .weather-icon {
-  font-size: 2.8rem;
+  font-size: 2.2rem;
   line-height: 1;
   filter: drop-shadow(0 0 12px rgba(232, 168, 75, 0.2));
 }
@@ -202,7 +200,7 @@ html, body {
 
 .weather-temp {
   font-family: var(--font-display);
-  font-size: var(--fs-weather-temp, 2rem);
+  font-size: min(var(--fs-weather-temp, 2rem), 2.2rem);
   font-weight: 300;
   color: var(--text-primary);
   line-height: 1;
@@ -215,37 +213,28 @@ html, body {
   text-transform: capitalize;
 }
 
-.weather-city {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 8px;
-  text-align: center;
-}
+.weather-city { display: none; } /* the bar has no room; the city is set in the panel */
 
 .weather-hint {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 500;
   color: var(--accent-sup);
-  margin-top: 12px;
-  line-height: 1.35;
-  padding: 10px 12px;
-  background: rgba(232, 168, 75, 0.06);
-  border-radius: 8px;
-  border-left: 3px solid rgba(232, 168, 75, 0.3);
+  margin-top: 4px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── Period Filter ─── */
 
 /* Grade 2x2: botoes grandes o bastante para o toque no tablet sem estourar a altura do painel. */
 .period-nav {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 6px;
-  width: 100%;
+  flex-shrink: 0;
   position: relative;
   z-index: 1;
-  margin-top: auto;
-  padding: 4px 0 0;
 }
 
 .period-nav-btn {
@@ -259,7 +248,7 @@ html, body {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   min-height: 48px;
-  padding: 8px 4px;
+  padding: 8px 14px;
   cursor: pointer;
   transition: background 0.25s, color 0.25s, border-color 0.25s, transform 0.15s;
   -webkit-tap-highlight-color: transparent;
@@ -314,12 +303,10 @@ html, body {
 .date-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
+  gap: 8px;
+  flex-shrink: 0;
   position: relative;
   z-index: 1;
-  padding: 4px 8px 0;
 }
 
 .date-nav-btn {
@@ -368,9 +355,7 @@ html, body {
 /* ─── Admin link (gear, top-left corner of info strip) ─── */
 
 .admin-link {
-  position: absolute;
-  top: 10px;
-  left: 10px;
+  flex-shrink: 0;
   z-index: 2;
   width: 36px;
   height: 36px;
@@ -395,6 +380,7 @@ html, body {
   display: flex;
   gap: var(--gap);
   min-width: 0;
+  min-height: 0;        /* the screen is a column now: let the task lists scroll */
 }
 
 .column {
@@ -580,11 +566,15 @@ html, body {
 /* Title row: optional set time ("08:00") + title, same size — the tablet is low-res */
 .task-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 2px;
   min-width: 0;
 }
-.task-head .task-title { min-width: 0; }
+/* Below ~6 letters of room the title drops under the time instead of
+   breaking one letter per line ("A / do / rla / n" on the wall tablet). */
+.task-head .task-title { flex: 1 1 6em; min-width: 0; }
 
 .task-time {
   font-size: var(--fs-task-title, 1.05rem);
@@ -745,20 +735,18 @@ html, body {
 /* ═══ PROGRESS DOCK (bottom) ═══ */
 
 .progress-dock {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  z-index: 10;
+  flex: 1 1 120px;     /* takes the bar's spare width */
+  min-width: 64px;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 20px 12px;
-  background: linear-gradient(transparent, var(--bg-deep) 30%);
+  flex-direction: column;  /* track on top, "3 de 13" under it: the track keeps the full width */
+  align-items: stretch;
+  gap: 6px;
 }
 
 .progress-track {
   flex: 1;
   height: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -780,8 +768,8 @@ html, body {
   font-size: var(--fs-progress, 0.78rem);
   font-weight: 600;
   color: var(--text-muted);
-  min-width: 60px;
-  text-align: right;
+  text-align: center;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1003,78 +991,50 @@ html, body {
 /* ═══ PORTRAIT MODE ═══ */
 
 @media (orientation: portrait) {
-  .screen {
-    flex-direction: column;
-    height: calc(100% - 48px);
-  }
-
-  /* Info strip becomes top bar */
-  .info-strip {
-    width: 100%;
-    flex-direction: row;
-    align-items: center;
-    padding: 12px 18px;
-    gap: 16px;
+  /* The bar wraps into two compact rows; columns stack and scroll. */
+  .info-bar {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 14px;
     border-radius: var(--radius-sm);
   }
-
-  .info-strip::before { display: none; }
-
-  .info-clock-section {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 10px;
-    flex: 1;
-  }
-
   .clock { font-size: 1.8rem; }
-  .greeting { font-size: 0.9rem; margin-top: 0; }
+  .greeting { font-size: 0.9rem; }
   .date { display: none; }
-
-  .info-weather { padding: 0; margin-top: 0; }
-  .weather-city { display: none; }
-  .weather-content { gap: 8px; }
+  .info-weather { padding: 0; border: 0; background: none; }
   .weather-icon { font-size: 1.4rem; }
   .weather-temp { font-size: 1.1rem; }
-  .weather-desc { display: none; }
-  .weather-hint { display: none; }
-
-  .period-nav {
-    margin-top: 0;
-    padding: 0;
-    width: auto;
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 4px;
-  }
+  .weather-desc, .weather-hint { display: none; }
+  .progress-dock { flex-basis: 100%; order: 10; }
+  .period-nav { gap: 4px; }
   .period-nav-btn { min-height: 0; padding: 5px 9px; font-size: 0.62rem; }
-
-  .date-nav { margin-top: 0; gap: 6px; padding: 0; }
-  .date-nav-btn { width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 6px 10px; font-size: 0.85rem; }
+  .date-nav { gap: 6px; }
+  .date-nav-btn { width: 36px; height: 36px; font-size: 0.85rem; }
   .date-nav-today { font-size: 0.7rem; }
 
-  /* Columns stack vertically */
   .columns {
     flex-direction: column;
     overflow-y: auto;
     gap: 10px;
   }
-
   .column { flex: none; }
-
   .column-tasks {
     padding: 2px 8px 8px;
     gap: 6px;
   }
-
   .task {
     min-height: 64px;
     padding: 12px 14px;
   }
+}
 
-  .progress-dock {
-    padding: 8px 16px 10px;
-  }
+/* Narrow landscape screens (below the 1280px wall tablet): period buttons
+   keep only the icon when there is one, and the weather drops its text. */
+@media (orientation: landscape) and (max-width: 1100px) {
+  .period-nav-btn.with-icon .pn-word { display: none; }
+  .period-nav-btn.with-icon { padding: 8px 12px; }
+  .weather-desc, .weather-hint { display: none; }
+  .clock { font-size: min(var(--fs-clock, 3.6rem), 2.8rem); }
 }
 
 /* ═══ ADAPTIVE ═══ */

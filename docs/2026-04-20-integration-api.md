@@ -240,6 +240,7 @@ Key-value store. Keys are whitelisted.
 | `weather_city` | display string | free text |
 | `language` | `"pt-BR"` \| `"en"` \| `"es"` | |
 | `period_display_mode` | `"words"` \| `"icons"` \| `"both"` | |
+| `bar_position` | `"top"` \| `"bottom"` | Where the tablet's info bar (clock, weather, progress, periods, day arrows) sits. Default `"top"`. |
 | `period_morning_start` | HH:MM | < afternoon |
 | `period_afternoon_start` | HH:MM | < night |
 | `period_night_start` | HH:MM | |
@@ -794,6 +795,10 @@ Full API guide: https://github.com/pedroberaldo87/daily-screen/blob/main/docs/20
 ---
 
 ## 11. Changelog
+
+### v1.4 — 2026-11-15
+- New setting `bar_position` (`"top"` | `"bottom"`, default `"top"`): the
+  tablet's left column became one horizontal bar, above or below the task columns.
 
 ### v1.3 — 2026-11-15
 - **Several doses a day:** new field `times` (list of `"HH:MM"`) on items and

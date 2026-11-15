@@ -21,8 +21,8 @@
 
   <div class="screen">
 
-    <!-- Compact info strip (left) -->
-    <aside class="info-strip">
+    <!-- Info bar (horizontal, top or bottom — setting bar_position) -->
+    <header class="info-bar" id="info-bar">
       <a class="admin-link" href="/admin" aria-label="Configurações" data-i18n-aria="display.openAdmin">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="3"/>
@@ -31,12 +31,22 @@
       </a>
       <div class="info-clock-section">
         <time class="clock" id="clock">08:23</time>
-        <h1 class="greeting" id="greeting">Bom dia</h1>
-        <p class="date" id="date-display"></p>
+        <div class="info-day">
+          <h1 class="greeting" id="greeting">Bom dia</h1>
+          <p class="date" id="date-display"></p>
+        </div>
       </div>
 
       <div class="info-weather" id="weather">
         <div class="weather-loading">...</div>
+      </div>
+
+      <!-- Progress of the day (inside the bar: no strip of its own) -->
+      <div class="progress-dock" id="progress-dock">
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <span class="progress-text" id="progress-text">0 de 0</span>
       </div>
 
       <nav class="period-nav" id="period-nav" aria-label="Filtro de período">
@@ -52,7 +62,7 @@
         <button class="date-nav-btn" id="date-next" aria-label="Próximo dia" data-i18n-aria="display.nextDay">›</button>
       </div>
 
-    </aside>
+    </header>
 
     <!-- Task columns — THE HERO -->
     <div class="columns" id="columns">
@@ -88,14 +98,6 @@
       </div>
     </div>
 
-  </div>
-
-  <!-- Progress bar — full width bottom -->
-  <div class="progress-dock" id="progress-dock">
-    <div class="progress-track">
-      <div class="progress-fill" id="progress-fill"></div>
-    </div>
-    <span class="progress-text" id="progress-text">0 de 0</span>
   </div>
 
   <!-- Celebration overlay -->
