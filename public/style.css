@@ -100,8 +100,9 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  flex-wrap: wrap;      /* too much for one row (long weather text, 12h clock, "Hoje") → a second row, never overlap */
+  gap: 8px 10px;
+  padding: 10px 14px;
   background:
     radial-gradient(ellipse at 12% 50%, rgba(232, 168, 75, 0.05) 0%, transparent 60%),
     rgba(18, 16, 26, 0.65);
@@ -118,15 +119,14 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
   flex-direction: row;
   align-items: center;
   gap: 14px;
-  flex: 0 1 auto;       /* greeting/date give room first (ellipsis); the clock never shrinks */
-  min-width: 0;
+  flex-shrink: 0;       /* never squeezed under its neighbours */
 }
 .info-clock-section .clock { flex-shrink: 0; }
 
 .info-day {
   display: flex;
   flex-direction: column;
-  min-width: 9em;
+  max-width: 11em;      /* the date wraps inside this width instead of widening the bar */
 }
 
 .clock {
@@ -171,8 +171,9 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
   position: relative;
   z-index: 1;
   flex-shrink: 0;
-  max-width: 260px;
+  max-width: 200px;
 }
+.weather-info { min-width: 0; }
 
 .weather-loading {
   font-size: 0.85rem;
@@ -207,6 +208,9 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
 }
 
 .weather-desc {
+  white-space: nowrap;  /* "Parcialmente Nublado": cut with "…" rather than push the bar */
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 0.85rem;
   font-weight: 400;
   color: var(--text-secondary);
@@ -232,6 +236,7 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  margin-left: auto;    /* periods + day arrows stay right, on the first row or the second */
   position: relative;
   z-index: 1;
 }
@@ -247,7 +252,7 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
   letter-spacing: 0.03em;
   text-transform: uppercase;
   min-height: 48px;
-  padding: 8px 14px;
+  padding: 8px 11px;
   cursor: pointer;
   transition: background 0.25s, color 0.25s, border-color 0.25s, transform 0.15s;
   -webkit-tap-highlight-color: transparent;
@@ -336,7 +341,7 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
 .date-nav-today {
   border-radius: 20px;
   width: auto;
-  padding: 0 20px;
+  padding: 0 14px;
   font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -734,8 +739,9 @@ body.bar-bottom .screen { flex-direction: column-reverse; }
 /* ═══ PROGRESS DOCK (bottom) ═══ */
 
 .progress-dock {
-  flex: 1 1 120px;     /* takes the bar's spare width */
-  min-width: 64px;
+  flex: 1 1 0;         /* takes the bar's spare width, and is the first to give it back */
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;  /* track on top, "3 de 13" under it: the track keeps the full width */
   align-items: stretch;

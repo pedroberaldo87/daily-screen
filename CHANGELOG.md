@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **Dose times and several doses a day.** Items and protocol phases take a list of times of day (`times`, e.g. `["09:00","15:00","23:00"]`; the single `time` field is still accepted). Each time is its own task with its own check, all counting down the same box; a box that runs out mid-day starts the new one that same day with the remaining doses. Timed doses come first, in clock order, sit in the period their time falls in, and turn red on the tablet once their time has passed unmarked. Entries, history and adherence work per dose. The admin panel edits the list with "+ time". On first start the `daily_tasks` table is rebuilt once to allow one row per dose (same ids, row and marked-dose counts checked).
+- **Horizontal info bar on the tablet.** The 230px left column became one bar with clock, weather, progress, period buttons and day arrows, at the top or the bottom (new setting `bar_position`, panel → Settings → Tablet bar). The task columns use the full width, so names no longer wrap letter by letter.
+- **Pending tasks first.** A task you mark moves to the bottom of its column after its check animation; unmarking puts it back in place.
+- App icon (`public/icon.svg`) for the manifest and browser tab (the manifest pointed at missing PNGs).
+
+### Fixed
+
+- Giving an item dose times after today's dose was marked no longer leaves an extra card; the taken dose takes the first free new time. Same when converting an item into a protocol.
+
+
 ### Security
 
 - **All `/api/*` routes now require authentication.** Before, task, item, settings (including the weather location), completed and weather reads, plus task toggle and delete, answered without any credential. They now accept an admin session, an integration Bearer token, or a paired display (see below). Unauthenticated requests get `401`.

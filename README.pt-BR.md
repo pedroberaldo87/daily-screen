@@ -9,20 +9,22 @@ Uma lista diária self-hosted para um tablet fixado na parede (feita para tela d
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](Dockerfile)
 
 <p align="center">
-  <img src="docs/screenshots/display-progress.png" width="760" alt="Tela do tablet: barra lateral com relógio, clima e botões de período, suplementos e lembretes em duas colunas, com quatro de oito tarefas feitas e a barra de progresso embaixo">
+  <img src="docs/screenshots/display-progress.png" width="760" alt="Tela do tablet: barra horizontal com relógio, clima, progresso, botões de período e setas de dia, sobre três colunas de tarefas, com as doses com horário primeiro e as feitas embaixo">
 </p>
 
 *Todas as capturas de tela deste repositório usam dados de demonstração inventados. A interface está em inglês nas imagens; ela também funciona em português e espanhol.*
 
 ## Funcionalidades
 
-- **Lista diária** de remédios, suplementos e lembretes, com ícones de emoji, filtrada por período (manhã, tarde, noite).
+- **Lista diária** de remédios, suplementos e lembretes, com ícones de emoji, filtrada por período (manhã, tarde, noite). As pendentes ficam em cima; a tarefa marcada desce para o fim da coluna.
+- **Horários das doses**: dê a um item um ou mais horários (09:00 · 15:00 · 23:00). Cada horário é um cartão com marcação própria, no período do seu horário; as doses com horário vêm primeiro, em ordem de relógio, e ficam vermelhas quando o horário passa sem marcar. Todas as doses de um item descontam da mesma cartela.
 - **Regras de repetição**: a cada N dias, semanas (em dias da semana escolhidos) ou meses (o dia 31 cai no último dia dos meses mais curtos).
 - **Cartelas com contagem de doses**: uma cartela de 30 comprimidos vai contando à medida que você marca as doses. Quando acaba, aparece a tarefa "Comprar X", e "Comprei" começa uma cartela nova.
 - **Protocolos**: fases com data, em sequência (desmame, titulação), cada uma com seu horário, mais alertas perto do fim.
 - **Lançamentos**: para cada item, veja todos os dias, se foi feito e se ainda cabe na regra. Marque ou desmarque, mude a data, remova ou restaure, adicione um dia avulso ou limpe os dias que não cabem mais.
 - **Correção manual** da contagem de "já tomadas" de uma cartela.
 - **Sem apagar por padrão**: excluir pelo tablet só arquiva o item.
+- **Uma barra de informação** com relógio, clima, progresso, botões de período e setas de dia, em cima ou embaixo da tela (configurável), para as colunas de tarefas usarem a largura toda.
 - **Barra de progresso** que acompanha a virada da meia-noite sozinha.
 - **Clima** pelo Open-Meteo (grátis, sem chave de API).
 - **Navegação por data**, com volta automática para hoje após 5 minutos parado.
@@ -119,11 +121,11 @@ Variáveis de ambiente (lidas do processo ou de um arquivo `.env`):
 
 No Google Cloud Console, adicione este URI de redirecionamento autorizado: `https://<seu-dominio>/admin/auth/google/callback` (e `http://localhost:3000/admin/auth/google/callback` para uso local).
 
-Idioma, cidade do clima, horários de início dos períodos, estilo dos botões de período e tamanhos de fonte não são variáveis de ambiente. Ficam salvos no banco, pelas **Configurações** do painel.
+Idioma, cidade do clima, horários de início dos períodos, estilo dos botões de período, posição da barra do tablet (em cima ou embaixo) e tamanhos de fonte não são variáveis de ambiente. Ficam salvos no banco, pelas **Configurações** do painel.
 
 ## Uso
 
-**Tablet.** Pareie uma vez (abaixo) e abra a URL raiz. Toque no círculo para marcar uma tarefa, use os botões de período para filtrar e as setas para ver outros dias. Para um tablet Android em modo quiosque, o [Open Kiosk](https://github.com/pedroberaldo87/open-kiosk) trava o aparelho em uma única URL.
+**Tablet.** Pareie uma vez (abaixo) e abra a URL raiz. Toque no círculo para marcar uma tarefa (ela desce para o fim da coluna), use os botões de período para filtrar e as setas para ver outros dias. Os horários das doses e a posição da barra se ajustam no painel. Para um tablet Android em modo quiosque, o [Open Kiosk](https://github.com/pedroberaldo87/open-kiosk) trava o aparelho em uma única URL.
 
 **Painel de administração.** Acesse `/admin` e entre com o Google. Dali você adiciona e edita itens e protocolos, abre os **Lançamentos** de qualquer item, cria tokens de API em **Tokens** e muda as **Configurações**.
 
@@ -184,9 +186,9 @@ Páginas renderizadas no servidor e uma API JSON pequena, sem etapa de build.
 - **Frontend**: `views/*.html` mais JS puro em `public/`. Os três idiomas ficam em `public/lang/`.
 - **Dados**: SQLite (`better-sqlite3`, modo WAL). O esquema está em `model.js` e é atualizado no lugar, ao iniciar.
   - `templates`: o que você gerencia no painel (um item ou um protocolo)
-  - `phases`: o agendamento (dias da semana, períodos, regra de repetição, contagem de doses, duração)
+  - `phases`: o agendamento (dias da semana, períodos, horários das doses, regra de repetição, contagem de doses, duração)
   - `series`: cada cartela ou fase de protocolo concreta, com contador e status próprios
-  - `daily_tasks`: uma linha por série por dia, criada sob demanda
+  - `daily_tasks`: uma linha por dose (série, dia e horário da dose), criada sob demanda
   - `settings`, `sessions`, `api_tokens`, `api_idempotency_keys`
 - **As tarefas são criadas sob demanda.** O primeiro `GET /api/tasks?date=...` de um dia cria as linhas daquele dia a partir das séries ativas. Remover um dia nos Lançamentos deixa uma marca, para que ele não seja criado de novo.
 - **O login** é Google OpenID Connect (fluxo de código de autorização). Só os e-mails de `ADMIN_EMAILS` recebem sessão.

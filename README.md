@@ -9,20 +9,22 @@ A self-hosted daily checklist for a wall-mounted tablet (built for a 1280×800 l
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](Dockerfile)
 
 <p align="center">
-  <img src="docs/screenshots/display-progress.png" width="760" alt="Tablet display: sidebar with clock, weather and period buttons, supplements and reminders in two columns, with four of eight tasks done and a progress bar at the bottom">
+  <img src="docs/screenshots/display-progress.png" width="760" alt="Tablet display: a horizontal bar with clock, weather, progress, period buttons and day arrows above three columns of tasks, with timed doses first and done tasks at the bottom">
 </p>
 
 *All screenshots in this repository use made-up demo data.*
 
 ## Features
 
-- **Daily checklist** of medications, supplements and reminders with emoji icons, filtered by period (morning, afternoon, night).
+- **Daily checklist** of medications, supplements and reminders with emoji icons, filtered by period (morning, afternoon, night). Pending tasks stay on top; a task you mark moves to the bottom of its column.
+- **Dose times**: give an item one or more times of day (09:00 · 15:00 · 23:00). Each time is its own card with its own check, shown in the period its time falls in; timed doses come first, in clock order, and turn red once their time has passed unmarked. All doses of an item count down the same box.
 - **Repeat rules**: every N days, weeks (on chosen weekdays) or months (day 31 falls on the last day of shorter months).
 - **Boxes with a dose count**: a 30-pill box counts down as you mark doses. When it runs out, a "Buy X" task appears, and "I bought it" starts a fresh box.
 - **Protocols**: dated phases in sequence (tapering, titration), each with its own schedule, plus alerts near the end.
 - **Entries**: for each item, see every day, whether it was done and whether it still fits the rule. Mark or unmark, change the date, remove or restore, add a one-off day, or clean days that no longer fit.
 - **Manual corrections** of a box's "already taken" count.
 - **Non-destructive by default**: deleting from the tablet only archives the item.
+- **One info bar** with clock, weather, progress, period buttons and day arrows, at the top or the bottom of the screen (a setting), so the task columns get the full width.
 - **Progress bar** that follows midnight on its own.
 - **Weather** from Open-Meteo (free, no API key).
 - **Date navigation** with automatic return to today after 5 minutes idle.
@@ -119,11 +121,11 @@ Environment variables (read from the process or from a `.env` file):
 
 In the Google Cloud Console, add this authorized redirect URI: `https://<your-domain>/admin/auth/google/callback` (and `http://localhost:3000/admin/auth/google/callback` for local use).
 
-Language, weather city, period start times, period button style and font sizes are not environment variables. They are saved in the database from the panel's **Settings**.
+Language, weather city, period start times, period button style, tablet bar position (top or bottom) and font sizes are not environment variables. They are saved in the database from the panel's **Settings**.
 
 ## Usage
 
-**Tablet.** Pair it once (below), then open the root URL. Tap a circle to mark a task, use the period buttons to filter, and the arrows to look at other days. For a kiosk setup on Android, [Open Kiosk](https://github.com/pedroberaldo87/open-kiosk) locks the tablet to one URL.
+**Tablet.** Pair it once (below), then open the root URL. Tap a circle to mark a task (it moves to the bottom of its column), use the period buttons to filter, and the arrows to look at other days. Dose times and the bar position are set in the admin panel. For a kiosk setup on Android, [Open Kiosk](https://github.com/pedroberaldo87/open-kiosk) locks the tablet to one URL.
 
 **Admin panel.** Go to `/admin` and sign in with Google. From there you add and edit items and protocols, open **Entries** for any item, create API tokens under **Tokens**, and change **Settings**.
 
@@ -184,9 +186,9 @@ Server-rendered pages and a small JSON API, with no build step.
 - **Frontend**: `views/*.html` plus vanilla JS in `public/`. The three languages are in `public/lang/`.
 - **Data**: SQLite (`better-sqlite3`, WAL mode). The schema lives in `model.js` and is upgraded in place at startup.
   - `templates`: what you manage in the panel (an item or a protocol)
-  - `phases`: the schedule (weekdays, periods, repeat rule, dose count, duration)
+  - `phases`: the schedule (weekdays, periods, dose times, repeat rule, dose count, duration)
   - `series`: each concrete box or protocol phase, with its own counter and status
-  - `daily_tasks`: one row per series per day, created on demand
+  - `daily_tasks`: one row per dose (series, day and dose time), created on demand
   - `settings`, `sessions`, `api_tokens`, `api_idempotency_keys`
 - **Tasks are created lazily.** The first `GET /api/tasks?date=...` for a day creates that day's rows from the active series. Removing a day in Entries leaves a marker, so it is not created again.
 - **Sign-in** is Google OpenID Connect (authorization code flow). Only the emails in `ADMIN_EMAILS` get a session.
