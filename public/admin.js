@@ -36,10 +36,12 @@ const CATEGORY_KEYS = {
 async function loadItems() {
   // Fetch standalone items and protocols in parallel — the unified listing
   // renders both in the same #items-list container.
-  const [itemsRes, protocolsRes] = await Promise.all([
+  const [itemsRes, protocolsRes, settingsRes] = await Promise.all([
     fetch(`${API}/items`),
     fetch(`${API}/protocols`).catch(() => null),
+    fetch(`${API}/settings`).catch(() => null),
   ]);
+  if (settingsRes && settingsRes.ok) periodBoundsSettings = await settingsRes.json();
   const items = itemsRes.ok ? await itemsRes.json() : [];
   const protocols = (protocolsRes && protocolsRes.ok) ? await protocolsRes.json() : [];
   renderItems(items, protocols);
@@ -69,6 +71,31 @@ function repeatSummary(item, weekdays) {
 // all day" by ticking every box; we treat that the same as the wildcard.
 function isDayLong(periods) {
   return !periods || periods.length === 0 || periods.length >= 3;
+}
+
+// Period boundaries (from settings) so a timed item with no period picked is
+// shown where the tablet shows it: in the period its time falls in.
+let periodBoundsSettings = {};
+function hhmmToMin(str) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(str || ''));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+function periodOfTime(time) {
+  const min = hhmmToMin(time);
+  if (min === null) return null;
+  const b = (k, d) => { const v = hhmmToMin(periodBoundsSettings[k]); return v === null ? d : v; };
+  const morning = b('period_morning_start', 300);
+  const afternoon = b('period_afternoon_start', 720);
+  const night = b('period_night_start', 1080);
+  if (min >= morning && min < afternoon) return 'morning';
+  if (min >= afternoon && min < night) return 'afternoon';
+  return 'night';
+}
+// The periods an item is shown in: the picked ones, else its time's period.
+function effectivePeriods(item, periods) {
+  if (periods && periods.length) return periods;
+  const p = periodOfTime(item.time);
+  return p ? [p] : [];
 }
 
 function periodsSummary(periods) {
@@ -127,7 +154,8 @@ function buildItemCard(item) {
       <div class="item-meta">
         <span class="badge ${escapeHtml(item.category)}">${escapeHtml(catLabel)}</span>
         <span class="meta-pill weekdays-pill"${(item.repeat_unit || 'week') === 'week' ? ` data-action="edit-weekdays" title="${escapeHtml(t('admin.clickToEdit'))}"` : ''}>${escapeHtml(repeatSummary(item, weekdays))}</span>
-        <span class="meta-pill periods-pill" data-action="edit-periods" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(periodsSummary(periods))}</span>
+        <span class="meta-pill periods-pill" data-action="edit-periods" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(periodsSummary(effectivePeriods(item, periods)))}</span>
+        ${item.time ? `<span class="meta-pill time-pill" data-action="open-modal" title="${escapeHtml(t('admin.time'))}">⏰ ${escapeHtml(item.time)}</span>` : ''}
         ${windowPillHtml}
         ${statusIcons.join('')}
         ${!item.active ? `<em style="color:var(--accent-danger)">${escapeHtml(t('admin.deactivated'))}</em>` : ''}
@@ -196,6 +224,7 @@ function renderItems(items, protocols = []) {
     let periods = [];
     try { periods = JSON.parse(item.periods || '[]'); } catch {}
     if (!Array.isArray(periods)) periods = [];
+    periods = effectivePeriods(item, periods);
     if (isDayLong(periods)) {
       buckets.dayLong.push(item);
     } else {
@@ -483,6 +512,10 @@ function buildPhaseCard(phase = {}) {
         <button type="button" class="period-btn${periods.includes('morning') ? ' active' : ''}" data-period="morning">${escapeHtml(t('period.morning'))}</button>
         <button type="button" class="period-btn${periods.includes('afternoon') ? ' active' : ''}" data-period="afternoon">${escapeHtml(t('period.afternoon'))}</button>
         <button type="button" class="period-btn${periods.includes('night') ? ' active' : ''}" data-period="night">${escapeHtml(t('period.night'))}</button>
+        <label class="time-field" title="${escapeHtml(t('admin.timeHelp'))}">
+          <span>${escapeHtml(t('admin.time'))}</span>
+          <input type="time" class="phase-time" step="60" value="${escapeHtml(phase.time || '')}">
+        </label>
       </div>
     </div>
   `;
@@ -523,6 +556,7 @@ function snapshotPhaseCard(card) {
     icon: card.querySelector('.phase-icon').value,
     category: card.querySelector('.phase-category').value,
     periods: JSON.stringify(activePeriods),
+    time: card.querySelector('.phase-time').value || null,
   };
 }
 
@@ -577,6 +611,7 @@ function collectPhasesFromForm() {
       icon: card.querySelector('.phase-icon').value.trim() || '💊',
       category: card.querySelector('.phase-category').value,
       periods: JSON.stringify(periods),
+      time: card.querySelector('.phase-time').value || null,
     };
   });
 }
@@ -669,16 +704,18 @@ async function quickAdd() {
   const category = document.getElementById('add-category').value;
   const icon = document.getElementById('add-icon').value.trim() || '✅';
   const sort_order = Number(document.getElementById('add-sort').value) || 0;
+  const time = document.getElementById('add-time').value || null;
 
   if (!title) return;
 
   await fetch(`${API}/items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, category, icon, sort_order }),
+    body: JSON.stringify({ title, category, icon, sort_order, time }),
   });
 
   document.getElementById('add-title').value = '';
+  document.getElementById('add-time').value = '';
   document.getElementById('add-icon').value = '✅';
   document.getElementById('add-sort').value = '0';
   loadItems();
@@ -713,6 +750,10 @@ function syncWeekdaysEnabled() {
   document.getElementById('edit-weekdays-block').classList.toggle('is-disabled', !weekly);
 }
 document.getElementById('edit-repeat-unit').addEventListener('change', syncWeekdaysEnabled);
+
+document.getElementById('edit-time-clear').addEventListener('click', () => {
+  document.getElementById('edit-time').value = '';
+});
 
 function setupPeriodButtons() {
   document.querySelectorAll('#edit-periods .period-btn').forEach(btn => {
@@ -765,6 +806,9 @@ async function openEditModal(id) {
   document.querySelectorAll('#edit-periods .period-btn').forEach(btn => {
     btn.classList.toggle('active', currentEditPeriods.includes(btn.dataset.period));
   });
+
+  // Optional set time
+  document.getElementById('edit-time').value = item.time || '';
 
   // Count & Alerts
   document.getElementById('edit-total-count').value = item.total_count || '';
@@ -844,6 +888,7 @@ function convertEditItemToProtocol() {
     icon: document.getElementById('edit-icon').value.trim() || '💊',
     category: document.getElementById('edit-category').value,
     periods: JSON.stringify(currentEditPeriods),
+    time: document.getElementById('edit-time').value || null,
     weekdays: JSON.stringify(currentEditWeekdays),
     repeat_every: Number(document.getElementById('edit-repeat-every').value) || 1,
     repeat_unit: document.getElementById('edit-repeat-unit').value,
@@ -885,6 +930,7 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     repeat_every: Number(document.getElementById('edit-repeat-every').value) || 1,
     repeat_unit: document.getElementById('edit-repeat-unit').value,
     periods: JSON.stringify(currentEditPeriods),
+    time: document.getElementById('edit-time').value || null,
     total_count: totalCount ? Number(totalCount) : null,
     alert_penultimate: document.getElementById('edit-alert-penultimate').value.trim() || null,
     alert_last: document.getElementById('edit-alert-last').value.trim() || null,

@@ -35,13 +35,20 @@ function parseHHMMtoMin(str, fallback) {
   return h * 60 + min;
 }
 
-function getCurrentPeriod() {
-  const now = new Date();
-  const cur = now.getHours() * 60 + now.getMinutes();
+function periodOfMinutes(cur) {
   const { morningStart, afternoonStart, nightStart } = periodTimes;
   if (cur >= morningStart && cur < afternoonStart) return 'morning';
   if (cur >= afternoonStart && cur < nightStart) return 'afternoon';
   return 'night'; // night wraps midnight (>= nightStart OR < morningStart)
+}
+
+function nowMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+function getCurrentPeriod() {
+  return periodOfMinutes(nowMinutes());
 }
 
 // ═══ Date Navigation ═══
@@ -120,7 +127,12 @@ function getVisibleTasks() {
     // "Day-long" = no periods selected OR all 3 selected. Both mean
     // "visible in every period filter". Users intuitively tick all 3
     // to express "this matters all day", so we treat it equivalently.
-    if (periods.length === 0 || periods.length >= 3) return true;
+    if (periods.length >= 3) return true;
+    if (periods.length === 0) {
+      // No period picked but a set time: the item belongs to that time's period.
+      const min = parseHHMMtoMin(task.time, null);
+      return min === null || periodOfMinutes(min) === currentPeriod;
+    }
     return periods.includes(currentPeriod);
   });
 }
@@ -187,6 +199,7 @@ function updateGreeting() {
   document.getElementById('greeting').textContent = t(key);
   // Refresh "current" highlight on the period nav buttons (cheap, runs every minute)
   updateCurrentPeriodHighlight();
+  updateLateMarks();
 }
 
 function updateCurrentPeriodHighlight() {
@@ -334,6 +347,18 @@ function renderTasks() {
   }
 
   updateProgress();
+  updateLateMarks();
+}
+
+// A timed item still unmarked after its time, today, is late. Runs on every
+// render and every minute; the completed state is handled in CSS.
+function updateLateMarks() {
+  const isToday = currentDate === todayStr();
+  const now = nowMinutes();
+  document.querySelectorAll('.task[data-time]').forEach((el) => {
+    const min = parseHHMMtoMin(el.dataset.time, null);
+    el.classList.toggle('is-late', isToday && min !== null && now > min);
+  });
 }
 
 function createTaskElement(task) {
@@ -351,6 +376,12 @@ function createTaskElement(task) {
     ? `<span class="task-source">↳ ${escapeHtml(t('display.followupFrom'))} ${escapeHtml(task.source.icon || '')} <b class="${escapeHtml(task.source.category)}">${escapeHtml(task.source.title)}</b></span>`
     : '';
 
+  // Optional set time ("08:00"), same size as the title — the tablet is low-res.
+  const timeHTML = task.time
+    ? `<span class="task-time">${escapeHtml(task.time)}</span>`
+    : '';
+  if (task.time) el.dataset.time = task.time;
+
   const countHTML = task.total_count
     ? `<span class="task-count">${escapeHtml(task.completed_count)}/${escapeHtml(task.total_count)}</span>`
     : '';
@@ -358,7 +389,7 @@ function createTaskElement(task) {
   el.innerHTML = `
     <span class="task-icon">${escapeHtml(task.icon)}</span>
     <div class="task-body">
-      <span class="task-title">${escapeHtml(task.title)}</span>
+      <div class="task-head">${timeHTML}<span class="task-title">${escapeHtml(task.title)}</span></div>
       ${sourceHTML}
       ${alertHTML}
     </div>

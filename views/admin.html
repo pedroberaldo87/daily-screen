@@ -121,6 +121,21 @@
 
     /* Period selector */
     .period-selector { display: flex; gap: 6px; flex-wrap: wrap; }
+    /* Optional set time: sits with the periods, same height as a period button */
+    .time-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .time-field {
+      display: inline-flex; align-items: center; gap: 8px; margin: 0;
+      font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+    }
+    .time-field input[type="time"] {
+      height: 34px; padding: 0 10px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--bg-input);
+      color: var(--text-primary); font-family: var(--font); font-size: 0.85rem;
+      font-variant-numeric: tabular-nums; color-scheme: dark; width: auto;
+    }
+    .time-field input[type="time"]:focus { border-color: var(--accent-sup); outline: none; }
+    .phase-periods .time-field { margin-left: auto; }
+    .meta-pill.time-pill { color: var(--accent-sup); font-variant-numeric: tabular-nums; }
     .period-btn {
       padding: 7px 14px; height: 34px; border-radius: 6px;
       border: 1px solid var(--border); background: var(--bg-input);
@@ -1314,6 +1329,10 @@
           <label data-i18n="admin.order">Ordem</label>
           <input id="add-sort" type="number" value="0" style="width:100%;text-align:center">
         </div>
+        <div class="narrow" style="flex:0 0 120px">
+          <label for="add-time" data-i18n="admin.time">Horário</label>
+          <input id="add-time" type="time" step="60" style="width:100%">
+        </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-primary" data-click="quickAdd" data-i18n="common.add">Adicionar</button>
@@ -1424,6 +1443,14 @@
                 <button type="button" class="period-btn" data-period="night" data-i18n="period.night">Noite</button>
               </div>
               <small class="period-help" data-i18n="admin.periodsHelp">Sem nenhum selecionado, o item aparece o dia todo.</small>
+              <div class="time-row">
+                <label class="time-field" for="edit-time">
+                  <span data-i18n="admin.time">Horário</span>
+                  <input type="time" id="edit-time" step="60">
+                </label>
+                <button type="button" class="btn btn-secondary btn-sm" id="edit-time-clear" data-i18n="admin.timeClear">Limpar horário</button>
+              </div>
+              <small class="period-help" data-i18n="admin.timeHelp">Opcional. Sem período marcado, o item aparece no período desse horário.</small>
             </div>
           </div>
 

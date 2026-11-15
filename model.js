@@ -96,6 +96,8 @@ function initSchema(db) {
     // by generation or by hand, and soft-removal (a tombstone row blocks
     // generateDailyTasks from recreating a removed day; restore = clear it).
     ['daily_tasks', 'created_at', 'TEXT'], ['daily_tasks', 'origin', 'TEXT'], ['daily_tasks', 'removed_at', 'TEXT'],
+    // Optional time of day ("HH:MM"); NULL = no set time.
+    ['phases', 'time', 'TEXT'], ['series', 'time', 'TEXT'],
   ];
   for (const [table, col, type] of added) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -149,13 +151,13 @@ function createModel(db) {
     const result = db.prepare(`
       INSERT INTO series (
         template_id, phase_id, seq, title, category, icon, sort_order,
-        weekdays, repeat_every, repeat_unit, periods, total_count, alert_penultimate, alert_last,
+        weekdays, repeat_every, repeat_unit, periods, time, total_count, alert_penultimate, alert_last,
         start_date, end_date, status, source_series_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
     `).run(
       templateId, phase.id, seq, phase.title, phase.category, phase.icon || '✅',
       phase.sort_order ?? phase.phase_order ?? 0, phase.weekdays || '[0,1,2,3,4,5,6]',
-      phase.repeat_every || 1, phase.repeat_unit || 'week', phase.periods || '[]',
+      phase.repeat_every || 1, phase.repeat_unit || 'week', phase.periods || '[]', phase.time || null,
       phase.total_count ?? null, phase.alert_penultimate ?? null, phase.alert_last ?? null,
       start_date, end_date, source_series_id,
     );
@@ -178,12 +180,12 @@ function createModel(db) {
 
       const phaseId = db.prepare(`
         INSERT INTO phases (template_id, phase_order, title, category, icon,
-          weekdays, repeat_every, repeat_unit, periods, total_count, alert_penultimate, alert_last)
-        VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          weekdays, repeat_every, repeat_unit, periods, time, total_count, alert_penultimate, alert_last)
+        VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         tmplId, data.title, data.category, data.icon || '✅',
         data.weekdays || '[0,1,2,3,4,5,6]', Number(data.repeat_every) || 1, data.repeat_unit || 'week',
-        data.periods || '[]',
+        data.periods || '[]', data.time || null,
         data.total_count || null, data.alert_penultimate || null, data.alert_last || null,
       ).lastInsertRowid;
 
@@ -226,13 +228,13 @@ function createModel(db) {
       withDates.forEach((p, i) => {
         const phaseId = db.prepare(`
           INSERT INTO phases (template_id, phase_order, title, category, icon,
-            weekdays, repeat_every, repeat_unit, periods, total_count, duration_days, alert_penultimate, alert_last)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            weekdays, repeat_every, repeat_unit, periods, time, total_count, duration_days, alert_penultimate, alert_last)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           tmplId, i, p.title, p.category, p.icon || '💊',
           typeof p.weekdays === 'string' ? p.weekdays : JSON.stringify(p.weekdays || [0, 1, 2, 3, 4, 5, 6]),
           Number(p.repeat_every) || 1, p.repeat_unit || 'week',
-          typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []),
+          typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []), p.time || null,
           p.total_count || null, Number(p.duration_days) || null,
           p.alert_penultimate || null, p.alert_last || null,
         ).lastInsertRowid;
@@ -415,6 +417,7 @@ function createModel(db) {
       icon: r.icon,
       sort_order: r.sort_order,
       periods: r.periods,
+      time: r.time || null,
       total_count: r.total_count,
       completed_count: shownCount,
       alert_penultimate: r.alert_penultimate,
@@ -429,7 +432,7 @@ function createModel(db) {
 
   const TASK_SELECT = `
     SELECT dt.id, dt.series_id, dt.date, dt.completed, dt.completed_at,
-      s.title, s.category, s.icon, s.sort_order, s.periods, s.total_count, s.completed_count,
+      s.title, s.category, s.icon, s.sort_order, s.periods, s.time, s.total_count, s.completed_count,
       s.alert_penultimate, s.alert_last, s.end_date, s.template_id, t.kind AS tkind,
       t.alert_penultimate AS t_alert_penultimate, t.alert_last AS t_alert_last,
       s.phase_id = (SELECT id FROM phases WHERE template_id = s.template_id
@@ -440,8 +443,10 @@ function createModel(db) {
     JOIN templates t ON t.id = s.template_id
     LEFT JOIN series src ON src.id = s.source_series_id`;
 
+  // Items with a set time come first, in clock order; the rest keep the
+  // admin's manual order after them.
   function getTasksView(date) {
-    const rows = db.prepare(`${TASK_SELECT} WHERE dt.date = ? AND t.active = 1 AND dt.removed_at IS NULL ORDER BY s.sort_order, s.id`).all(date);
+    const rows = db.prepare(`${TASK_SELECT} WHERE dt.date = ? AND t.active = 1 AND dt.removed_at IS NULL ORDER BY s.time IS NULL, s.time, s.sort_order, s.id`).all(date);
     return rows.map((r) => mapTaskRow(r, date));
   }
 
@@ -520,6 +525,7 @@ function createModel(db) {
       repeat_every: phase.repeat_every,
       repeat_unit: phase.repeat_unit,
       periods: phase.periods,
+      time: phase.time || null,
       total_count: phase.total_count,
       completed_count: cur ? cur.completed_count : 0,
       alert_penultimate: phase.alert_penultimate,
@@ -573,6 +579,7 @@ function createModel(db) {
         repeat_every: ph.repeat_every,
         repeat_unit: ph.repeat_unit,
         periods: ph.periods,
+        time: ph.time || null,
         total_count: ph.total_count,
         completed_count: s ? s.completed_count : 0,
         alert_penultimate: ph.alert_penultimate,
@@ -688,6 +695,7 @@ function createModel(db) {
       s.category,
       s.icon,
       s.periods,
+      s.time,
       s.alert_penultimate,
       s.alert_last,
       t.id AS template_id,
@@ -739,6 +747,7 @@ function createModel(db) {
       category: r.category,
       icon: r.icon,
       periods: r.periods,
+      time: r.time || null,
       total_count: r.total_count,
       completed_count: r.completed_count,
       seq: r.seq,
@@ -854,6 +863,7 @@ function createModel(db) {
       repeat_every: data.repeat_every !== undefined ? Number(data.repeat_every) : phase.repeat_every,
       repeat_unit: pick(data.repeat_unit, phase.repeat_unit),
       periods: pick(data.periods, phase.periods),
+      time: data.time !== undefined ? (data.time || null) : phase.time,
       total_count: data.total_count !== undefined ? (data.total_count || null) : phase.total_count,
       alert_penultimate: data.alert_penultimate !== undefined ? (data.alert_penultimate || null) : phase.alert_penultimate,
       alert_last: data.alert_last !== undefined ? (data.alert_last || null) : phase.alert_last,
@@ -872,15 +882,15 @@ function createModel(db) {
         id,
       );
       db.prepare(`UPDATE phases SET title=?, category=?, icon=?, weekdays=?, repeat_every=?, repeat_unit=?,
-        periods=?, total_count=?, alert_penultimate=?, alert_last=? WHERE id=?`).run(
+        periods=?, time=?, total_count=?, alert_penultimate=?, alert_last=? WHERE id=?`).run(
         next.title, next.category, next.icon, next.weekdays, next.repeat_every, next.repeat_unit,
-        next.periods, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
+        next.periods, next.time, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
       );
       reflectOnActiveSeries(id, {
         title: next.title, category: next.category, icon: next.icon,
         sort_order: pick(data.sort_order, t.sort_order),
         weekdays: next.weekdays, repeat_every: next.repeat_every, repeat_unit: next.repeat_unit,
-        periods: next.periods, total_count: next.total_count,
+        periods: next.periods, time: next.time, total_count: next.total_count,
         alert_penultimate: next.alert_penultimate, alert_last: next.alert_last,
       });
       const norm = (v) => (v === '' || v === null ? null : v);
@@ -961,12 +971,12 @@ function createModel(db) {
         const withDates = computePhaseDates(start, data.phases, repeat);
         withDates.forEach((p, i) => {
           const phaseId = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon,
-            weekdays, repeat_every, repeat_unit, periods, total_count, duration_days, alert_penultimate, alert_last)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+            weekdays, repeat_every, repeat_unit, periods, time, total_count, duration_days, alert_penultimate, alert_last)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
             id, i, p.title, p.category, p.icon || '💊',
             typeof p.weekdays === 'string' ? p.weekdays : JSON.stringify(p.weekdays || [0, 1, 2, 3, 4, 5, 6]),
             Number(p.repeat_every) || 1, p.repeat_unit || 'week',
-            typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []),
+            typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []), p.time || null,
             p.total_count || null, Number(p.duration_days) || null,
             p.alert_penultimate || null, p.alert_last || null,
           ).lastInsertRowid;
@@ -1006,9 +1016,9 @@ function createModel(db) {
       // Phase 1: blank clone.
       const secondStart = addDays(today, firstDur);
       const secondEnd = repeat ? null : addDays(secondStart, secondDur - 1);
-      const p2 = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon, weekdays, periods, duration_days)
-        VALUES (?, 1, ?, ?, ?, ?, ?, ?)`).run(
-        id, phase.title, phase.category, phase.icon, phase.weekdays, phase.periods, secondDur,
+      const p2 = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon, weekdays, periods, time, duration_days)
+        VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)`).run(
+        id, phase.title, phase.category, phase.icon, phase.weekdays, phase.periods, phase.time || null, secondDur,
       ).lastInsertRowid;
       const phase2 = db.prepare('SELECT * FROM phases WHERE id = ?').get(p2);
       spawnSeries(id, phase2, { seq: 1, start_date: secondStart, end_date: secondEnd });
@@ -1041,13 +1051,14 @@ function createModel(db) {
       const next = {
         title: f.title || phase.title, category: f.category || phase.category, icon: f.icon || phase.icon,
         weekdays: str(f.weekdays, phase.weekdays), periods: str(f.periods, phase.periods),
+        time: f.time === undefined ? phase.time : (f.time || null),
         repeat_every: Number(f.repeat_every) || phase.repeat_every, repeat_unit: f.repeat_unit || phase.repeat_unit,
         total_count: opt(f.total_count, phase.total_count),
         alert_penultimate: opt(f.alert_penultimate, phase.alert_penultimate), alert_last: opt(f.alert_last, phase.alert_last),
       };
       db.prepare(`UPDATE phases SET phase_order = 0, duration_days = ?, title = ?, category = ?, icon = ?, weekdays = ?,
-        periods = ?, repeat_every = ?, repeat_unit = ?, total_count = ?, alert_penultimate = ?, alert_last = ? WHERE id = ?`).run(
-        Number(f.duration_days) || 1, next.title, next.category, next.icon, next.weekdays, next.periods,
+        periods = ?, time = ?, repeat_every = ?, repeat_unit = ?, total_count = ?, alert_penultimate = ?, alert_last = ? WHERE id = ?`).run(
+        Number(f.duration_days) || 1, next.title, next.category, next.icon, next.weekdays, next.periods, next.time,
         next.repeat_every, next.repeat_unit, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
       );
       reflectOnActiveSeries(id, { ...next, start_date: f.start_date, end_date: f.end_date });
@@ -1058,10 +1069,10 @@ function createModel(db) {
       }
       withDates.slice(1).forEach((p, i) => {
         const phaseId = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon,
-          weekdays, repeat_every, repeat_unit, periods, total_count, duration_days, alert_penultimate, alert_last)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+          weekdays, repeat_every, repeat_unit, periods, time, total_count, duration_days, alert_penultimate, alert_last)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
           id, i + 1, p.title, p.category, p.icon || '💊', str(p.weekdays, '[0,1,2,3,4,5,6]'),
-          Number(p.repeat_every) || 1, p.repeat_unit || 'week', str(p.periods, '[]'),
+          Number(p.repeat_every) || 1, p.repeat_unit || 'week', str(p.periods, '[]'), p.time || null,
           p.total_count || null, Number(p.duration_days) || null, p.alert_penultimate || null, p.alert_last || null,
         ).lastInsertRowid;
         spawnSeries(id, db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId), { seq: 1, start_date: p.start_date, end_date: p.end_date });

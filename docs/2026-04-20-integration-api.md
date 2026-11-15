@@ -168,6 +168,7 @@ type Item = {
   repeat_every: number;               // 1..365, default 1 — "every N <repeat_unit>"
   repeat_unit: "day" | "week" | "month"; // default "week"; counted from start_date (see 9.3.1)
   periods: string;                    // JSON array of "morning"|"afternoon"|"night", [] = day-long
+  time: string | null;                // optional set time "HH:MM" (24h, "8:05" is stored as "08:05"); null = no set time (see 9.13)
   total_count: number | null;         // if set, item becomes a counter: integer 1..100000 (JSON number); 0, "", numeric strings, fractions and out-of-range values are rejected with 400
   completed_count: number;            // counter progress (marked tasks + manual correction). PUT /items/:id {completed_count} corrects it on the current cartela; marked tasks are kept, and lowering it below total reopens a closed cartela
   alert_penultimate: string | null;   // shown at total_count - 1
@@ -284,6 +285,7 @@ Returns all daily tasks for the given date (default: today in `weather_tz`). Laz
     "category": "supplement",
     "icon": "☀️",
     "periods": "[\"morning\"]",
+    "time": "08:00",
     "weekdays": "[0,1,2,3,4,5,6]",
     "...": "plus all other item fields"
   }
@@ -428,6 +430,7 @@ Creates a new standalone item. Body follows the `Item` type; required fields: `t
   "sort_order": 10,
   "weekdays": [1,2,3,4,5],
   "periods": ["night"],
+  "time": "21:00",
   "total_count": 30,
   "alert_penultimate": "Penúltimo!",
   "alert_last": "Último — lembrar de comprar",
@@ -719,6 +722,9 @@ Days are generated lazily: deleting a `daily_tasks` row that still fits the rule
 ### 9.12. Old boxes don't reopen; one "Buy X" per box
 Unmarking or removing a dose of an **older** box while a newer one is in use only fixes that old box's count — it never reopens it (at most one active box per item). Each box spawns at most one "Buy X" follow-up, so restoring a dose can't ask you to buy again.
 
+### 9.13. `time` is optional, one per item
+`time` (`"HH:MM"`, 24h) is optional on items and on each protocol phase; `null` or `""` clears it, and leaving it out of a `PUT` keeps it. One item has at most one time — a medicine taken at 08:00 and 20:00 is two items. On `GET /tasks` timed items come first, in clock order, then the untimed ones by `sort_order`. With `periods: []` a timed item shows only in the period its time falls in (period boundaries come from the `period_*_start` settings). The display shows the time on the card and highlights it once today's time has passed and the task is still unmarked; nothing is pushed or notified. New boxes ("comprei") inherit the item's time; the "Buy X" follow-up has none.
+
 ---
 
 ## 10. Skill Template for External Agents
@@ -749,6 +755,9 @@ You have programmatic access to the owner's Daily Screen app (a tablet-based med
 ### Add a daily reminder with weekday filter
 `POST /items` with `weekdays: [1,2,3,4,5]` (Mon-Fri) and appropriate periods.
 
+### Give a medicine a set time
+`PUT /items/{id}` with `{ "time": "08:00" }`; `{ "time": null }` removes it. Two doses a day = two items, each with its own time.
+
 ### Create a dose-taper protocol
 `POST /protocols` with phases array — each phase has `duration_days` and a full item config (title, category, icon, periods).
 
@@ -775,6 +784,13 @@ Full API guide: https://github.com/pedroberaldo87/daily-screen/blob/main/docs/20
 ---
 
 ## 11. Changelog
+
+### v1.2 — 2026-11-15
+- New optional field `time` (`"HH:MM"` or `null`) on items, protocol phases and
+  tasks. Accepted on `POST`/`PUT /items` and in each `phases[]` entry; returned by
+  `/items`, `/protocols`, `/tasks` and `/history`. Invalid values answer `400`
+  with `time must be HH:MM (00:00-23:59) or null`. See 9.13.
+- `GET /tasks` order: timed tasks first, by time; then the rest by `sort_order`.
 
 ### v1.1 — 2026-06-08
 - **Internal data model redesigned** (template → phase → series). External JSON

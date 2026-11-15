@@ -577,6 +577,44 @@ html, body {
   word-wrap: break-word;
 }
 
+/* Title row: optional set time ("08:00") + title, same size — the tablet is low-res */
+.task-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.task-head .task-title { min-width: 0; }
+
+.task-time {
+  font-size: var(--fs-task-title, 1.05rem);
+  font-weight: 600;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: color 0.3s;
+}
+.task.medication .task-time { color: var(--accent-med); }
+.task.supplement .task-time { color: var(--accent-sup); }
+.task.reminder   .task-time { color: var(--accent-rem); }
+
+/* Late = today, past its time and still unmarked: the time turns into a solid
+   tag. Static on purpose — the wall tablet's old WebView is always on. */
+.task.is-late:not(.completed) .task-time {
+  color: #fff;
+  background: var(--accent-med);
+  padding: 0 8px;
+  border-radius: 6px;
+}
+
+.task.completed .task-time {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-ghost);
+}
+
 .task.completed .task-title {
   color: var(--text-muted);
   text-decoration: line-through;
