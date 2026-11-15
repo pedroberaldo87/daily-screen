@@ -127,13 +127,23 @@
       display: inline-flex; align-items: center; gap: 8px; margin: 0;
       font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
     }
-    .time-field input[type="time"] {
-      height: 34px; padding: 0 10px; border-radius: 6px;
-      border: 1px solid var(--border); background: var(--bg-input);
-      color: var(--text-primary); font-family: var(--font); font-size: 0.85rem;
-      font-variant-numeric: tabular-nums; color-scheme: dark; width: auto;
+    .times-editor { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .time-chip {
+      display: inline-flex; align-items: center; gap: 2px; height: 34px; padding-right: 4px;
+      border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input);
     }
-    .time-field input[type="time"]:focus { border-color: var(--accent-sup); outline: none; }
+    .time-chip:focus-within { border-color: var(--accent-sup); }
+    .time-chip input[type="time"] {
+      height: 32px; padding: 0 6px 0 10px; border: 0; background: transparent;
+      color: var(--text-primary); font-family: var(--font); font-size: 0.85rem;
+      font-variant-numeric: tabular-nums; color-scheme: dark; width: auto; outline: none;
+    }
+    .time-chip-x {
+      width: 22px; height: 22px; border: 0; border-radius: 4px; background: transparent;
+      color: var(--text-muted); font-size: 1rem; line-height: 1; cursor: pointer;
+    }
+    .time-chip-x:hover { color: var(--accent-danger); background: rgba(255,255,255,0.05); }
+    .times-add { height: 34px; }
     .phase-periods .time-field { margin-left: auto; }
     .meta-pill.time-pill { color: var(--accent-sup); font-variant-numeric: tabular-nums; }
     .period-btn {
@@ -424,6 +434,8 @@
     .hist-day { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
     .hist-day-dow { font-size: 0.64rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); }
     .hist-day-num { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .hist-day-time { font-size: 0.72rem; font-weight: 600; color: var(--accent-sup); font-variant-numeric: tabular-nums; margin-top: 2px; }
+    #history-add-time { height: 38px; }
     .hist-body { min-width: 0; }
     .hist-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
     .hist-status { display: inline-flex; align-items: center; gap: 7px; font-size: 0.84rem; font-weight: 600; }
@@ -1444,13 +1456,10 @@
               </div>
               <small class="period-help" data-i18n="admin.periodsHelp">Sem nenhum selecionado, o item aparece o dia todo.</small>
               <div class="time-row">
-                <label class="time-field" for="edit-time">
-                  <span data-i18n="admin.time">Horário</span>
-                  <input type="time" id="edit-time" step="60">
-                </label>
-                <button type="button" class="btn btn-secondary btn-sm" id="edit-time-clear" data-i18n="admin.timeClear">Limpar horário</button>
+                <span class="time-field" data-i18n="admin.times">Horários</span>
+                <div class="times-editor" id="edit-times"></div>
               </div>
-              <small class="period-help" data-i18n="admin.timeHelp">Opcional. Sem período marcado, o item aparece no período desse horário.</small>
+              <small class="period-help" data-i18n="admin.timeHelp">Opcional. Cada horário é uma dose com marcação própria, no período desse horário. A caixa conta todas as doses.</small>
             </div>
           </div>
 
@@ -1642,6 +1651,7 @@
         <div class="hist-add-hint" data-i18n="admin.historyAddHint">Cria a tarefa nessa data no tablet, mesmo fora da regra.</div>
         <div class="hist-add-form">
           <input type="date" id="history-add-date">
+          <select id="history-add-time" hidden aria-label="Horário" data-i18n-aria="admin.historyTimeOptional"></select>
           <button type="button" class="btn btn-primary" id="history-add-btn" data-click="addHistoryDay">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
             <span data-i18n="admin.historyAddButton">Adicionar</span>

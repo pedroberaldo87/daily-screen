@@ -96,11 +96,14 @@ function setTaskCompleted(id, completed) {
 function getOccurrences(templateId, range) {
   return model.getOccurrences(templateId, range);
 }
-function addOccurrence(templateId, date) {
-  return model.addOccurrence(templateId, date);
+function getOccurrence(dailyId) {
+  return model.getOccurrence(dailyId);
 }
-function moveOccurrence(dailyId, date) {
-  return model.moveOccurrence(dailyId, date, todayDate());
+function addOccurrence(templateId, date, time) {
+  return model.addOccurrence(templateId, date, time || null);
+}
+function moveOccurrence(dailyId, date, time) {
+  return model.moveOccurrence(dailyId, date, todayDate(), time);
 }
 function setOccurrenceCompleted(dailyId, completed) {
   return model.setTaskCompleted(dailyId, completed) ? model.getOccurrence(dailyId) : null;
@@ -238,6 +241,7 @@ function saveApiIdempotencyKey({ tokenId, method, path, idempotencyKey, requestH
 module.exports = {
   db,
   getOccurrences,
+  getOccurrence,
   addOccurrence,
   moveOccurrence,
   setOccurrenceCompleted,

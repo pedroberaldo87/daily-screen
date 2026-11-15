@@ -127,12 +127,10 @@ function getVisibleTasks() {
     // "Day-long" = no periods selected OR all 3 selected. Both mean
     // "visible in every period filter". Users intuitively tick all 3
     // to express "this matters all day", so we treat it equivalently.
-    if (periods.length >= 3) return true;
-    if (periods.length === 0) {
-      // No period picked but a set time: the item belongs to that time's period.
-      const min = parseHHMMtoMin(task.time, null);
-      return min === null || periodOfMinutes(min) === currentPeriod;
-    }
+    // A dose with a set time belongs to the period its time falls in.
+    const min = parseHHMMtoMin(task.time, null);
+    if (min !== null) return periodOfMinutes(min) === currentPeriod;
+    if (periods.length === 0 || periods.length >= 3) return true;
     return periods.includes(currentPeriod);
   });
 }

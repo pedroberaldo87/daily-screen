@@ -91,11 +91,38 @@ function periodOfTime(time) {
   if (min >= afternoon && min < night) return 'afternoon';
   return 'night';
 }
-// The periods an item is shown in: the picked ones, else its time's period.
+// The periods an item is shown in: with dose times, the periods those times
+// fall in (each dose shows in its own period on the tablet); else the picked ones.
 function effectivePeriods(item, periods) {
-  if (periods && periods.length) return periods;
-  const p = periodOfTime(item.time);
-  return p ? [p] : [];
+  const times = Array.isArray(item.times) ? item.times : [];
+  if (times.length) return PERIOD_ORDER.filter((p) => times.some((tm) => periodOfTime(tm) === p));
+  return periods || [];
+}
+
+// Editable list of dose times: one time input per dose, "×" to drop one,
+// "+ horário" to add one. Read back sorted and without repeats.
+function renderTimesEditor(el, times) {
+  el.innerHTML = '';
+  const addChip = (value) => {
+    const chip = document.createElement('span');
+    chip.className = 'time-chip';
+    chip.innerHTML = `<input type="time" step="60" value="${escapeHtml(value || '')}" aria-label="${escapeHtml(t('admin.time'))}">`
+      + `<button type="button" class="time-chip-x" aria-label="${escapeHtml(t('admin.removeTime'))}" title="${escapeHtml(t('admin.removeTime'))}">×</button>`;
+    chip.querySelector('.time-chip-x').addEventListener('click', () => chip.remove());
+    el.insertBefore(chip, addBtn);
+    return chip;
+  };
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'btn btn-secondary btn-sm times-add';
+  addBtn.textContent = t('admin.addTime');
+  addBtn.addEventListener('click', () => addChip('').querySelector('input').focus());
+  el.appendChild(addBtn);
+  (times || []).forEach(addChip);
+}
+function readTimes(el) {
+  const vals = Array.from(el.querySelectorAll('.time-chip input')).map((i) => i.value).filter(Boolean);
+  return [...new Set(vals)].sort();
 }
 
 function periodsSummary(periods) {
@@ -155,7 +182,7 @@ function buildItemCard(item) {
         <span class="badge ${escapeHtml(item.category)}">${escapeHtml(catLabel)}</span>
         <span class="meta-pill weekdays-pill"${(item.repeat_unit || 'week') === 'week' ? ` data-action="edit-weekdays" title="${escapeHtml(t('admin.clickToEdit'))}"` : ''}>${escapeHtml(repeatSummary(item, weekdays))}</span>
         <span class="meta-pill periods-pill" data-action="edit-periods" title="${escapeHtml(t('admin.clickToEdit'))}">${escapeHtml(periodsSummary(effectivePeriods(item, periods)))}</span>
-        ${item.time ? `<span class="meta-pill time-pill" data-action="open-modal" title="${escapeHtml(t('admin.time'))}">⏰ ${escapeHtml(item.time)}</span>` : ''}
+        ${(item.times || []).length ? `<span class="meta-pill time-pill" data-action="open-modal" title="${escapeHtml(t('admin.times'))}">⏰ ${escapeHtml(item.times.join(' · '))}</span>` : ''}
         ${windowPillHtml}
         ${statusIcons.join('')}
         ${!item.active ? `<em style="color:var(--accent-danger)">${escapeHtml(t('admin.deactivated'))}</em>` : ''}
@@ -512,10 +539,10 @@ function buildPhaseCard(phase = {}) {
         <button type="button" class="period-btn${periods.includes('morning') ? ' active' : ''}" data-period="morning">${escapeHtml(t('period.morning'))}</button>
         <button type="button" class="period-btn${periods.includes('afternoon') ? ' active' : ''}" data-period="afternoon">${escapeHtml(t('period.afternoon'))}</button>
         <button type="button" class="period-btn${periods.includes('night') ? ' active' : ''}" data-period="night">${escapeHtml(t('period.night'))}</button>
-        <label class="time-field" title="${escapeHtml(t('admin.timeHelp'))}">
-          <span>${escapeHtml(t('admin.time'))}</span>
-          <input type="time" class="phase-time" step="60" value="${escapeHtml(phase.time || '')}">
-        </label>
+        <div class="time-field" title="${escapeHtml(t('admin.timeHelp'))}">
+          <span>${escapeHtml(t('admin.times'))}</span>
+          <div class="times-editor phase-times"></div>
+        </div>
       </div>
     </div>
   `;
@@ -529,6 +556,8 @@ function buildPhaseCard(phase = {}) {
   });
   // Listen for picker output to keep the field consistent
   iconInput.addEventListener('input', () => renderPhaseTimeline());
+
+  renderTimesEditor(card.querySelector('.phase-times'), phase.times);
 
   // Period buttons (local toggle state)
   card.querySelectorAll('.phase-periods .period-btn').forEach(btn => {
@@ -556,7 +585,7 @@ function snapshotPhaseCard(card) {
     icon: card.querySelector('.phase-icon').value,
     category: card.querySelector('.phase-category').value,
     periods: JSON.stringify(activePeriods),
-    time: card.querySelector('.phase-time').value || null,
+    times: readTimes(card.querySelector('.phase-times')),
   };
 }
 
@@ -611,7 +640,7 @@ function collectPhasesFromForm() {
       icon: card.querySelector('.phase-icon').value.trim() || '💊',
       category: card.querySelector('.phase-category').value,
       periods: JSON.stringify(periods),
-      time: card.querySelector('.phase-time').value || null,
+      times: readTimes(card.querySelector('.phase-times')),
     };
   });
 }
@@ -751,10 +780,6 @@ function syncWeekdaysEnabled() {
 }
 document.getElementById('edit-repeat-unit').addEventListener('change', syncWeekdaysEnabled);
 
-document.getElementById('edit-time-clear').addEventListener('click', () => {
-  document.getElementById('edit-time').value = '';
-});
-
 function setupPeriodButtons() {
   document.querySelectorAll('#edit-periods .period-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -807,8 +832,8 @@ async function openEditModal(id) {
     btn.classList.toggle('active', currentEditPeriods.includes(btn.dataset.period));
   });
 
-  // Optional set time
-  document.getElementById('edit-time').value = item.time || '';
+  // Dose times (optional; one card per time on the tablet)
+  renderTimesEditor(document.getElementById('edit-times'), item.times);
 
   // Count & Alerts
   document.getElementById('edit-total-count').value = item.total_count || '';
@@ -888,7 +913,7 @@ function convertEditItemToProtocol() {
     icon: document.getElementById('edit-icon').value.trim() || '💊',
     category: document.getElementById('edit-category').value,
     periods: JSON.stringify(currentEditPeriods),
-    time: document.getElementById('edit-time').value || null,
+    times: readTimes(document.getElementById('edit-times')),
     weekdays: JSON.stringify(currentEditWeekdays),
     repeat_every: Number(document.getElementById('edit-repeat-every').value) || 1,
     repeat_unit: document.getElementById('edit-repeat-unit').value,
@@ -930,7 +955,7 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     repeat_every: Number(document.getElementById('edit-repeat-every').value) || 1,
     repeat_unit: document.getElementById('edit-repeat-unit').value,
     periods: JSON.stringify(currentEditPeriods),
-    time: document.getElementById('edit-time').value || null,
+    times: readTimes(document.getElementById('edit-times')),
     total_count: totalCount ? Number(totalCount) : null,
     alert_penultimate: document.getElementById('edit-alert-penultimate').value.trim() || null,
     alert_last: document.getElementById('edit-alert-last').value.trim() || null,
@@ -1029,6 +1054,12 @@ function openHistoryModal(id, opts) {
   document.getElementById('history-icon').textContent = opts ? (opts.icon || '') : (item ? item.icon : '');
   document.getElementById('history-rule').textContent = opts ? opts.rule : (item ? repeatSummary(item, weekdays) : '');
   document.getElementById('history-add-date').value = todayISO();
+  // Several doses a day: pick which one to add (default: the first one missing).
+  const times = (item && item.times) || [];
+  const timeSel = document.getElementById('history-add-time');
+  timeSel.hidden = times.length < 2;
+  timeSel.innerHTML = `<option value="">${escapeHtml(t('admin.historyTimeOptional'))}</option>`
+    + times.map((tm) => `<option value="${escapeHtml(tm)}">${escapeHtml(tm)}</option>`).join('');
   setHistoryRange('90');
   document.getElementById('history-modal').classList.add('active');
 }
@@ -1099,10 +1130,10 @@ function historyRow(o) {
         title="${escapeHtml(t(o.completed ? 'admin.historyUnmark' : 'admin.historyMark'))}">${HIST_ICON.check}</button>`;
   const link = o.removed_at
     ? `<button type="button" class="hist-link restore" data-hist="restore" data-id="${escapeHtml(o.id)}">${HIST_ICON.restore}${escapeHtml(t('admin.historyRestore'))}</button>`
-    : `<button type="button" class="hist-link edit" data-hist="edit" data-id="${escapeHtml(o.id)}" data-date="${escapeHtml(o.date)}" data-completed="${o.completed ? 1 : 0}">${HIST_ICON.edit}${escapeHtml(t('admin.historyEdit'))}</button>
+    : `<button type="button" class="hist-link edit" data-hist="edit" data-id="${escapeHtml(o.id)}" data-date="${escapeHtml(o.date)}" data-time="${escapeHtml(o.time || '')}" data-completed="${o.completed ? 1 : 0}">${HIST_ICON.edit}${escapeHtml(t('admin.historyEdit'))}</button>
        <button type="button" class="hist-link" data-hist="remove" data-id="${escapeHtml(o.id)}" data-date="${escapeHtml(o.date)}">${HIST_ICON.remove}${escapeHtml(t('admin.historyRemove'))}</button>`;
   return `<div class="hist-row${o.removed_at ? ' removed' : ''}">
-    <div class="hist-day"><span class="hist-day-dow">${escapeHtml(t(WEEKDAY_KEYS[dow]))}</span><span class="hist-day-num">${escapeHtml(dm)}</span></div>
+    <div class="hist-day"><span class="hist-day-dow">${escapeHtml(t(WEEKDAY_KEYS[dow]))}</span><span class="hist-day-num">${escapeHtml(dm)}</span>${o.time ? `<span class="hist-day-time">${escapeHtml(o.time)}</span>` : ''}</div>
     <div class="hist-body">
       <div class="hist-line"><span class="hist-status ${cls}">${escapeHtml(t(key))}</span>${tags}</div>
       <div class="hist-meta">${escapeHtml(meta)}</div>
@@ -1134,7 +1165,9 @@ async function loadHistory() {
   pruneBtn.disabled = historyPruneCount === 0;
 
   const live = list.filter((o) => !o.removed_at);
-  document.getElementById('history-summary').textContent = t('admin.historySummary', {
+  // Several doses a day: the count is of doses, not days.
+  const multiDose = live.some((o) => o.time) && new Set(live.map((o) => o.date)).size < live.length;
+  document.getElementById('history-summary').textContent = t(multiDose ? 'admin.historySummaryDoses' : 'admin.historySummary', {
     total: live.length, done: live.filter((o) => o.completed).length,
   });
 
@@ -1176,8 +1209,9 @@ function askConfirm(message, action) {
 
 async function addHistoryDay() {
   const date = document.getElementById('history-add-date').value;
+  const time = document.getElementById('history-add-time').value || null;
   if (!date) return;
-  if (await historyRequest(`${API}/items/${historyItemId}/occurrences`, 'POST', { date })) {
+  if (await historyRequest(`${API}/items/${historyItemId}/occurrences`, 'POST', { date, time })) {
     showToast(t('admin.historyAdded', { date: dayMonth(date) }));
   }
 }
@@ -1189,7 +1223,8 @@ function startHistoryEdit(btn) {
   const max = btn.dataset.completed === '1' ? ` max="${escapeHtml(todayISO())}"` : '';
   row.querySelector('.hist-body').innerHTML = `<div class="hist-edit-form">
     <input type="date" value="${escapeHtml(btn.dataset.date)}"${max} aria-label="${escapeHtml(t('admin.historyEditDate'))}">
-    <button type="button" class="btn btn-primary" data-hist="edit-save" data-id="${escapeHtml(btn.dataset.id)}" data-date="${escapeHtml(btn.dataset.date)}">${escapeHtml(t('admin.historySave'))}</button>
+    ${btn.dataset.time ? `<input type="time" step="60" class="hist-edit-time" value="${escapeHtml(btn.dataset.time)}" aria-label="${escapeHtml(t('admin.time'))}">` : ''}
+    <button type="button" class="btn btn-primary" data-hist="edit-save" data-id="${escapeHtml(btn.dataset.id)}" data-date="${escapeHtml(btn.dataset.date)}" data-time="${escapeHtml(btn.dataset.time || '')}">${escapeHtml(t('admin.historySave'))}</button>
     <button type="button" class="btn btn-secondary" data-hist="edit-cancel">${escapeHtml(t('admin.historyCancel'))}</button>
   </div>`;
   row.querySelector('.hist-actions').innerHTML = '';
@@ -1197,10 +1232,14 @@ function startHistoryEdit(btn) {
 }
 
 async function saveHistoryEdit(btn) {
-  const date = btn.closest('.hist-edit-form').querySelector('input').value;
+  const form = btn.closest('.hist-edit-form');
+  const date = form.querySelector('input[type="date"]').value;
+  const timeInput = form.querySelector('.hist-edit-time');
+  const time = timeInput ? timeInput.value : '';
   if (!date) return;
-  if (date === btn.dataset.date) return loadHistory();
-  if (await historyRequest(`${API}/occurrences/${btn.dataset.id}`, 'PUT', { date })) {
+  if (date === btn.dataset.date && time === (btn.dataset.time || '')) return loadHistory();
+  const body = time && time !== btn.dataset.time ? { date, time } : { date };
+  if (await historyRequest(`${API}/occurrences/${btn.dataset.id}`, 'PUT', body)) {
     showToast(t('admin.historyMoved', { date: dayMonth(date) }));
   }
 }

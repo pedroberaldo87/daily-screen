@@ -77,7 +77,8 @@ function initSchema(db) {
       date TEXT NOT NULL,
       completed INTEGER DEFAULT 0,
       completed_at TEXT,
-      UNIQUE(series_id, date)
+      slot TEXT NOT NULL DEFAULT '',
+      UNIQUE(series_id, date, slot)
     );
 
     CREATE INDEX IF NOT EXISTS idx_daily_tasks_date ON daily_tasks(date);
@@ -96,13 +97,89 @@ function initSchema(db) {
     // by generation or by hand, and soft-removal (a tombstone row blocks
     // generateDailyTasks from recreating a removed day; restore = clear it).
     ['daily_tasks', 'created_at', 'TEXT'], ['daily_tasks', 'origin', 'TEXT'], ['daily_tasks', 'removed_at', 'TEXT'],
-    // Optional time of day ("HH:MM"); NULL = no set time.
+    // Single time of day ("HH:MM"), shipped first; superseded by `times` and
+    // only read once, to fill `times` (see backfillDoseTimes).
     ['phases', 'time', 'TEXT'], ['series', 'time', 'TEXT'],
+    // Times of day of each dose: JSON array of "HH:MM", sorted; [] = one untimed dose.
+    ['phases', 'times', "TEXT DEFAULT '[]'"], ['series', 'times', "TEXT DEFAULT '[]'"],
   ];
   for (const [table, col, type] of added) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
     if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
   }
+  upgradeDoseSlots(db);
+  backfillDoseTimes(db);
+}
+
+// daily_tasks used to hold one row per series per day (UNIQUE(series_id, date)).
+// A medicine taken more than once a day needs one row per dose, keyed by the
+// dose's time (`slot`, '' = untimed). SQLite can't change a UNIQUE constraint in
+// place, so an old table is rebuilt once: same ids, same rows, slot ''. The
+// marked-dose count must match, else the transaction rolls back.
+function upgradeDoseSlots(db) {
+  const cols = db.prepare('PRAGMA table_info(daily_tasks)').all().map((c) => c.name);
+  if (cols.includes('slot')) return;
+  const keep = ['id', 'series_id', 'date', 'completed', 'completed_at', 'created_at', 'origin', 'removed_at'];
+  db.transaction(() => {
+    const before = db.prepare('SELECT COUNT(*) c, SUM(completed = 1) m FROM daily_tasks').get();
+    db.exec(`
+      CREATE TABLE daily_tasks_slots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        series_id INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+        date TEXT NOT NULL,
+        completed INTEGER DEFAULT 0,
+        completed_at TEXT,
+        created_at TEXT,
+        origin TEXT,
+        removed_at TEXT,
+        slot TEXT NOT NULL DEFAULT '',
+        UNIQUE(series_id, date, slot)
+      );
+      INSERT INTO daily_tasks_slots (${keep.join(', ')}, slot) SELECT ${keep.join(', ')}, '' FROM daily_tasks;
+      DROP TABLE daily_tasks;
+      ALTER TABLE daily_tasks_slots RENAME TO daily_tasks;
+      CREATE INDEX IF NOT EXISTS idx_daily_tasks_date ON daily_tasks(date);
+    `);
+    const after = db.prepare('SELECT COUNT(*) c, SUM(completed = 1) m FROM daily_tasks').get();
+    if (before.c !== after.c || (before.m || 0) !== (after.m || 0)) {
+      throw new Error(`dose-slot upgrade invariant failed: rows ${before.c} → ${after.c}, marked ${before.m} → ${after.m}`);
+    }
+  })();
+}
+
+// Idempotent, every boot: (1) a single `time` set before `times` existed
+// becomes a one-entry `times`; (2) an untimed row ('' slot) of a series that now
+// has times moves into its first time, unless that dose already exists — so a
+// day never shows the old untimed card next to the timed ones.
+function backfillDoseTimes(db) {
+  for (const table of ['phases', 'series']) {
+    db.prepare(`UPDATE ${table} SET times = json_array(time)
+      WHERE time IS NOT NULL AND time <> '' AND (times IS NULL OR times = '[]')`).run();
+  }
+  db.prepare(`UPDATE daily_tasks SET slot = (SELECT json_extract(s.times, '$[0]') FROM series s WHERE s.id = daily_tasks.series_id)
+    WHERE slot = ''
+      AND EXISTS (SELECT 1 FROM series s WHERE s.id = daily_tasks.series_id AND json_array_length(s.times) > 0)
+      AND NOT EXISTS (SELECT 1 FROM daily_tasks d2 JOIN series s ON s.id = daily_tasks.series_id
+        WHERE d2.series_id = daily_tasks.series_id AND d2.date = daily_tasks.date
+          AND d2.slot = json_extract(s.times, '$[0]'))`).run();
+}
+
+// Model callers may hand a list (a view shape fed back) or the validator's JSON
+// string; the column always gets a JSON string.
+function timesJson(v) {
+  if (v === undefined || v === null || v === '') return '[]';
+  return typeof v === 'string' ? v : JSON.stringify(v);
+}
+
+function parseTimes(v) {
+  try { const t = JSON.parse(v || '[]'); return Array.isArray(t) ? t : []; } catch { return []; }
+}
+
+// The doses of a day: one per time, or a single untimed dose ('').
+function doseSlots(s) {
+  let t = [];
+  try { t = JSON.parse(s.times || '[]'); } catch {}
+  return Array.isArray(t) && t.length ? t : [''];
 }
 
 // One-off data fix (idempotent, so it simply runs at every startup): rows
@@ -151,13 +228,13 @@ function createModel(db) {
     const result = db.prepare(`
       INSERT INTO series (
         template_id, phase_id, seq, title, category, icon, sort_order,
-        weekdays, repeat_every, repeat_unit, periods, time, total_count, alert_penultimate, alert_last,
+        weekdays, repeat_every, repeat_unit, periods, times, total_count, alert_penultimate, alert_last,
         start_date, end_date, status, source_series_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
     `).run(
       templateId, phase.id, seq, phase.title, phase.category, phase.icon || '✅',
       phase.sort_order ?? phase.phase_order ?? 0, phase.weekdays || '[0,1,2,3,4,5,6]',
-      phase.repeat_every || 1, phase.repeat_unit || 'week', phase.periods || '[]', phase.time || null,
+      phase.repeat_every || 1, phase.repeat_unit || 'week', phase.periods || '[]', phase.times || '[]',
       phase.total_count ?? null, phase.alert_penultimate ?? null, phase.alert_last ?? null,
       start_date, end_date, source_series_id,
     );
@@ -180,12 +257,12 @@ function createModel(db) {
 
       const phaseId = db.prepare(`
         INSERT INTO phases (template_id, phase_order, title, category, icon,
-          weekdays, repeat_every, repeat_unit, periods, time, total_count, alert_penultimate, alert_last)
+          weekdays, repeat_every, repeat_unit, periods, times, total_count, alert_penultimate, alert_last)
         VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         tmplId, data.title, data.category, data.icon || '✅',
         data.weekdays || '[0,1,2,3,4,5,6]', Number(data.repeat_every) || 1, data.repeat_unit || 'week',
-        data.periods || '[]', data.time || null,
+        data.periods || '[]', timesJson(data.times),
         data.total_count || null, data.alert_penultimate || null, data.alert_last || null,
       ).lastInsertRowid;
 
@@ -228,13 +305,13 @@ function createModel(db) {
       withDates.forEach((p, i) => {
         const phaseId = db.prepare(`
           INSERT INTO phases (template_id, phase_order, title, category, icon,
-            weekdays, repeat_every, repeat_unit, periods, time, total_count, duration_days, alert_penultimate, alert_last)
+            weekdays, repeat_every, repeat_unit, periods, times, total_count, duration_days, alert_penultimate, alert_last)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           tmplId, i, p.title, p.category, p.icon || '💊',
           typeof p.weekdays === 'string' ? p.weekdays : JSON.stringify(p.weekdays || [0, 1, 2, 3, 4, 5, 6]),
           Number(p.repeat_every) || 1, p.repeat_unit || 'week',
-          typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []), p.time || null,
+          typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []), timesJson(p.times),
           p.total_count || null, Number(p.duration_days) || null,
           p.alert_penultimate || null, p.alert_last || null,
         ).lastInsertRowid;
@@ -359,7 +436,7 @@ function createModel(db) {
   // ── Lazy generation: one daily_task per active series in its window ──
   function generateDailyTasks(date) {
     const seriesList = db.prepare("SELECT * FROM series WHERE status = 'active'").all();
-    const insert = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'auto')");
+    const insert = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, slot, created_at, origin) VALUES (?, ?, ?, ?, 'auto')");
     const tx = db.transaction(() => {
       for (const s of seriesList) {
         if (s.start_date && date < s.start_date) continue;
@@ -369,7 +446,7 @@ function createModel(db) {
         // doses are all marked, even across skipped days. The ceiling lives in
         // toggleTask (refuse marking beyond total_count) — counting generated
         // days here would freeze a box whenever a dose day was skipped.
-        insert.run(s.id, date, nowIso());
+        for (const slot of doseSlots(s)) insert.run(s.id, date, slot, nowIso());
       }
     });
     tx();
@@ -379,10 +456,13 @@ function createModel(db) {
   // that date. Counting per-date (not the series' global total) makes the
   // counter progress day by day (01→1/5, 05→5/5) instead of repeating the
   // same number on every day.
-  function countUpTo(seriesId, date) {
+  // With several doses a day, the dose's own time is the tie-breaker: the 15:00
+  // card counts the 09:00 dose of the same day, not the 23:00 one.
+  function countUpTo(seriesId, date, slot = '') {
     return db.prepare(
-      'SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks WHERE series_id = ? AND completed = 1 AND removed_at IS NULL AND date <= ?'
-    ).get(seriesId, seriesId, date).c;
+      `SELECT COUNT(*) + (SELECT count_offset FROM series WHERE id = ?) c FROM daily_tasks
+       WHERE series_id = ? AND completed = 1 AND removed_at IS NULL AND (date < ? OR (date = ? AND slot <= ?))`
+    ).get(seriesId, seriesId, date, date, slot || '\uffff').c;
   }
 
   // ── Map a joined daily_task+series+template row to the frozen task shape ──
@@ -391,7 +471,7 @@ function createModel(db) {
     const isProto = r.tkind === 'protocol';
     // Count series: the displayed counter is cumulative up to this day.
     const shownCount = (!isProto && r.total_count != null)
-      ? countUpTo(r.series_id, date)
+      ? countUpTo(r.series_id, date, r.slot)
       : r.completed_count;
     if (isProto && r.end_date) {
       const daysLeft = dayCount(date, r.end_date) - 1;
@@ -417,7 +497,7 @@ function createModel(db) {
       icon: r.icon,
       sort_order: r.sort_order,
       periods: r.periods,
-      time: r.time || null,
+      time: r.slot || null,
       total_count: r.total_count,
       completed_count: shownCount,
       alert_penultimate: r.alert_penultimate,
@@ -431,8 +511,8 @@ function createModel(db) {
   }
 
   const TASK_SELECT = `
-    SELECT dt.id, dt.series_id, dt.date, dt.completed, dt.completed_at,
-      s.title, s.category, s.icon, s.sort_order, s.periods, s.time, s.total_count, s.completed_count,
+    SELECT dt.id, dt.series_id, dt.date, dt.slot, dt.completed, dt.completed_at,
+      s.title, s.category, s.icon, s.sort_order, s.periods, s.total_count, s.completed_count,
       s.alert_penultimate, s.alert_last, s.end_date, s.template_id, t.kind AS tkind,
       t.alert_penultimate AS t_alert_penultimate, t.alert_last AS t_alert_last,
       s.phase_id = (SELECT id FROM phases WHERE template_id = s.template_id
@@ -443,10 +523,10 @@ function createModel(db) {
     JOIN templates t ON t.id = s.template_id
     LEFT JOIN series src ON src.id = s.source_series_id`;
 
-  // Items with a set time come first, in clock order; the rest keep the
+  // Doses with a set time come first, in clock order; untimed ones keep the
   // admin's manual order after them.
   function getTasksView(date) {
-    const rows = db.prepare(`${TASK_SELECT} WHERE dt.date = ? AND t.active = 1 AND dt.removed_at IS NULL ORDER BY s.time IS NULL, s.time, s.sort_order, s.id`).all(date);
+    const rows = db.prepare(`${TASK_SELECT} WHERE dt.date = ? AND t.active = 1 AND dt.removed_at IS NULL ORDER BY dt.slot = '', dt.slot, s.sort_order, s.id`).all(date);
     return rows.map((r) => mapTaskRow(r, date));
   }
 
@@ -494,7 +574,7 @@ function createModel(db) {
             type: orig.kind === 'protocol' ? 'protocol' : 'item',
             title: orig.kind === 'protocol' ? orig.name : origPhase.title,
             icon: origPhase.icon || result.icon,
-            start_date: nextBoxStart(orig.id, origPhase, serie.source_series_id, today || row.date),
+            start_date: nextBoxStart(orig.id, origPhase, serie.source_series_id, today || row.date).date,
           };
         }
       }
@@ -525,7 +605,8 @@ function createModel(db) {
       repeat_every: phase.repeat_every,
       repeat_unit: phase.repeat_unit,
       periods: phase.periods,
-      time: phase.time || null,
+      times: parseTimes(phase.times),
+      time: parseTimes(phase.times)[0] || null,
       total_count: phase.total_count,
       completed_count: cur ? cur.completed_count : 0,
       alert_penultimate: phase.alert_penultimate,
@@ -579,7 +660,8 @@ function createModel(db) {
         repeat_every: ph.repeat_every,
         repeat_unit: ph.repeat_unit,
         periods: ph.periods,
-        time: ph.time || null,
+        times: parseTimes(ph.times),
+        time: parseTimes(ph.times)[0] || null,
         total_count: ph.total_count,
         completed_count: s ? s.completed_count : 0,
         alert_penultimate: ph.alert_penultimate,
@@ -653,7 +735,7 @@ function createModel(db) {
       WHERE (start_date IS NULL OR start_date <= ?)
         AND (end_date IS NULL OR end_date >= ? OR status = 'completed')
     `).all(dateTo, dateFrom);
-    const insert = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'auto')");
+    const insert = db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, slot, created_at, origin) VALUES (?, ?, ?, ?, 'auto')");
 
     db.transaction(() => {
       for (const s of seriesList) {
@@ -668,11 +750,19 @@ function createModel(db) {
           const maxTaskDate = db.prepare('SELECT MAX(date) AS max_date FROM daily_tasks WHERE series_id = ? AND removed_at IS NULL').get(s.id).max_date;
           if (maxTaskDate && maxTaskDate < end) end = maxTaskDate;
         }
+        // A closed box's last day keeps only the doses up to its last one: the
+        // later doses of that day came out of the next box.
+        const lastSlot = s.status === 'completed' && s.total_count != null
+          ? db.prepare('SELECT MAX(slot) m FROM daily_tasks WHERE series_id = ? AND date = ? AND removed_at IS NULL').get(s.id, end).m
+          : null;
 
         if (start > end) continue;
         for (let cur = start; cur <= end; cur = addDays(cur, 1)) {
           if (!occursOn(s, cur)) continue;
-          insert.run(s.id, cur, nowIso());
+          for (const slot of doseSlots(s)) {
+            if (cur === end && lastSlot != null && slot > lastSlot) continue;
+            insert.run(s.id, cur, slot, nowIso());
+          }
         }
       }
     })();
@@ -695,7 +785,7 @@ function createModel(db) {
       s.category,
       s.icon,
       s.periods,
-      s.time,
+      dt.slot,
       s.alert_penultimate,
       s.alert_last,
       t.id AS template_id,
@@ -731,7 +821,7 @@ function createModel(db) {
     const rows = db.prepare(`
       ${HISTORY_SELECT}
       WHERE ${clauses.join(' AND ')}
-      ORDER BY dt.date ASC, s.sort_order ASC, dt.id ASC
+      ORDER BY dt.date ASC, dt.slot ASC, s.sort_order ASC, dt.id ASC
     `).all(...params);
 
     return rows.map((r) => ({
@@ -747,7 +837,7 @@ function createModel(db) {
       category: r.category,
       icon: r.icon,
       periods: r.periods,
-      time: r.time || null,
+      time: r.slot || null,
       total_count: r.total_count,
       completed_count: r.completed_count,
       seq: r.seq,
@@ -863,7 +953,7 @@ function createModel(db) {
       repeat_every: data.repeat_every !== undefined ? Number(data.repeat_every) : phase.repeat_every,
       repeat_unit: pick(data.repeat_unit, phase.repeat_unit),
       periods: pick(data.periods, phase.periods),
-      time: data.time !== undefined ? (data.time || null) : phase.time,
+      times: data.times === undefined ? (phase.times || '[]') : timesJson(data.times),
       total_count: data.total_count !== undefined ? (data.total_count || null) : phase.total_count,
       alert_penultimate: data.alert_penultimate !== undefined ? (data.alert_penultimate || null) : phase.alert_penultimate,
       alert_last: data.alert_last !== undefined ? (data.alert_last || null) : phase.alert_last,
@@ -882,15 +972,15 @@ function createModel(db) {
         id,
       );
       db.prepare(`UPDATE phases SET title=?, category=?, icon=?, weekdays=?, repeat_every=?, repeat_unit=?,
-        periods=?, time=?, total_count=?, alert_penultimate=?, alert_last=? WHERE id=?`).run(
+        periods=?, times=?, total_count=?, alert_penultimate=?, alert_last=? WHERE id=?`).run(
         next.title, next.category, next.icon, next.weekdays, next.repeat_every, next.repeat_unit,
-        next.periods, next.time, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
+        next.periods, next.times, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
       );
       reflectOnActiveSeries(id, {
         title: next.title, category: next.category, icon: next.icon,
         sort_order: pick(data.sort_order, t.sort_order),
         weekdays: next.weekdays, repeat_every: next.repeat_every, repeat_unit: next.repeat_unit,
-        periods: next.periods, time: next.time, total_count: next.total_count,
+        periods: next.periods, times: next.times, total_count: next.total_count,
         alert_penultimate: next.alert_penultimate, alert_last: next.alert_last,
       });
       const norm = (v) => (v === '' || v === null ? null : v);
@@ -904,8 +994,12 @@ function createModel(db) {
       for (const s of targets) {
         // Rule changed (weekdays/frequency): drop pending tasks from today on
         // that no longer fit it. Past unmarked days stay as missed history.
-        const pending = db.prepare('SELECT id, date FROM daily_tasks WHERE series_id=? AND completed=0 AND removed_at IS NULL AND date>=?').all(s.id, from);
-        for (const dt of pending) if (!occursOn(s, dt.date)) db.prepare('DELETE FROM daily_tasks WHERE id=?').run(dt.id);
+        // Same for a dose time taken out of the list. Marked doses always stay.
+        const pending = db.prepare('SELECT id, date, slot FROM daily_tasks WHERE series_id=? AND completed=0 AND removed_at IS NULL AND date>=?').all(s.id, from);
+        const slots = doseSlots(s);
+        for (const dt of pending) {
+          if (!occursOn(s, dt.date) || !slots.includes(dt.slot)) db.prepare('DELETE FROM daily_tasks WHERE id=?').run(dt.id);
+        }
         // Manual "Já completou": keep the marked tasks as they are, store the
         // difference as an offset on this cartela.
         if (data.completed_count !== undefined) {
@@ -971,12 +1065,12 @@ function createModel(db) {
         const withDates = computePhaseDates(start, data.phases, repeat);
         withDates.forEach((p, i) => {
           const phaseId = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon,
-            weekdays, repeat_every, repeat_unit, periods, time, total_count, duration_days, alert_penultimate, alert_last)
+            weekdays, repeat_every, repeat_unit, periods, times, total_count, duration_days, alert_penultimate, alert_last)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
             id, i, p.title, p.category, p.icon || '💊',
             typeof p.weekdays === 'string' ? p.weekdays : JSON.stringify(p.weekdays || [0, 1, 2, 3, 4, 5, 6]),
             Number(p.repeat_every) || 1, p.repeat_unit || 'week',
-            typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []), p.time || null,
+            typeof p.periods === 'string' ? p.periods : JSON.stringify(p.periods || []), timesJson(p.times),
             p.total_count || null, Number(p.duration_days) || null,
             p.alert_penultimate || null, p.alert_last || null,
           ).lastInsertRowid;
@@ -1016,9 +1110,9 @@ function createModel(db) {
       // Phase 1: blank clone.
       const secondStart = addDays(today, firstDur);
       const secondEnd = repeat ? null : addDays(secondStart, secondDur - 1);
-      const p2 = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon, weekdays, periods, time, duration_days)
+      const p2 = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon, weekdays, periods, times, duration_days)
         VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)`).run(
-        id, phase.title, phase.category, phase.icon, phase.weekdays, phase.periods, phase.time || null, secondDur,
+        id, phase.title, phase.category, phase.icon, phase.weekdays, phase.periods, phase.times || '[]', secondDur,
       ).lastInsertRowid;
       const phase2 = db.prepare('SELECT * FROM phases WHERE id = ?').get(p2);
       spawnSeries(id, phase2, { seq: 1, start_date: secondStart, end_date: secondEnd });
@@ -1051,14 +1145,14 @@ function createModel(db) {
       const next = {
         title: f.title || phase.title, category: f.category || phase.category, icon: f.icon || phase.icon,
         weekdays: str(f.weekdays, phase.weekdays), periods: str(f.periods, phase.periods),
-        time: f.time === undefined ? phase.time : (f.time || null),
+        times: str(f.times, phase.times || '[]'),
         repeat_every: Number(f.repeat_every) || phase.repeat_every, repeat_unit: f.repeat_unit || phase.repeat_unit,
         total_count: opt(f.total_count, phase.total_count),
         alert_penultimate: opt(f.alert_penultimate, phase.alert_penultimate), alert_last: opt(f.alert_last, phase.alert_last),
       };
       db.prepare(`UPDATE phases SET phase_order = 0, duration_days = ?, title = ?, category = ?, icon = ?, weekdays = ?,
-        periods = ?, time = ?, repeat_every = ?, repeat_unit = ?, total_count = ?, alert_penultimate = ?, alert_last = ? WHERE id = ?`).run(
-        Number(f.duration_days) || 1, next.title, next.category, next.icon, next.weekdays, next.periods, next.time,
+        periods = ?, times = ?, repeat_every = ?, repeat_unit = ?, total_count = ?, alert_penultimate = ?, alert_last = ? WHERE id = ?`).run(
+        Number(f.duration_days) || 1, next.title, next.category, next.icon, next.weekdays, next.periods, next.times,
         next.repeat_every, next.repeat_unit, next.total_count, next.alert_penultimate, next.alert_last, phase.id,
       );
       reflectOnActiveSeries(id, { ...next, start_date: f.start_date, end_date: f.end_date });
@@ -1069,10 +1163,10 @@ function createModel(db) {
       }
       withDates.slice(1).forEach((p, i) => {
         const phaseId = db.prepare(`INSERT INTO phases (template_id, phase_order, title, category, icon,
-          weekdays, repeat_every, repeat_unit, periods, time, total_count, duration_days, alert_penultimate, alert_last)
+          weekdays, repeat_every, repeat_unit, periods, times, total_count, duration_days, alert_penultimate, alert_last)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
           id, i + 1, p.title, p.category, p.icon || '💊', str(p.weekdays, '[0,1,2,3,4,5,6]'),
-          Number(p.repeat_every) || 1, p.repeat_unit || 'week', str(p.periods, '[]'), p.time || null,
+          Number(p.repeat_every) || 1, p.repeat_unit || 'week', str(p.periods, '[]'), str(p.times, '[]'),
           p.total_count || null, Number(p.duration_days) || null, p.alert_penultimate || null, p.alert_last || null,
         ).lastInsertRowid;
         spawnSeries(id, db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId), { seq: 1, start_date: p.start_date, end_date: p.end_date });
@@ -1088,17 +1182,18 @@ function createModel(db) {
   // ── Occurrence governance (admin "Histórico"): every daily_task of a
   // template, with when it was created, whether it fits the series' current
   // rule, and soft-removal. Counting always goes through recount/reconcile. ──
-  function fitsSeries(s, date) {
-    return (!s.start_date || date >= s.start_date) && (!s.end_date || date <= s.end_date) && occursOn(s, date);
+  function fitsSeries(s, date, slot) {
+    return (!s.start_date || date >= s.start_date) && (!s.end_date || date <= s.end_date) && occursOn(s, date)
+      && (slot === undefined || doseSlots(s).includes(slot));
   }
   function occurrenceShape(r, s) {
     return {
-      id: r.id, date: r.date, completed: r.completed, completed_at: r.completed_at,
+      id: r.id, date: r.date, time: r.slot || null, completed: r.completed, completed_at: r.completed_at,
       created_at: r.created_at, origin: r.origin || 'auto', removed_at: r.removed_at,
       series_id: s.id, seq: s.seq, series_status: s.status, total_count: s.total_count,
       // A dose the rule generated and the person took was on the rule of its
       // time: changing the rule later doesn't make that history "off rule".
-      fits_rule: (!!r.completed && r.origin !== 'manual') || fitsSeries(s, r.date),
+      fits_rule: (!!r.completed && r.origin !== 'manual') || fitsSeries(s, r.date, r.slot || ''),
     };
   }
   function getOccurrences(templateId, { from = null, to = null } = {}) {
@@ -1109,17 +1204,19 @@ function createModel(db) {
     if (from) { clauses.push('dt.date >= ?'); params.push(from); }
     if (to) { clauses.push('dt.date <= ?'); params.push(to); }
     return db.prepare(`SELECT dt.* FROM daily_tasks dt JOIN series s ON s.id = dt.series_id
-      WHERE ${clauses.join(' AND ')} ORDER BY dt.date DESC, dt.id DESC`).all(...params)
+      WHERE ${clauses.join(' AND ')} ORDER BY dt.date DESC, dt.slot DESC, dt.id DESC`).all(...params)
       .map((r) => occurrenceShape(r, series.get(r.series_id)));
   }
   function getOccurrence(dailyId) {
     const r = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
     return r ? occurrenceShape(r, db.prepare('SELECT * FROM series WHERE id = ?').get(r.series_id)) : null;
   }
-  // Add a day by hand to the active series that covers the date. A plain item
+  // Add a dose by hand to the active series that covers the date. A plain item
   // has a single active series and accepts days outside its window; a protocol's
-  // date must fall in a phase. Adding a removed day again brings it back.
-  function addOccurrence(templateId, date) {
+  // date must fall in a phase. Adding a removed dose again brings it back.
+  // `time` picks the dose; without it, the first of the day's doses still
+  // missing (an item without times has a single untimed dose).
+  function addOccurrence(templateId, date, time = null) {
     const active = "SELECT * FROM series WHERE template_id = ? AND status = 'active'";
     const latest = 'ORDER BY seq DESC, id DESC LIMIT 1';
     const t = db.prepare('SELECT kind FROM templates WHERE id = ?').get(templateId);
@@ -1127,7 +1224,9 @@ function createModel(db) {
       .get(templateId, date, date)
       || (t && t.kind !== 'protocol' ? db.prepare(`${active} ${latest}`).get(templateId) : null);
     if (!s) return { ok: false, code: 'no_series', error: 'no active series covers this date' };
-    const existing = db.prepare('SELECT * FROM daily_tasks WHERE series_id = ? AND date = ?').get(s.id, date);
+    const rowAt = (slot) => db.prepare('SELECT * FROM daily_tasks WHERE series_id = ? AND date = ? AND slot = ?').get(s.id, date, slot);
+    const slot = time || doseSlots(s).find((x) => { const r = rowAt(x); return !r || r.removed_at; }) || doseSlots(s)[0];
+    const existing = rowAt(slot);
     if (existing && !existing.removed_at) return { ok: false, code: 'exists', error: 'occurrence already exists for this date' };
     if (existing) {
       const back = removeOccurrence(existing.id, false);
@@ -1135,32 +1234,34 @@ function createModel(db) {
       db.prepare("UPDATE daily_tasks SET origin = 'manual' WHERE id = ?").run(existing.id);
       return { ok: true, occurrence: getOccurrence(existing.id) };
     }
-    const r = db.prepare("INSERT INTO daily_tasks (series_id, date, created_at, origin) VALUES (?, ?, ?, 'manual')")
-      .run(s.id, date, nowIso());
+    const r = db.prepare("INSERT INTO daily_tasks (series_id, date, slot, created_at, origin) VALUES (?, ?, ?, ?, 'manual')")
+      .run(s.id, date, slot, nowIso());
     return { ok: true, occurrence: getOccurrence(r.lastInsertRowid) };
   }
   // Move one occurrence to another day. The count is by marked rows, not dates,
   // so nothing recounts. `today` keeps a taken dose out of the future.
-  function moveOccurrence(dailyId, date, today) {
+  // `time` moves it to another dose of the day; without it the dose keeps its time.
+  function moveOccurrence(dailyId, date, today, time) {
     const r = db.prepare('SELECT * FROM daily_tasks WHERE id = ?').get(dailyId);
     if (!r) return null;
-    if (r.date === date) return getOccurrence(dailyId);
+    const slot = time === undefined || time === null ? r.slot : time;
+    if (r.date === date && r.slot === slot) return getOccurrence(dailyId);
     if (r.removed_at) return { code: 'removed', error: 'occurrence is removed: restore it first' };
     if (r.completed && date > today) return { code: 'future_done', error: 'a marked dose cannot move to the future' };
     const s = db.prepare('SELECT * FROM series WHERE id = ?').get(r.series_id);
     const clash = db.prepare(`SELECT 1 FROM daily_tasks dt JOIN series s ON s.id = dt.series_id
-      WHERE s.template_id = ? AND dt.date = ? AND dt.removed_at IS NULL`).get(s.template_id, date);
+      WHERE s.template_id = ? AND dt.date = ? AND dt.slot = ? AND dt.removed_at IS NULL`).get(s.template_id, date, slot);
     if (clash) return { code: 'exists', error: 'occurrence already exists for this date' };
-    const tombstone = db.prepare('SELECT * FROM daily_tasks WHERE series_id = ? AND date = ?').get(r.series_id, date);
+    const tombstone = db.prepare('SELECT * FROM daily_tasks WHERE series_id = ? AND date = ? AND slot = ?').get(r.series_id, date, slot);
     if (tombstone && tombstone.completed) return { code: 'removed_dose', error: 'a removed dose is on this date: restore it first' };
     db.transaction(() => {
       if (tombstone) db.prepare('DELETE FROM daily_tasks WHERE id = ?').run(tombstone.id);
-      db.prepare("UPDATE daily_tasks SET date = ?, origin = 'manual' WHERE id = ?").run(date, dailyId);
-      // Days are generated lazily: without this tombstone the old rule day comes back.
-      if (fitsSeries(s, r.date)) {
+      db.prepare("UPDATE daily_tasks SET date = ?, slot = ?, origin = 'manual' WHERE id = ?").run(date, slot, dailyId);
+      // Days are generated lazily: without this tombstone the old rule dose comes back.
+      if (fitsSeries(s, r.date, r.slot)) {
         const stamp = nowIso();
-        db.prepare("INSERT INTO daily_tasks (series_id, date, created_at, origin, removed_at) VALUES (?, ?, ?, 'auto', ?)")
-          .run(r.series_id, r.date, stamp, stamp);
+        db.prepare("INSERT INTO daily_tasks (series_id, date, slot, created_at, origin, removed_at) VALUES (?, ?, ?, ?, 'auto', ?)")
+          .run(r.series_id, r.date, r.slot, stamp, stamp);
       }
     })();
     return getOccurrence(dailyId);
@@ -1221,14 +1322,21 @@ function createModel(db) {
   function nextBoxStart(origId, phase, sourceSeriesId, today) {
     const orig = db.prepare('SELECT kind FROM templates WHERE id = ?').get(origId);
     const prev = sourceSeriesId && db.prepare('SELECT * FROM series WHERE id = ?').get(sourceSeriesId);
-    if (!orig || orig.kind === 'protocol' || !prev || prev.template_id !== origId) return today;
-    const last = db.prepare(
-      'SELECT MAX(date) d FROM daily_tasks WHERE series_id = ? AND completed = 1 AND removed_at IS NULL'
-    ).get(prev.id).d;
+    if (!orig || orig.kind === 'protocol' || !prev || prev.template_id !== origId) return { date: today, skipSlots: [] };
+    const lastRow = db.prepare(
+      'SELECT date d, slot FROM daily_tasks WHERE series_id = ? AND completed = 1 AND removed_at IS NULL ORDER BY date DESC, slot DESC LIMIT 1'
+    ).get(prev.id);
+    const last = lastRow && lastRow.d;
     const rule = { ...phase, start_date: prev.start_date, created_at: prev.created_at };
+    // Several doses a day: the box ran out mid-day, so the new one takes that
+    // day's later doses (the earlier ones came out of the old box — skipSlots).
+    if (last && last >= today && lastRow.slot && occursOn(rule, last)) {
+      const later = doseSlots(phase).filter((x) => x > lastRow.slot);
+      if (later.length) return { date: last, skipSlots: doseSlots(phase).filter((x) => x <= lastRow.slot) };
+    }
     let d = last && last >= today ? addDays(last, 1) : today;
-    for (let i = 0; i < 3660; i++, d = addDays(d, 1)) if (occursOn(rule, d)) return d;
-    return today;
+    for (let i = 0; i < 3660; i++, d = addDays(d, 1)) if (occursOn(rule, d)) return { date: d, skipSlots: [] };
+    return { date: today, skipSlots: [] };
   }
 
   // ── "Comprei": start a brand-new series of the original template ──
@@ -1251,7 +1359,15 @@ function createModel(db) {
       if (!alreadyActive) {
         const phase = db.prepare('SELECT * FROM phases WHERE template_id = ? ORDER BY phase_order LIMIT 1').get(origId);
         const nextSeq = (db.prepare('SELECT MAX(seq) m FROM series WHERE template_id = ?').get(origId).m || 0) + 1;
-        spawnSeries(origId, phase, { seq: nextSeq, start_date: nextBoxStart(origId, phase, fu.source_series_id, today), end_date: null });
+        const start = nextBoxStart(origId, phase, fu.source_series_id, today);
+        const newId = spawnSeries(origId, phase, { seq: nextSeq, start_date: start.date, end_date: null });
+        // Doses of the start day already taken from the old box: tombstones keep
+        // the lazy generation from offering them again.
+        const stamp = nowIso();
+        for (const slot of start.skipSlots) {
+          db.prepare("INSERT OR IGNORE INTO daily_tasks (series_id, date, slot, created_at, origin, removed_at) VALUES (?, ?, ?, ?, 'auto', ?)")
+            .run(newId, start.date, slot, stamp, stamp);
+        }
       }
       // The follow-up series stays completed (drops out of generation).
       db.prepare("UPDATE series SET status = 'completed', completed_at = COALESCE(completed_at, ?) WHERE id = ?")

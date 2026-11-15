@@ -4,12 +4,14 @@
 // /integration/v1 (bearer token) so both expose the same contract.
 const {
   getOccurrences,
+  getOccurrence,
   addOccurrence,
   moveOccurrence,
   setOccurrenceCompleted,
   removeOccurrence,
   pruneOffRule,
 } = require('../db');
+const { normalizeHHMM } = require('../lib/validators');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Format AND a real calendar day (rejects 2026-02-31, 2026-13-45).
@@ -33,7 +35,9 @@ function mountOccurrences(router, guard) {
   router.post('/items/:id/occurrences', guard, (req, res) => {
     const date = req.body && req.body.date;
     if (!isDate(date)) return res.status(400).json({ error: 'date must be a valid YYYY-MM-DD day' });
-    const result = addOccurrence(Number(req.params.id), date);
+    const time = req.body.time;
+    if (time !== undefined && time !== null && !normalizeHHMM(time)) return res.status(400).json({ error: 'time must be HH:MM (00:00-23:59) or null' });
+    const result = addOccurrence(Number(req.params.id), date, time ? normalizeHHMM(time) : null);
     if (!result.ok) return res.status(409).json(result);
     res.status(201).json(result.occurrence);
   });
@@ -46,15 +50,22 @@ function mountOccurrences(router, guard) {
   });
 
   router.put('/occurrences/:id', guard, (req, res) => {
-    const { completed, removed, date } = req.body || {};
+    const { completed, removed, date, time } = req.body || {};
     const isBool = (v) => v === true || v === false || v === 1 || v === 0;
-    if (completed === undefined && removed === undefined && date === undefined) return res.status(400).json({ error: 'send completed, removed (boolean) or date' });
+    if (completed === undefined && removed === undefined && date === undefined && time === undefined) return res.status(400).json({ error: 'send completed, removed (boolean), date or time' });
     if (date !== undefined && !isDate(date)) return res.status(400).json({ error: 'date must be a valid YYYY-MM-DD day' });
+    if (time !== undefined && !normalizeHHMM(time)) return res.status(400).json({ error: 'time must be HH:MM (00:00-23:59)' });
     if ((completed !== undefined && !isBool(completed)) || (removed !== undefined && !isBool(removed))) {
       return res.status(400).json({ error: 'completed/removed must be boolean' });
     }
     const id = Number(req.params.id);
-    let occ = date !== undefined ? moveOccurrence(id, date) : null;
+    let moveTo = date;
+    if (moveTo === undefined && time !== undefined) {
+      const cur = getOccurrence(id);
+      if (!cur) return res.status(404).json({ error: 'Occurrence not found' });
+      moveTo = cur.date;
+    }
+    let occ = moveTo !== undefined ? moveOccurrence(id, moveTo, time === undefined ? undefined : normalizeHHMM(time)) : null;
     if (occ && occ.error) return res.status(409).json(occ);
     if (removed !== undefined) occ = removeOccurrence(id, !!removed);
     if (occ && occ.error) return res.status(409).json(occ);

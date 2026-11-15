@@ -168,7 +168,8 @@ type Item = {
   repeat_every: number;               // 1..365, default 1 — "every N <repeat_unit>"
   repeat_unit: "day" | "week" | "month"; // default "week"; counted from start_date (see 9.3.1)
   periods: string;                    // JSON array of "morning"|"afternoon"|"night", [] = day-long
-  time: string | null;                // optional set time "HH:MM" (24h, "8:05" is stored as "08:05"); null = no set time (see 9.13)
+  times: string[];                    // dose times of the day, "HH:MM" (24h), sorted; [] = one untimed dose per day (see 9.13)
+  time: string | null;                // first of `times`, or null — the v1.2 single-time field, kept for compatibility
   total_count: number | null;         // if set, item becomes a counter: integer 1..100000 (JSON number); 0, "", numeric strings, fractions and out-of-range values are rejected with 400
   completed_count: number;            // counter progress (marked tasks + manual correction). PUT /items/:id {completed_count} corrects it on the current cartela; marked tasks are kept, and lowering it below total reopens a closed cartela
   alert_penultimate: string | null;   // shown at total_count - 1
@@ -222,8 +223,10 @@ type DailyTask = {
   date: string;                       // "YYYY-MM-DD" in weather_tz
   completed: 0 | 1;
   completed_at: string | null;        // SQLite datetime
+  time: string | null;                // the time of THIS dose ("HH:MM"), or null for an untimed item
   // …plus all item fields (title, category, icon, etc.) joined in
 };
+// An item with 3 times has 3 tasks per day (same series_id, same date, different id and time).
 ```
 
 ### Settings
@@ -285,7 +288,7 @@ Returns all daily tasks for the given date (default: today in `weather_tz`). Laz
     "category": "supplement",
     "icon": "☀️",
     "periods": "[\"morning\"]",
-    "time": "08:00",
+    "time": "09:00",
     "weekdays": "[0,1,2,3,4,5,6]",
     "...": "plus all other item fields"
   }
@@ -430,7 +433,7 @@ Creates a new standalone item. Body follows the `Item` type; required fields: `t
   "sort_order": 10,
   "weekdays": [1,2,3,4,5],
   "periods": ["night"],
-  "time": "21:00",
+  "times": ["09:00", "15:00", "23:00"],
   "total_count": 30,
   "alert_penultimate": "Penúltimo!",
   "alert_last": "Último — lembrar de comprar",
@@ -510,6 +513,7 @@ Every day of a repeated item (a `daily_tasks` row, here called an *occurrence*),
 type Occurrence = {
   id: number;                         // daily_tasks.id — same id as in /tasks
   date: string;                       // "YYYY-MM-DD"
+  time: string | null;                // the dose's time; null for an untimed item
   completed: 0 | 1;
   completed_at: string | null;
   created_at: string | null;          // when the day was generated/added (null = before 2026-10-31)
@@ -526,11 +530,12 @@ type Occurrence = {
 Newest first. `from`/`to` optional; must be real calendar days (`2026-02-31` → 400). `404` if the item/protocol doesn't exist.
 
 #### `POST /items/:id/occurrences`
-Add a one-off day: `{ "date": "2026-11-04" }`. Goes into the active series that covers that date, with `origin: "manual"`; a plain item also accepts days outside its window. Adding a removed day restores it. **201** with the occurrence. **409** with a `code`: `exists` (day already active), `no_series` (no active series, or a protocol date outside its phases), `closed` / `at_total` (restore refused).
+Add a one-off day: `{ "date": "2026-11-04" }`, or one dose of it: `{ "date": "2026-11-04", "time": "15:00" }`. Without `time`, an item with several dose times gets the first dose of that day still missing. Goes into the active series that covers that date, with `origin: "manual"`; a plain item also accepts days outside its window. Adding a removed day restores it. **201** with the occurrence. **409** with a `code`: `exists` (that dose already active), `no_series` (no active series, or a protocol date outside its phases), `closed` / `at_total` (restore refused).
 
 #### `PUT /occurrences/:id`
 `{ "completed": true|false }` — mark/unmark (same box ceiling and state machine as `/tasks/:id/toggle`); **409** if nothing changed (removed day, or box already at its total).
 `{ "date": "YYYY-MM-DD" }` — move the entry to another day (keeps its mark; becomes `origin: "manual"`). If the old day fits the rule it stays as a removed day, so it isn't generated again. **409** with a `code`: `exists` (date taken), `removed` (restore it first), `future_done` (a marked dose can't go to the future), `removed_dose` (a removed dose is on the target date).
+`{ "time": "HH:MM" }` (alone or with `date`) — move the entry to another dose time; same rules and **409** codes as the date move (`exists` = that dose is taken).
 `{ "removed": true|false }` — remove/restore. Restore is **409** when it would push a box past its total, or when it's an unmarked day of a closed box.
 
 #### `DELETE /occurrences/:id`
@@ -722,8 +727,13 @@ Days are generated lazily: deleting a `daily_tasks` row that still fits the rule
 ### 9.12. Old boxes don't reopen; one "Buy X" per box
 Unmarking or removing a dose of an **older** box while a newer one is in use only fixes that old box's count — it never reopens it (at most one active box per item). Each box spawns at most one "Buy X" follow-up, so restoring a dose can't ask you to buy again.
 
-### 9.13. `time` is optional, one per item
-`time` (`"HH:MM"`, 24h) is optional on items and on each protocol phase; `null` or `""` clears it, and leaving it out of a `PUT` keeps it. One item has at most one time — a medicine taken at 08:00 and 20:00 is two items. On `GET /tasks` timed items come first, in clock order, then the untimed ones by `sort_order`. With `periods: []` a timed item shows only in the period its time falls in (period boundaries come from the `period_*_start` settings). The display shows the time on the card and highlights it once today's time has passed and the task is still unmarked; nothing is pushed or notified. New boxes ("comprei") inherit the item's time; the "Buy X" follow-up has none.
+### 9.13. Dose times: `times`, one task per dose
+`times` (list of `"HH:MM"`, 24h, up to 12) is optional on items and on each protocol phase. Each time is **one dose**: a medicine taken at 09:00, 15:00 and 23:00 is ONE item with `times: ["09:00","15:00","23:00"]`, and `GET /tasks` returns three tasks for it, each with its own `id`, `time` and mark. `[]` means one untimed dose a day (the old behavior). Values are normalized (`"9:00"` → `"09:00"`), sorted and de-duplicated; leaving `times` out of a `PUT` keeps it. `time` (single value, or `null`/`""`) is still accepted and means `times: [time]` / `[]`; sending both is a `400`.
+- **One box for all doses:** with `total_count`, every marked dose counts 1 — a box of 30 at 3 doses a day lasts 10 days and spawns one "Buy X". Each task's `completed_count` is the count up to that dose (the 15:00 card counts the 09:00 dose of the same day). When a box runs out mid-day, "comprei" starts the new box that same day with the remaining doses.
+- **Order and period:** on `GET /tasks` timed doses come first, in clock order, then untimed tasks by `sort_order`. A timed dose shows on the tablet in the period its time falls in (boundaries = the `period_*_start` settings); `periods` only matters for untimed items.
+- **Changing times:** removing a time drops its unmarked doses from today on; marked doses stay as history (with their old time). Adding a time creates its doses from today on.
+- **History/adherence** count per dose: `expected_count` is doses, and `missed_dates` repeats a date once per missed dose; each `/history` row has `time`.
+- The display shows the time on the card and highlights it once today's time has passed and the dose is still unmarked; nothing is pushed or notified. The "Buy X" follow-up has no time.
 
 ---
 
@@ -755,8 +765,8 @@ You have programmatic access to the owner's Daily Screen app (a tablet-based med
 ### Add a daily reminder with weekday filter
 `POST /items` with `weekdays: [1,2,3,4,5]` (Mon-Fri) and appropriate periods.
 
-### Give a medicine a set time
-`PUT /items/{id}` with `{ "time": "08:00" }`; `{ "time": null }` removes it. Two doses a day = two items, each with its own time.
+### Give a medicine its dose times
+`PUT /items/{id}` with `{ "times": ["09:00", "15:00", "23:00"] }` — one task per time each day, one box for all. `{ "times": [] }` goes back to one untimed dose a day.
 
 ### Create a dose-taper protocol
 `POST /protocols` with phases array — each phase has `duration_days` and a full item config (title, category, icon, periods).
@@ -784,6 +794,15 @@ Full API guide: https://github.com/pedroberaldo87/daily-screen/blob/main/docs/20
 ---
 
 ## 11. Changelog
+
+### v1.3 — 2026-11-15
+- **Several doses a day:** new field `times` (list of `"HH:MM"`) on items and
+  protocol phases; one task per time per day, all counting in the same box.
+  `time` stays accepted (= one-entry `times`) and is returned as the first time.
+- Tasks, `/history` rows and occurrences carry the dose's `time`.
+- `POST /items/:id/occurrences` and `PUT /occurrences/:id` accept `time` to pick
+  or move a dose.
+- `/adherence` counts doses, not days.
 
 ### v1.2 — 2026-11-15
 - New optional field `time` (`"HH:MM"` or `null`) on items, protocol phases and

@@ -20,117 +20,203 @@ function freshModel() {
   db.pragma('foreign_keys = ON');
   return { db, m: createModel(db) };
 }
+const THREE = '["09:00","15:00","23:00"]';
+const day = (m, date) => { m.generateDailyTasks(date); return m.getTasksView(date); };
 
 // ── Validation ──
 
-test('time aceita HH:MM e normaliza H:MM para HH:MM', () => {
-  const d = { time: '8:05' };
+test('times: normaliza H:MM, ordena, tira repetido e guarda como texto JSON', () => {
+  const d = { times: ['23:00', '9:00', '15:00', '09:00'] };
   assert.deepEqual(validateItemData(d, false), []);
-  assert.equal(d.time, '08:05');
-  const e = { time: '23:59' };
-  assert.deepEqual(validateItemData(e, false), []);
-  assert.equal(e.time, '23:59');
+  assert.equal(d.times, THREE);
 });
 
-test('time vazio ou null vira null (limpa o horário)', () => {
+test('time (forma antiga, um horário) vira lista de um; null/"" vira lista vazia', () => {
+  const a = { time: '8:05' };
+  assert.deepEqual(validateItemData(a, false), []);
+  assert.equal(a.times, '["08:05"]');
+  assert.equal(a.time, undefined);
   for (const v of ['', null]) {
     const d = { time: v };
     assert.deepEqual(validateItemData(d, false), []);
-    assert.equal(d.time, null);
+    assert.equal(d.times, '[]');
   }
 });
 
-test('time inválido é recusado', () => {
+test('horário inválido, lista inválida ou time+times juntos são recusados', () => {
   for (const v of ['24:00', '12:60', '8h', '0800', '12:5', 800, {}, '<b>1</b>']) {
-    const errs = validateItemData({ time: v }, false);
-    assert.ok(errs.some((e) => e.startsWith('time must be')), `aceitou ${JSON.stringify(v)}`);
+    assert.ok(validateItemData({ times: [v] }, false).some((e) => e.startsWith('time must be')), `aceitou ${JSON.stringify(v)}`);
+    assert.ok(validateItemData({ time: v }, false).some((e) => e.startsWith('time must be')), `aceitou time ${JSON.stringify(v)}`);
   }
+  assert.ok(validateItemData({ times: 'x' }, false).some((e) => e.startsWith('times must be')));
+  assert.ok(validateItemData({ times: Array(13).fill('08:00') }, false).some((e) => e.startsWith('times must be')));
+  assert.ok(validateItemData({ time: '08:00', times: ['09:00'] }, false).includes('send time or times, not both'));
 });
 
-test('time inválido numa fase de protocolo é recusado com o índice da fase', () => {
+test('horário inválido numa fase de protocolo é recusado com o índice da fase', () => {
   const errs = validateProtocolData({
     name: 'P', start_date: '2026-11-10',
-    phases: [{ title: 'F1', category: 'medication', duration_days: 3, time: '25:00' }],
+    phases: [{ title: 'F1', category: 'medication', duration_days: 3, times: ['25:00'] }],
   }, true);
   assert.ok(errs.some((e) => e.startsWith('phases[0]: time must be')), errs.join(' | '));
 });
 
-// ── Model ──
+// ── Model: one card per dose ──
 
-test('createItem grava o horário na fase e na série, e o dia o devolve', () => {
-  const { db, m } = freshModel();
-  const id = m.createItem({ title: 'Losartana', category: 'medication', time: '08:00' });
-  assert.equal(db.prepare('SELECT time FROM phases WHERE template_id = ?').get(id).time, '08:00');
-  assert.equal(db.prepare('SELECT time FROM series WHERE template_id = ?').get(id).time, '08:00');
-  assert.equal(m.getItemView(id).time, '08:00');
-  m.generateDailyTasks('2026-11-15');
-  const [task] = m.getTasksView('2026-11-15');
-  assert.equal(task.time, '08:00');
+test('item com 3 horários gera 3 doses no dia, cada uma com o seu horário', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'Adorlan', category: 'medication', times: THREE });
+  const view = m.getItemView(id);
+  assert.deepEqual(view.times, ['09:00', '15:00', '23:00']);
+  assert.equal(view.time, '09:00');
+  assert.deepEqual(day(m, '2026-11-15').map((t) => [t.title, t.time]),
+    [['Adorlan', '09:00'], ['Adorlan', '15:00'], ['Adorlan', '23:00']]);
 });
 
-test('item sem horário devolve time null', () => {
+test('item sem horário segue com uma dose por dia e time null', () => {
   const { m } = freshModel();
   const id = m.createItem({ title: 'Vitamina D', category: 'supplement' });
-  assert.equal(m.getItemView(id).time, null);
-  m.generateDailyTasks('2026-11-15');
-  assert.equal(m.getTasksView('2026-11-15')[0].time, null);
+  assert.deepEqual(m.getItemView(id).times, []);
+  const tasks = day(m, '2026-11-15');
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].time, null);
 });
 
-test('updateItem muda e limpa o horário, refletindo na série ativa', () => {
-  const { db, m } = freshModel();
-  const id = m.createItem({ title: 'Losartana', category: 'medication', time: '08:00' });
-  m.updateItem(id, { time: '21:30' }, '2026-11-15');
-  assert.equal(m.getItemView(id).time, '21:30');
-  assert.equal(db.prepare("SELECT time FROM series WHERE template_id = ? AND status='active'").get(id).time, '21:30');
-  // Edit that does not mention time keeps it.
-  m.updateItem(id, { title: 'Losartana 50mg' }, '2026-11-15');
-  assert.equal(m.getItemView(id).time, '21:30');
-  m.updateItem(id, { time: null }, '2026-11-15');
-  assert.equal(m.getItemView(id).time, null);
-});
-
-test('o dia lista primeiro quem tem horário, em ordem de relógio; depois o resto pela ordem manual', () => {
+test('o dia lista as doses com horário primeiro, em ordem de relógio; depois as sem horário', () => {
   const { m } = freshModel();
   m.createItem({ title: 'Sem hora A', category: 'medication', sort_order: 1 });
-  m.createItem({ title: 'Noite', category: 'medication', time: '21:00', sort_order: 0 });
-  m.createItem({ title: 'Manhã', category: 'medication', time: '07:30', sort_order: 5 });
+  m.createItem({ title: 'Adorlan', category: 'medication', times: THREE, sort_order: 9 });
+  m.createItem({ title: 'Manhã', category: 'medication', times: '["07:30"]', sort_order: 5 });
   m.createItem({ title: 'Sem hora B', category: 'medication', sort_order: 0 });
-  m.generateDailyTasks('2026-11-15');
-  assert.deepEqual(m.getTasksView('2026-11-15').map((t) => t.title),
-    ['Manhã', 'Noite', 'Sem hora B', 'Sem hora A']);
+  assert.deepEqual(day(m, '2026-11-15').map((t) => `${t.time || '-'} ${t.title}`),
+    ['07:30 Manhã', '09:00 Adorlan', '15:00 Adorlan', '23:00 Adorlan', '- Sem hora B', '- Sem hora A']);
 });
 
-test('cartela nova ("comprei") herda o horário; o "Comprar" nasce sem horário', () => {
+test('uma caixa só: cada dose marcada conta 1, e o cartão mostra a contagem até a sua dose', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'Adorlan', category: 'medication', times: THREE, total_count: 30 });
+  const [d9, d15] = day(m, '2026-11-15');
+  m.toggleTask(d9.id);
+  m.toggleTask(d15.id);
+  assert.equal(m.getItemView(id).completed_count, 2);
+  assert.deepEqual(m.getTasksView('2026-11-15').map((t) => `${t.time} ${t.completed_count}/${t.total_count}`),
+    ['09:00 1/30', '15:00 2/30', '23:00 2/30']);
+});
+
+test('caixa acaba no meio do dia: a nova começa no mesmo dia, só com as doses que faltam', () => {
   const { db, m } = freshModel();
   const id = m.createItem({
-    title: 'Caixa', category: 'medication', total_count: 1, time: '09:15',
-    followup_title: 'Comprar Caixa', followup_category: 'reminder', followup_recreate: 1,
+    title: 'Adorlan', category: 'medication', times: THREE, total_count: 2,
+    followup_title: 'Comprar Adorlan', followup_category: 'reminder', followup_recreate: 1,
   });
-  m.generateDailyTasks('2026-11-15');
-  m.toggleTask(m.getTasksView('2026-11-15')[0].id, '2026-11-15'); // closes the 1-dose box
-  m.generateDailyTasks('2026-11-16');
-  const fu = m.getTasksView('2026-11-16').find((t) => t.title === 'Comprar Caixa');
+  const today = '2026-11-15';
+  const [d9, d15] = day(m, today);
+  m.toggleTask(d9.id, today);
+  m.toggleTask(d15.id, today); // 2/2: box closes, 23:00 of the old box goes away
+  const fu = day(m, today).find((t) => t.title === 'Comprar Adorlan');
   assert.equal(fu.time, null);
-  m.toggleTask(fu.id, '2026-11-16');
-  m.recreateFromFollowup(fu.id, '2026-11-16');
+  m.toggleTask(fu.id, today);
+  m.recreateFromFollowup(fu.id, today);
   const fresh = db.prepare("SELECT * FROM series WHERE template_id = ? AND status = 'active'").get(id);
-  assert.equal(fresh.seq, 2);
-  assert.equal(fresh.time, '09:15');
+  assert.equal(fresh.start_date, today);
+  assert.equal(fresh.times, THREE);
+  const adorlan = day(m, today).filter((t) => t.title === 'Adorlan');
+  assert.deepEqual(adorlan.map((t) => `${t.time} ${t.series_id === fresh.id ? 'nova' : 'velha'} ${t.completed ? 'x' : 'o'}`),
+    ['09:00 velha x', '15:00 velha x', '23:00 nova o']);
 });
 
-test('protocolo: cada fase guarda o próprio horário', () => {
+test('tirar um horário apaga a dose pendente dele de hoje em diante; dose marcada fica', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'Adorlan', category: 'medication', times: THREE });
+  const [d9] = day(m, '2026-11-15');
+  m.toggleTask(d9.id);
+  m.updateItem(id, { times: '["15:00"]' }, '2026-11-15');
+  assert.deepEqual(m.getTasksView('2026-11-15').map((t) => `${t.time} ${t.completed}`), ['09:00 1', '15:00 0']);
+  assert.deepEqual(day(m, '2026-11-16').map((t) => t.time), ['15:00']);
+});
+
+test('protocolo: cada fase guarda a própria lista, e a view devolve lista que pode voltar ao salvar', () => {
   const { m } = freshModel();
   const pid = m.createProtocol({
     name: 'Curso', start_date: '2026-11-15',
     phases: [
-      { title: 'F1', category: 'medication', duration_days: 2, time: '08:00' },
+      { title: 'F1', category: 'medication', duration_days: 2, times: '["08:00","20:00"]' },
       { title: 'F2', category: 'medication', duration_days: 2 },
     ],
   });
   const view = m.getProtocolView(pid);
-  assert.deepEqual(view.phases.map((p) => p.time), ['08:00', null]);
-  m.generateDailyTasks('2026-11-15');
-  assert.equal(m.getTasksView('2026-11-15')[0].time, '08:00');
+  assert.deepEqual(view.phases.map((p) => p.times), [['08:00', '20:00'], []]);
+  assert.deepEqual(day(m, '2026-11-15').map((t) => t.time), ['08:00', '20:00']);
+});
+
+// ── Lançamentos per dose ──
+
+test('lançamentos: cada dose tem o seu horário; adicionar escolhe a dose que falta; mover troca de horário', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'Adorlan', category: 'medication', times: THREE, start_date: '2026-11-15' });
+  day(m, '2026-11-15');
+  const occ = m.getOccurrences(id);
+  assert.deepEqual(occ.map((o) => o.time), ['23:00', '15:00', '09:00']);
+  // the 15:00 dose removed: adding without a time brings that one back
+  const o15 = occ.find((o) => o.time === '15:00');
+  m.removeOccurrence(o15.id, true);
+  const back = m.addOccurrence(id, '2026-11-15');
+  assert.equal(back.ok, true);
+  assert.equal(back.occurrence.time, '15:00');
+  assert.equal(m.addOccurrence(id, '2026-11-15', '09:00').code, 'exists');
+  // a dose on a day off the rule, then moved to another time of that day
+  const extra = m.addOccurrence(id, '2026-11-10', '09:00');
+  assert.equal(extra.occurrence.time, '09:00');
+  const moved = m.moveOccurrence(extra.occurrence.id, '2026-11-10', '2026-11-15', '23:00');
+  assert.equal(moved.time, '23:00');
+});
+
+test('histórico e adesão contam por dose', () => {
+  const { m } = freshModel();
+  const id = m.createItem({ title: 'Adorlan', category: 'medication', times: THREE, start_date: '2026-11-15' });
+  const [d9] = day(m, '2026-11-15');
+  m.toggleTask(d9.id);
+  const rows = m.getHistoryView({ dateFrom: '2026-11-15', dateTo: '2026-11-15', itemId: id });
+  assert.deepEqual(rows.map((r) => `${r.time} ${r.completed}`), ['09:00 1', '15:00 0', '23:00 0']);
+  const adh = m.getItemAdherence({ itemId: id, dateFrom: '2026-11-15', dateTo: '2026-11-15' });
+  assert.equal(adh.expected_count, 3);
+  assert.equal(adh.completed_count, 1);
+});
+
+// ── Upgrade of an existing database ──
+
+test('banco antigo: a tabela de marcações ganha a dose sem perder linha nem marcação; horário único vira lista', () => {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  // A database from before dose times: build it, then strip slot/times off.
+  const m0 = createModel(db);
+  const id = m0.createItem({ title: 'Losartana', category: 'medication', start_date: '2026-11-14' });
+  const legacy = m0.createItem({ title: 'Antigo', category: 'medication', start_date: '2026-11-14' });
+  m0.generateDailyTasks('2026-11-14');
+  m0.generateDailyTasks('2026-11-15');
+  m0.toggleTask(m0.getTasksView('2026-11-14')[0].id);
+  db.exec(`
+    CREATE TABLE dt_old (id INTEGER PRIMARY KEY AUTOINCREMENT, series_id INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+      date TEXT NOT NULL, completed INTEGER DEFAULT 0, completed_at TEXT, created_at TEXT, origin TEXT, removed_at TEXT,
+      UNIQUE(series_id, date));
+    INSERT INTO dt_old SELECT id, series_id, date, completed, completed_at, created_at, origin, removed_at FROM daily_tasks;
+    DROP TABLE daily_tasks; ALTER TABLE dt_old RENAME TO daily_tasks;
+    UPDATE phases SET times = '[]'; UPDATE series SET times = '[]';
+    UPDATE phases SET time = '08:00' WHERE template_id = ${id}; UPDATE series SET time = '08:00' WHERE template_id = ${id};
+  `);
+  const before = db.prepare('SELECT id, completed FROM daily_tasks ORDER BY id').all();
+  const m = createModel(db); // boot
+  const after = db.prepare('SELECT id, completed, slot FROM daily_tasks ORDER BY id').all();
+  assert.deepEqual(after.map((r) => [r.id, r.completed]), before.map((r) => [r.id, r.completed]));
+  assert.deepEqual(m.getItemView(id).times, ['08:00']);
+  assert.deepEqual(m.getItemView(legacy).times, []);
+  // the single-time item's old rows moved into its 08:00 dose: no duplicate card
+  assert.deepEqual(m.getTasksView('2026-11-15').map((t) => `${t.title} ${t.time}`), ['Losartana 08:00', 'Antigo null']);
+  // two doses on the same day are now possible
+  m.updateItem(id, { times: '["08:00","20:00"]' }, '2026-11-15');
+  assert.deepEqual(day(m, '2026-11-15').filter((t) => t.title === 'Losartana').map((t) => t.time), ['08:00', '20:00']);
+  createModel(db); // second boot: idempotent
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM daily_tasks WHERE completed = 1').get().c, 1);
 });
 
 // ── Integration API (/integration/v1) ──
@@ -166,26 +252,35 @@ test.after(() => {
   server.close();
 });
 
-test('Integration API: cria com horário, lê no item e na tarefa do dia, altera e limpa', async () => {
-  const created = await call('POST', '/integration/v1/items', { title: 'Remédio API', category: 'medication', time: '7:45' });
+test('Integration API: cria com 3 horários, o dia traz 3 doses, altera e limpa; time segue aceito', async () => {
+  const created = await call('POST', '/integration/v1/items', { title: 'Remédio API', category: 'medication', times: ['23:00', '9:00', '15:00'] });
   assert.equal(created.status, 201);
-  assert.equal(created.body.time, '07:45');
+  assert.deepEqual(created.body.times, ['09:00', '15:00', '23:00']);
 
   const tasks = await call('GET', '/integration/v1/tasks');
-  assert.equal(tasks.status, 200);
-  const mine = tasks.body.find((t) => t.title === 'Remédio API');
-  assert.equal(mine.time, '07:45');
+  assert.deepEqual(tasks.body.filter((t) => t.title === 'Remédio API').map((t) => t.time), ['09:00', '15:00', '23:00']);
 
-  const changed = await call('PUT', `/integration/v1/items/${created.body.id}`, { time: '20:00' });
-  assert.equal(changed.status, 200);
-  assert.equal(changed.body.time, '20:00');
+  const one = await call('PUT', `/integration/v1/items/${created.body.id}`, { time: '20:00' });
+  assert.deepEqual(one.body.times, ['20:00']);
+  assert.equal(one.body.time, '20:00');
 
-  const cleared = await call('PUT', `/integration/v1/items/${created.body.id}`, { time: null });
+  const cleared = await call('PUT', `/integration/v1/items/${created.body.id}`, { times: [] });
+  assert.deepEqual(cleared.body.times, []);
   assert.equal(cleared.body.time, null);
 });
 
-test('Integration API: horário inválido volta 400 com a mensagem', async () => {
-  const res = await call('POST', '/integration/v1/items', { title: 'X', category: 'medication', time: '25:00' });
-  assert.equal(res.status, 400);
-  assert.match(res.body.error, /time must be HH:MM/);
+test('Integration API: horário inválido volta 400; lançamento aceita o horário da dose', async () => {
+  const bad = await call('POST', '/integration/v1/items', { title: 'X', category: 'medication', times: ['25:00'] });
+  assert.equal(bad.status, 400);
+  assert.match(bad.body.error, /time must be HH:MM/);
+
+  const it = await call('POST', '/integration/v1/items', { title: 'Lanç', category: 'medication', times: ['08:00', '20:00'] });
+  const add = await call('POST', `/integration/v1/items/${it.body.id}/occurrences`, { date: '2026-01-05', time: '20:00' });
+  assert.equal(add.status, 201);
+  assert.equal(add.body.time, '20:00');
+  const moved = await call('PUT', `/integration/v1/occurrences/${add.body.id}`, { time: '08:00' });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.time, '08:00');
+  const badTime = await call('POST', `/integration/v1/items/${it.body.id}/occurrences`, { date: '2026-01-06', time: '8h' });
+  assert.equal(badTime.status, 400);
 });
