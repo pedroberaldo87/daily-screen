@@ -23,3 +23,9 @@ GEMINI.md
 .impeccable/hook.cache.json
 .impeccable/config.local.json
 .claude/secrets/
+
+# segredos: .env nunca entra no git (2026-11-19)
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
